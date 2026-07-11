@@ -1,9 +1,13 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.admin.tools_common import can_manage_event, get_tools_user, login_redirect, templates
+from app.admin.tools_common import (
+    can_manage_event,
+    combine_event_date_and_time,
+    get_tools_user,
+    login_redirect,
+    templates,
+)
 from app.core.db import SessionLocal
 from app.models.event import Event
 from app.models.group import Group
@@ -61,7 +65,7 @@ async def group_new_submit(
             target_distance_km=target_distance_km,
             pace_min=pace_min or None,
             pace_max=pace_max or None,
-            start_time=datetime.fromisoformat(start_time) if start_time else None,
+            start_time=combine_event_date_and_time(event.date, start_time),
         )
         session.add(group)
         await session.commit()
@@ -121,7 +125,7 @@ async def group_edit_submit(
         group.target_distance_km = target_distance_km
         group.pace_min = pace_min or None
         group.pace_max = pace_max or None
-        group.start_time = datetime.fromisoformat(start_time) if start_time else None
+        group.start_time = combine_event_date_and_time(event.date, start_time)
         await session.commit()
     return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash=Сохранено", 303)
 

@@ -7,6 +7,9 @@ Both share the same session cookie (see SessionMiddleware in app.main), so an ad
 who reaches admin-tools via SSO is automatically also authenticated into SQLAdmin.
 """
 
+from datetime import date as date_type
+from datetime import datetime
+from datetime import time as time_type
 from pathlib import Path
 
 from fastapi.responses import RedirectResponse
@@ -32,6 +35,15 @@ def login_redirect() -> RedirectResponse:
 def can_manage_event(user: User, event: Event) -> bool:
     """Admin manages every event; an organizer only their own."""
     return user.role == UserRole.admin or event.created_by == user.id
+
+
+def combine_event_date_and_time(event_date: date_type, time_str: str) -> datetime | None:
+    """A group's start_time always falls on its event's date — the form only
+    collects time-of-day (see group_form.html), so the date always comes from
+    here, never from user input."""
+    if not time_str:
+        return None
+    return datetime.combine(event_date, time_type.fromisoformat(time_str))
 
 
 async def get_tools_user(request: Request) -> User | None:

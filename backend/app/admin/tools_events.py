@@ -1,4 +1,5 @@
 from datetime import date as date_type
+from datetime import datetime
 
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -9,6 +10,7 @@ from app.admin.tools_common import can_manage_event, get_tools_user, login_redir
 from app.core.db import SessionLocal
 from app.models.enums import UserRole
 from app.models.event import Event, EventPhoto
+from app.models.group import Group
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -102,8 +104,17 @@ async def event_edit_submit(
         if event is None or not can_manage_event(user, event):
             return RedirectResponse("/admin-tools/events", status_code=303)
         event.title = title
-        event.date = date
         event.description = description or None
+        if event.date != date:
+            event.date = date
+            # A group's start_time always falls on its event's date (see
+            # combine_event_date_and_time) — moving the event carries every
+            # group's time-of-day along to the new date instead of leaving
+            # them pointing at the old one.
+            groups = await session.scalars(select(Group).where(Group.event_id == event.id))
+            for group in groups:
+                if group.start_time is not None:
+                    group.start_time = datetime.combine(date, group.start_time.time())
         await session.commit()
     return RedirectResponse(f"/admin-tools/events/{event_id}/edit?flash=Сохранено", 303)
 
