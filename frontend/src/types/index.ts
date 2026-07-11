@@ -101,10 +101,36 @@ export interface Signup {
   created_at: string
 }
 
+export interface SignupGroupSummary {
+  group_id: number
+  group_name: string
+}
+
 /** Current user's signup state for a group. */
 export interface GroupSignupState {
   signed_up: boolean
   signup_id?: number | null
+  /** Set when signed up for a *different* group of this same event instead. */
+  other_group?: SignupGroupSummary | null
+}
+
+/** Current user's signup state for an event as a whole (any of its groups). */
+export interface EventSignupState {
+  signed_up: boolean
+  group_id?: number | null
+  group_name?: string | null
+}
+
+/** One of the current user's upcoming signups, for the profile page. */
+export interface MySignupEntry {
+  signup_id: number
+  group_id: number
+  group_name: string
+  location: string
+  event_id: number
+  event_title: string
+  event_date: string // ISO date
+  start_time?: string | null // ISO
 }
 
 /** Who's signed up (intent) for a group — shown only while the event is

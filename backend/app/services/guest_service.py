@@ -124,22 +124,24 @@ async def merge_guest_into(session: AsyncSession, guest: User, real_user: User) 
         record.runner_id = real_user.id
 
     # A guest never signs itself up, but handle it defensively: move signups,
-    # dropping any that would collide with one the real user already has.
-    existing_group_ids = {
-        gid
-        for gid in await session.scalars(
-            select(Signup.group_id).where(Signup.runner_id == real_user.id)
+    # dropping any that would collide with one the real user already has. A
+    # runner can only have one signup per *event* (uq_signup_runner_event),
+    # not per group, so the collision check is event-scoped too.
+    existing_event_ids = {
+        eid
+        for eid in await session.scalars(
+            select(Signup.event_id).where(Signup.runner_id == real_user.id)
         )
     }
     guest_signups = list(
         await session.scalars(select(Signup).where(Signup.runner_id == guest.id))
     )
     for signup in guest_signups:
-        if signup.group_id in existing_group_ids:
+        if signup.event_id in existing_event_ids:
             await session.delete(signup)
         else:
             signup.runner_id = real_user.id
-            existing_group_ids.add(signup.group_id)
+            existing_event_ids.add(signup.event_id)
 
     guest.merged_into_id = real_user.id
 

@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 from datetime import date as date_type
 from datetime import time as time_type
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -20,18 +19,12 @@ from starlette.requests import Request
 
 from app.core.db import SessionLocal
 from app.core.security import verify_password
+from app.core.timezone import EVENT_TZ
 from app.models.enums import UserRole
 from app.models.event import Event
 from app.models.user import User
 
 SESSION_KEY = "admin_user_id"
-
-# The community is Cheboksary-only — every start_time typed into admin-tools
-# is a Cheboksary wall-clock time, and every viewer must see that same
-# number regardless of their own browser's timezone. Russia hasn't observed
-# DST since 2014, so this is a fixed UTC+3, but ZoneInfo keeps it correct if
-# that ever changes rather than hardcoding the offset.
-EVENT_TZ = ZoneInfo("Europe/Moscow")
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 templates.env.filters["local_time"] = (

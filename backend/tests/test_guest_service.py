@@ -91,8 +91,8 @@ async def test_merge_guest_into_moves_signups_and_drops_collisions(
     _, group = await make_event_group(session, org)
     guest = await create_guest(session, "Bob Runner")
 
-    session.add(Signup(runner_id=guest.id, group_id=group.id))
-    session.add(Signup(runner_id=real_user.id, group_id=group.id))
+    session.add(Signup(runner_id=guest.id, group_id=group.id, event_id=group.event_id))
+    session.add(Signup(runner_id=real_user.id, group_id=group.id, event_id=group.event_id))
     await session.flush()
 
     await merge_guest_into(session, guest, real_user)

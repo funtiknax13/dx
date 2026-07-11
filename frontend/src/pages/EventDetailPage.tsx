@@ -1,23 +1,27 @@
 import { Link, useParams } from 'react-router-dom'
 import { eventsApi } from '../api/events'
 import { groupsApi } from '../api/groups'
+import { signupsApi } from '../api/signups'
 import { media } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, isPast, plural } from '../lib/format'
 import { GroupCard } from '../components/GroupCard'
 import { PhotoGallery } from '../components/PhotoGallery'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
-import { IconArrow, IconCalendar, IconPin } from '../components/ui/icons'
-import type { EventDetail, EventPhoto, Group } from '../types'
+import { IconArrow, IconCalendar, IconCheck, IconPin } from '../components/ui/icons'
+import type { EventDetail, EventPhoto, EventSignupState, Group } from '../types'
 
 export function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const { isAuthenticated } = useAuth()
 
   const { data, loading, error, reload } = useAsync<{
     event: EventDetail
     groups: Group[]
     photos: EventPhoto[]
+    mySignup: EventSignupState | null
   }>(async () => {
     const event = await eventsApi.detail(id!)
     const groups = event.groups?.length
@@ -26,8 +30,9 @@ export function EventDetailPage() {
     const photos = event.photos?.length
       ? event.photos
       : await eventsApi.photos(id!).catch(() => [])
-    return { event, groups, photos }
-  }, [id])
+    const mySignup = isAuthenticated ? await signupsApi.eventState(id!).catch(() => null) : null
+    return { event, groups, photos, mySignup }
+  }, [id, isAuthenticated])
 
   if (loading) return <PageLoader />
   if (error || !data) {
@@ -52,7 +57,7 @@ export function EventDetailPage() {
     )
   }
 
-  const { event, groups, photos } = data
+  const { event, groups, photos, mySignup } = data
   const cover = media(event.cover_url)
   const past = isPast(event.date)
 
@@ -166,6 +171,19 @@ export function EventDetailPage() {
         {/* Sidebar */}
         <aside className="order-1 lg:order-2">
           <div className="sticky top-24 space-y-4">
+            {mySignup?.signed_up && (
+              <Link
+                to={`/groups/${mySignup.group_id}`}
+                className="flex items-center gap-3 rounded-xl2 border border-signal/30 bg-signal-wash p-4 text-signal-600 transition hover:border-signal/50"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-signal text-white">
+                  <IconCheck width={18} height={18} />
+                </span>
+                <span className="text-sm">
+                  Вы записаны в «{mySignup.group_name}»
+                </span>
+              </Link>
+            )}
             <div className="card-ink p-6">
               <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-volt">Событие</h3>
               <dl className="mt-4 space-y-3 text-sm">

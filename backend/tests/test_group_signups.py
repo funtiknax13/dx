@@ -14,7 +14,7 @@ async def test_group_out_includes_event_date_and_signup_count(
     org = await make_user(session, "org-signups@example.com", UserRole.organizer)
     event, group = await make_event_group(session, org)
     runner = await make_user(session, "runner-signups@example.com", UserRole.runner)
-    session.add(Signup(group_id=group.id, runner_id=runner.id))
+    session.add(Signup(group_id=group.id, runner_id=runner.id, event_id=event.id))
     await session.commit()
 
     resp = await client.get(f"/api/v1/groups/{group.id}")
@@ -35,15 +35,15 @@ async def test_group_signup_roster_lists_names_and_count(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     org = await make_user(session, "org-roster@example.com", UserRole.organizer)
-    _event, group = await make_event_group(session, org)
+    event, group = await make_event_group(session, org)
     runner1 = await make_user(session, "runner-a@example.com", UserRole.runner)
     runner1.first_name, runner1.last_name = "Иван", "Бегунов"
     runner2 = await make_user(session, "runner-b@example.com", UserRole.runner)
     runner2.first_name, runner2.last_name = "Анна", "Скороходова"
     session.add_all(
         [
-            Signup(group_id=group.id, runner_id=runner1.id),
-            Signup(group_id=group.id, runner_id=runner2.id),
+            Signup(group_id=group.id, runner_id=runner1.id, event_id=event.id),
+            Signup(group_id=group.id, runner_id=runner2.id, event_id=event.id),
         ]
     )
     await session.commit()

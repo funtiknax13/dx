@@ -6,14 +6,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.admin.tools_common import (
-    EVENT_TZ,
-    can_manage_event,
-    get_tools_user,
-    login_redirect,
-    templates,
-)
+from app.admin.tools_common import can_manage_event, get_tools_user, login_redirect, templates
 from app.core.db import SessionLocal
+from app.core.timezone import EVENT_TZ
 from app.models.enums import UserRole
 from app.models.event import Event, EventPhoto
 from app.models.group import Group

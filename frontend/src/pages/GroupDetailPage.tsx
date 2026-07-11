@@ -295,6 +295,7 @@ function SignupControl({
   }
 
   const signedUp = state?.signed_up
+  const otherGroup = state?.other_group
 
   const toggle = async () => {
     setBusy(true)
@@ -304,6 +305,8 @@ function SignupControl({
         await signupsApi.remove(state.signup_id)
         setState({ signed_up: false })
       } else {
+        // Also covers "switch": signing up while already signed up for a
+        // different group of this event moves the existing signup here.
         const created = await signupsApi.create(groupId)
         setState({ signed_up: true, signup_id: created.id })
       }
@@ -316,7 +319,12 @@ function SignupControl({
   }
 
   return (
-    <div className="shrink-0">
+    <div className="shrink-0 text-right">
+      {otherGroup && !signedUp && (
+        <p className="mb-2 text-sm text-ink-600">
+          Вы записаны в «{otherGroup.group_name}» этого события
+        </p>
+      )}
       <button
         onClick={toggle}
         disabled={busy}
@@ -328,6 +336,8 @@ function SignupControl({
           <>
             <IconCheck width={18} height={18} /> Вы записаны · отменить
           </>
+        ) : otherGroup ? (
+          <>Записаться сюда вместо</>
         ) : (
           <>Записаться в группу</>
         )}

@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { guestsApi } from '../api/guests'
+import { signupsApi } from '../api/signups'
 import { ApiError } from '../api/client'
 import { useAsync } from '../lib/useAsync'
-import { fullName } from '../lib/format'
+import { formatDate, formatTime, fullName } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { Field, SelectField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { ParticipationHistory } from '../components/ParticipationHistory'
-import { IconTrophy, IconUser } from '../components/ui/icons'
-import type { Gender, GuestClaim, GuestProfile, User } from '../types'
+import { IconArrow, IconCalendar, IconTrophy, IconUser } from '../components/ui/icons'
+import type { Gender, GuestClaim, GuestProfile, MySignupEntry, User } from '../types'
 
 type Tab = 'profile' | 'security' | 'stats' | 'guest'
 
@@ -21,6 +23,7 @@ export function ProfilePage() {
 
   const stats = useAsync(() => usersApi.publicProfile(user!.id), [user?.id])
   const { reload: reloadStats } = stats
+  const upcoming = useAsync(() => signupsApi.mine(), [user?.id])
 
   if (!user) return null
 
@@ -114,6 +117,13 @@ export function ProfilePage() {
               </div>
             </div>
             <div>
+              {upcoming.data && upcoming.data.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="mb-4 font-display text-xl">Предстоящие события</h3>
+                  <UpcomingSignups entries={upcoming.data} />
+                </div>
+              )}
+
               <h3 className="mb-4 font-display text-xl">История участий</h3>
               {stats.loading ? (
                 <div className="flex justify-center py-10">
@@ -132,6 +142,34 @@ export function ProfilePage() {
         {tab === 'guest' && <GuestClaimSection />}
       </div>
     </div>
+  )
+}
+
+function UpcomingSignups({ entries }: { entries: MySignupEntry[] }) {
+  return (
+    <ul className="space-y-2">
+      {entries.map((e) => (
+        <li key={e.signup_id}>
+          <Link
+            to={`/groups/${e.group_id}`}
+            className="flex items-center justify-between gap-4 rounded-xl2 border border-ink/[0.08] bg-white p-4 shadow-card transition hover:border-signal/40"
+          >
+            <div className="min-w-0">
+              <p className="truncate font-display text-base text-ink">{e.event_title}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-600">
+                <span className="inline-flex items-center gap-1">
+                  <IconCalendar width={13} height={13} className="text-signal" />
+                  {formatDate(e.event_date, { day: 'numeric', month: 'long' })}
+                </span>
+                {e.start_time && <span>старт {formatTime(e.start_time)}</span>}
+                <span>{e.group_name}</span>
+              </p>
+            </div>
+            <IconArrow width={16} height={16} className="shrink-0 text-clay" />
+          </Link>
+        </li>
+      ))}
+    </ul>
   )
 }
 
