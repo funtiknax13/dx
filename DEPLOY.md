@@ -17,8 +17,8 @@
 ## 1. Клонировать репозиторий
 
 ```bash
-git clone git@github.com:funtiknax13/dx.git /srv/dh/app
-cd /srv/dh/app
+git clone https://github.com/funtiknax13/dx.git /srv/dh
+cd /srv/dh
 ```
 
 ## 2. Секреты
@@ -75,13 +75,13 @@ rsync -avz --delete dist/ user@server:/srv/dh/frontend-dist/
 `.env.production` и молча запекутся в сборку вместо относительных путей.
 
 Если сервер всё же достаточно живой, чтобы собрать фронтенд на месте —
-просто `npm ci && npm run build` в `/srv/dh/app/frontend` и скопировать
+просто `npm ci && npm run build` в `/srv/dh/frontend` и скопировать
 `dist/` в `/srv/dh/frontend-dist`.
 
 ## 4. Поднять backend + БД
 
 ```bash
-cd /srv/dh/app
+cd /srv/dh
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -129,8 +129,10 @@ Certbot настраивает автопродление сам (systemd timer)
 
 ## 7. Обновление после изменений в коде
 
+Вручную (если CI/CD из шага 7.1 не настроен или нужно обновить руками):
+
 ```bash
-cd /srv/dh/app
+cd /srv/dh
 git pull
 docker compose -f docker-compose.prod.yml up -d --build   # пересобирает и перезапускает api
 # при изменениях фронтенда — повторить шаг 3 (собрать и rsync dist/)
@@ -138,6 +140,41 @@ docker compose -f docker-compose.prod.yml up -d --build   # пересобира
 
 `docker compose restart` **не** подхватывает изменения `.env` — если менял
 секреты, нужно `docker compose -f docker-compose.prod.yml up -d --force-recreate api`.
+
+### 7.1 CI/CD (автодеплой при пуше в main)
+
+`.github/workflows/ci.yml` содержит джобу `deploy`, которая запускается
+после того, как оба джоба (`backend`, `frontend`) прошли зелёными, и только
+при пуше в `main` (не на PR). Она сама:
+
+1. Собирает `frontend/dist` на раннере GitHub (не на слабом VPS).
+2. Заливает его на сервер по `rsync` в `/srv/dh/frontend-dist`.
+3. По SSH заходит на сервер, делает `git fetch && git reset --hard
+   origin/main`, пересобирает и перезапускает `api` через
+   `docker compose -f docker-compose.prod.yml up -d --build`.
+4. Чистит неиспользуемые образы/билд-кэш (`docker image/builder prune`) —
+   без этого диск на слабом VPS быстро забивается пересборками.
+
+**Настройка (один раз)** — три секрета в GitHub: репозиторий →
+Settings → Secrets and variables → Actions → New repository secret:
+
+| Имя | Значение |
+|---|---|
+| `DEPLOY_SSH_KEY` | Приватный ключ целиком (весь файл `~/.ssh/dh_deploy_ed25519`, включая `-----BEGIN...-----`/`-----END...-----` строки) |
+| `DEPLOY_HOST` | IP или домен сервера |
+| `DEPLOY_USER` | `root` (или другой пользователь с доступом к `/srv/dh` и Docker) |
+
+Публичный ключ уже должен быть в `~/.ssh/authorized_keys` на сервере — это
+тот же ключ, которым разворачивали сервер изначально, просто даём GitHub
+Actions пользоваться им тоже.
+
+После этого любой `git push` в `main` (прошедший CI) автоматически
+доезжает до продакшена за пару минут — прогресс виден во вкладке Actions
+репозитория на GitHub.
+
+**Важно**: деплой-скрипт делает `git reset --hard origin/main` на
+сервере — любые ручные правки прямо в `/srv/dh` на сервере будут потеряны
+при следующем автодеплое. Все изменения — только через git.
 
 ## 8. Бэкап БД
 

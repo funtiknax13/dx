@@ -15,10 +15,10 @@ const base = (p: P) => ({
 
 export const IconRunner = (p: P) => (
   <svg {...base(p)}>
-    <circle cx="15.5" cy="4.5" r="1.7" />
-    <path d="M14 6.5L10.5 13L7.5 16L9 20" />
-    <path d="M10.5 13L14 14.5L12.5 20" />
-    <path d="M13.3 7.2L16.5 6.5L18.5 9M13.3 7.2L10.8 9.5L12 12.5" />
+    <circle cx="14.8" cy="4.6" r="1.7" />
+    <path d="M13.8 6.3L11 12.2L7.5 14.5L5 19.5" />
+    <path d="M11 12.2L14 11.5L13 17.5" />
+    <path d="M13.5 7.8L15.5 8.8L15 6.5M13.5 7.8L11 9.3L9.5 7.8" />
   </svg>
 )
 export const IconPin = (p: P) => (
