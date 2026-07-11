@@ -37,11 +37,19 @@ export function formatDateShort(iso?: string | null): string {
   return formatDate(iso, { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Event/group start times are Cheboksary wall-clock times — pinned to
+// Europe/Moscow so every viewer sees the same number regardless of their
+// own device's timezone (a race start time isn't a personal instant that
+// should shift per viewer).
 export function formatTime(iso?: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Moscow',
+  })
 }
 
 export function isPast(iso?: string | null): boolean {

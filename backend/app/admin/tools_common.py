@@ -7,10 +7,11 @@ Both share the same session cookie (see SessionMiddleware in app.main), so an ad
 who reaches admin-tools via SSO is automatically also authenticated into SQLAdmin.
 """
 
+from datetime import UTC, datetime
 from datetime import date as date_type
-from datetime import datetime
 from datetime import time as time_type
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -25,7 +26,17 @@ from app.models.user import User
 
 SESSION_KEY = "admin_user_id"
 
+# The community is Cheboksary-only — every start_time typed into admin-tools
+# is a Cheboksary wall-clock time, and every viewer must see that same
+# number regardless of their own browser's timezone. Russia hasn't observed
+# DST since 2014, so this is a fixed UTC+3, but ZoneInfo keeps it correct if
+# that ever changes rather than hardcoding the offset.
+EVENT_TZ = ZoneInfo("Europe/Moscow")
+
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+templates.env.filters["local_time"] = (
+    lambda dt: dt.astimezone(EVENT_TZ).strftime("%H:%M") if dt else ""
+)
 
 
 def login_redirect() -> RedirectResponse:
@@ -40,10 +51,14 @@ def can_manage_event(user: User, event: Event) -> bool:
 def combine_event_date_and_time(event_date: date_type, time_str: str) -> datetime | None:
     """A group's start_time always falls on its event's date — the form only
     collects time-of-day (see group_form.html), so the date always comes from
-    here, never from user input."""
+    here, never from user input. The time is entered as Cheboksary local time
+    and converted to a real UTC instant for storage, so it round-trips to the
+    same wall-clock number for every viewer (see EVENT_TZ) and still compares
+    correctly against GPX/FIT-recorded (genuinely UTC) result times."""
     if not time_str:
         return None
-    return datetime.combine(event_date, time_type.fromisoformat(time_str))
+    local = datetime.combine(event_date, time_type.fromisoformat(time_str), tzinfo=EVENT_TZ)
+    return local.astimezone(UTC)
 
 
 async def get_tools_user(request: Request) -> User | None:

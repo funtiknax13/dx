@@ -35,8 +35,8 @@
       </div>
       <div class="field">
         <label for="start_time">Время старта</label>
-        <input id="start_time" type="time" name="start_time" value="{{ group.start_time.strftime('%H:%M') if group and group.start_time else '' }}" />
-        <p class="hint">Дата — {{ event.date.strftime('%d.%m.%Y') }}, как у события. Вместе с дистанцией используется для автопроверки результатов бегунов.</p>
+        <input id="start_time" type="time" name="start_time" value="{{ group.start_time | local_time if group else '' }}" />
+        <p class="hint">Время — по Чебоксарам. Дата — {{ event.date.strftime('%d.%m.%Y') }}, как у события. Вместе с дистанцией используется для автопроверки результатов бегунов.</p>
       </div>
       <button type="submit">{{ 'Сохранить' if group else 'Создать' }}</button>
     </form>

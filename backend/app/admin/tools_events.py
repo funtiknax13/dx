@@ -1,12 +1,18 @@
+from datetime import UTC, datetime
 from datetime import date as date_type
-from datetime import datetime
 
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.admin.tools_common import can_manage_event, get_tools_user, login_redirect, templates
+from app.admin.tools_common import (
+    EVENT_TZ,
+    can_manage_event,
+    get_tools_user,
+    login_redirect,
+    templates,
+)
 from app.core.db import SessionLocal
 from app.models.enums import UserRole
 from app.models.event import Event, EventPhoto
@@ -109,12 +115,16 @@ async def event_edit_submit(
             event.date = date
             # A group's start_time always falls on its event's date (see
             # combine_event_date_and_time) — moving the event carries every
-            # group's time-of-day along to the new date instead of leaving
-            # them pointing at the old one.
+            # group's Cheboksary-local time-of-day along to the new date
+            # instead of leaving them pointing at the old one. Convert to
+            # local before re-combining, or the UTC-stored time-of-day would
+            # drift by the timezone offset each time an event moves.
             groups = await session.scalars(select(Group).where(Group.event_id == event.id))
             for group in groups:
                 if group.start_time is not None:
-                    group.start_time = datetime.combine(date, group.start_time.time())
+                    local_time = group.start_time.astimezone(EVENT_TZ).time()
+                    local_dt = datetime.combine(date, local_time, tzinfo=EVENT_TZ)
+                    group.start_time = local_dt.astimezone(UTC)
         await session.commit()
     return RedirectResponse(f"/admin-tools/events/{event_id}/edit?flash=Сохранено", 303)
 

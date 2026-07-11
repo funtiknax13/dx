@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
@@ -9,6 +10,8 @@ from app.core.security import create_access_token
 from app.models.enums import UserRole
 from app.models.group import Group
 from tests.factories import make_event_group, make_user
+
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 async def _login(client: AsyncClient, user_id: int) -> None:
@@ -22,7 +25,8 @@ async def test_new_group_start_time_takes_date_from_event(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     """The group form only collects time-of-day — the date always comes from
-    the parent event, never from the submitted value."""
+    the parent event, never from the submitted value. The time is entered as
+    Cheboksary local time and stored as the equivalent UTC instant."""
     org = await make_user(session, "org-groups@example.com", UserRole.organizer)
     event, _existing_group = await make_event_group(session, org)
     await session.commit()
@@ -44,15 +48,29 @@ async def test_new_group_start_time_takes_date_from_event(
         select(Group).where(Group.event_id == event.id, Group.name == "X-10 группа #2")
     )
     assert group is not None
-    assert group.start_time == datetime.combine(event.date, time(8, 30))
+    # SQLite (test DB) drops tzinfo on round-trip even for a
+    # DateTime(timezone=True) column — compare the naive UTC wall-clock
+    # number, same value Postgres would give back with tzinfo attached.
+    expected = datetime.combine(event.date, time(8, 30), tzinfo=MOSCOW).astimezone(UTC)
+    assert group.start_time == expected.replace(tzinfo=None)
+
+    # The exact bug report: typing 06:25 must show back 06:25 in the edit
+    # form for every admin, regardless of their own browser's timezone —
+    # not shifted by the UTC offset (Moscow is UTC+3, so a naive passthrough
+    # would round-trip 3h off, and the reported symptom was a 5h browser-side
+    # drift on top of that).
+    edit_resp = await client.get(f"/admin-tools/groups/{group.id}/edit")
+    assert edit_resp.status_code == 200
+    assert 'value="08:30"' in edit_resp.text
 
 
 @pytest.mark.asyncio
 async def test_editing_event_date_moves_group_start_times_along(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    """Changing the event's date must carry every group's time-of-day to the
-    new date instead of leaving start_time pointing at the old date."""
+    """Changing the event's date must carry every group's Cheboksary-local
+    time-of-day to the new date instead of leaving start_time pointing at
+    the old date (or drifting by the UTC offset)."""
     org = await make_user(session, "org-groups2@example.com", UserRole.organizer)
     event, group = await make_event_group(session, org)
     assert group.start_time == datetime(2026, 5, 1, 8, 0, tzinfo=UTC)
