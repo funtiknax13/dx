@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -20,6 +22,17 @@ from app.services.media_service import (
 )
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
+
+_TRAILING_GROUP_NUMBER = re.compile(r"^(.*#)(\d+)$")
+
+
+def _next_group_name(name: str) -> str:
+    """"X-33 группа #1" -> "X-33 группа #2"; falls back to a "(копия)" suffix
+    for names that don't end in a #N group number."""
+    m = _TRAILING_GROUP_NUMBER.match(name)
+    if m:
+        return f"{m.group(1)}{int(m.group(2)) + 1}"
+    return f"{name} (копия)"
 
 
 @router.get(
@@ -128,6 +141,35 @@ async def group_edit_submit(
         group.start_time = combine_event_date_and_time(event.date, start_time)
         await session.commit()
     return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash=Сохранено", 303)
+
+
+@router.post("/groups/{group_id}/duplicate", response_model=None)
+async def group_duplicate(request: Request, group_id: int) -> RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        group = await session.get(Group, group_id)
+        if group is None:
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        event = await session.get(Event, group.event_id)
+        if event is None or not can_manage_event(user, event):
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        copy = Group(
+            event_id=group.event_id,
+            name=_next_group_name(group.name),
+            location=group.location,
+            target_distance_km=group.target_distance_km,
+            pace_min=group.pace_min,
+            pace_max=group.pace_max,
+            start_time=group.start_time,
+            route_gpx=group.route_gpx,
+        )
+        session.add(copy)
+        await session.commit()
+        await session.refresh(copy)
+    flash = "Группа продублирована — поправь название и время"
+    return RedirectResponse(f"/admin-tools/groups/{copy.id}/edit?flash={flash}", 303)
 
 
 @router.post("/groups/{group_id}/gpx", response_model=None)

@@ -2,7 +2,14 @@
 {% block title %}{{ 'Группа' if group else 'Новая группа' }} — DH Admin Tools{% endblock %}
 {% block content %}
   <p><a href="/admin-tools/events/{{ event.id }}/edit">← {{ event.title }}</a></p>
-  <h1>{{ group.name if group else 'Новая группа' }}</h1>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <h1 style="margin:0;">{{ group.name if group else 'Новая группа' }}</h1>
+    {% if group %}
+    <form method="post" action="/admin-tools/groups/{{ group.id }}/duplicate">
+      <button type="submit" class="btn secondary">Дублировать группу</button>
+    </form>
+    {% endif %}
+  </div>
 
   <div class="card">
     <form method="post" action="{{ '/admin-tools/groups/%d/edit' % group.id if group else '/admin-tools/events/%d/groups/new' % event.id }}">
