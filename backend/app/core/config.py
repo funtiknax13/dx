@@ -42,6 +42,14 @@ class Settings(BaseSettings):
 
     # SQLAdmin
     admin_secret_key: str = "change-me-too"
+    # Marks the admin-tools/SQLAdmin session cookie Secure (HTTPS-only). Keep
+    # false until TLS is actually terminating traffic — a Secure cookie sent
+    # over plain HTTP is silently dropped by browsers, which locks everyone
+    # out of admin-tools/SQLAdmin even with correct credentials. Flip to true
+    # only once certbot is set up (see DEPLOY.md step 5). Deliberately NOT
+    # tied to `environment == "production"`: this app runs in production on
+    # plain HTTP for a while before a domain/TLS exist.
+    secure_cookies: bool = False
 
     # Initial admin bootstrap
     initial_admin_email: str = "admin@example.com"

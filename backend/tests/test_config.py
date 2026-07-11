@@ -1,6 +1,11 @@
 import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, _assert_production_is_configured
+from app.core.security import create_access_token
+from app.models.enums import UserRole
+from tests.factories import make_user
 
 
 def _prod_settings(**overrides: str) -> Settings:
@@ -39,3 +44,25 @@ def test_production_rejects_leftover_default(field: str) -> None:
 def test_production_rejects_short_secret(field: str) -> None:
     with pytest.raises(RuntimeError, match=field):
         _assert_production_is_configured(_prod_settings(**{field: "too-short"}))
+
+
+@pytest.mark.asyncio
+async def test_admin_tools_session_cookie_not_secure_by_default(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """secure_cookies defaults to False, so the admin-tools session cookie must
+    not carry the Secure flag — a Secure cookie is silently dropped by
+    browsers over plain HTTP, which locks everyone out of /admin-tools and
+    SQLAdmin even with a correct password (see conversation: the fix for
+    exactly this after the site went live without TLS)."""
+    admin = await make_user(session, "cookie-admin@example.com", UserRole.admin)
+    await session.commit()
+    token = create_access_token(admin.id)
+
+    resp = await client.get(
+        f"/admin-tools/sso?token={token}", follow_redirects=False
+    )
+    assert resp.status_code == 302
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert "session=" in set_cookie
+    assert "secure" not in set_cookie.lower()

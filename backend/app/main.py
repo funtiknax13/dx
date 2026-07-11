@@ -43,12 +43,12 @@ app.add_middleware(
 )
 
 # Session cookie shared with SQLAdmin's auth so the custom /admin-tools pages can
-# read the admin login session. https_only is off in dev (plain-HTTP localhost)
-# but must be on in production, where the app only ever sits behind TLS.
+# read the admin login session. https_only tracks settings.secure_cookies, not
+# environment — see its docstring in config.py for why those are different.
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.admin_secret_key,
-    https_only=settings.environment == "production",
+    https_only=settings.secure_cookies,
 )
 
 app.include_router(api_router)

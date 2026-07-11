@@ -119,6 +119,15 @@ sudo nginx -t && sudo systemctl reload nginx
 Certbot настраивает автопродление сам (systemd timer), ничего дополнительно
 делать не нужно.
 
+⚠️ Сразу после этого — поставить `SECURE_COOKIES=true` в `.env` (в корне,
+рядом с `docker-compose.prod.yml`) и `docker compose -f
+docker-compose.prod.yml up -d --force-recreate api`. Пока сайт живёт на
+голом HTTP, это должно быть `false` — иначе браузер молча отказывается
+сохранять cookie сессии `/admin-tools`/SQLAdmin (помечена `Secure`, а
+соединение не HTTPS), и зайти в админку не получится ни с каким паролем,
+хотя сами учётные данные будут верными. Первое включение до появления
+домена — ровно так наступили в этот баг.
+
 ## 6. Проверка
 
 - `curl -I https://твой-домен/` → 200, отдаёт `index.html`.
