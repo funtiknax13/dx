@@ -74,12 +74,21 @@ jobs:
 
       - name: Deploy backend
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" '
-            set -e
-            cd /srv/dh
-            git fetch origin main
-            git reset --hard origin/main
-            docker compose -f docker-compose.prod.yml up -d --build
-            docker image prune -f
-            docker builder prune -f --filter until=48h
-          '
+          # The VPS is small enough that a transient SSH hiccup isn't rare —
+          # one retry before failing the whole workflow.
+          for attempt in 1 2; do
+            if ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" '
+              set -e
+              cd /srv/dh
+              git fetch origin main
+              git reset --hard origin/main
+              docker compose -f docker-compose.prod.yml up -d --build
+              docker image prune -f
+              docker builder prune -af
+            '; then
+              exit 0
+            fi
+            echo "Deploy attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
