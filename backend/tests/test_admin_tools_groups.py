@@ -9,9 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import create_access_token
 from app.models.enums import UserRole
 from app.models.group import Group
+from app.services.media_service import media_path_to_fs
 from tests.factories import make_event_group, make_user
 
 MOSCOW = ZoneInfo("Europe/Moscow")
+
+SAMPLE_GPX = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>Test</name><trkseg>
+    <trkpt lat="55.7500" lon="37.6200"><ele>150.0</ele><time>2026-05-01T08:00:00Z</time></trkpt>
+    <trkpt lat="55.7510" lon="37.6210"><ele>152.0</ele><time>2026-05-01T08:05:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>
+"""
 
 
 async def _login(client: AsyncClient, user_id: int) -> None:
@@ -152,3 +162,84 @@ async def test_duplicate_group_without_trailing_number_gets_copy_suffix(
     copy = await session.get(Group, new_id)
     assert copy is not None
     assert copy.name == "X-10 (копия)"
+
+
+@pytest.mark.asyncio
+async def test_reuploading_gpx_does_not_break_a_duplicated_groups_route(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A duplicated group shares its route_gpx file with the original
+    (rather than copying the file itself). Re-uploading a new route to the
+    original must not delete that shared file out from under the
+    duplicate — reported as "path shown in the form but doesn't open,
+    as if it isn't there"."""
+    org = await make_user(session, "org-gpx@example.com", UserRole.organizer)
+    event, original = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    upload1 = await client.post(
+        f"/admin-tools/groups/{original.id}/gpx",
+        files={"file": ("route1.gpx", SAMPLE_GPX.encode(), "application/gpx+xml")},
+        follow_redirects=False,
+    )
+    assert upload1.status_code == 303, upload1.text
+    await session.refresh(original)
+    shared_path = original.route_gpx
+    assert shared_path
+    assert media_path_to_fs(shared_path).exists()
+
+    dup_resp = await client.post(
+        f"/admin-tools/groups/{original.id}/duplicate", follow_redirects=False
+    )
+    assert dup_resp.status_code == 303, dup_resp.text
+    dup_id = int(dup_resp.headers["location"].split("/groups/")[1].split("/edit")[0])
+    duplicate = await session.get(Group, dup_id)
+    assert duplicate is not None
+    assert duplicate.route_gpx == shared_path
+
+    upload2 = await client.post(
+        f"/admin-tools/groups/{original.id}/gpx",
+        files={"file": ("route2.gpx", SAMPLE_GPX.encode(), "application/gpx+xml")},
+        follow_redirects=False,
+    )
+    assert upload2.status_code == 303, upload2.text
+
+    await session.refresh(original)
+    await session.refresh(duplicate)
+    assert original.route_gpx != shared_path
+    assert duplicate.route_gpx == shared_path
+    assert media_path_to_fs(shared_path).exists(), "shared file deleted out from under duplicate"
+    assert media_path_to_fs(original.route_gpx).exists()
+
+
+@pytest.mark.asyncio
+async def test_reuploading_gpx_deletes_the_old_file_when_not_shared(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """The unshared case must still clean up — this isn't a license to leak
+    every replaced route file onto disk forever."""
+    org = await make_user(session, "org-gpx2@example.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    upload1 = await client.post(
+        f"/admin-tools/groups/{group.id}/gpx",
+        files={"file": ("route1.gpx", SAMPLE_GPX.encode(), "application/gpx+xml")},
+        follow_redirects=False,
+    )
+    assert upload1.status_code == 303, upload1.text
+    await session.refresh(group)
+    first_path = group.route_gpx
+    assert first_path
+    assert media_path_to_fs(first_path).exists()
+
+    upload2 = await client.post(
+        f"/admin-tools/groups/{group.id}/gpx",
+        files={"file": ("route2.gpx", SAMPLE_GPX.encode(), "application/gpx+xml")},
+        follow_redirects=False,
+    )
+    assert upload2.status_code == 303, upload2.text
+
+    assert not media_path_to_fs(first_path).exists()

@@ -18,6 +18,7 @@ from app.schemas.group import (
     RouteMap,
 )
 from app.services.gpx_service import TrackParseError, parse_gpx
+from app.services.group_service import set_group_route_gpx
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -106,8 +107,7 @@ async def upload_route_gpx(
         delete_media(path)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    delete_media(group.route_gpx)
-    group.route_gpx = path
+    await set_group_route_gpx(session, group, path)
     await session.commit()
     await session.refresh(group)
     return group

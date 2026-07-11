@@ -14,6 +14,7 @@ from app.core.db import SessionLocal
 from app.models.event import Event
 from app.models.group import Group
 from app.services.gpx_service import TrackParseError, parse_gpx
+from app.services.group_service import set_group_route_gpx
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -199,7 +200,6 @@ async def group_gpx_upload(request: Request, group_id: int, file: UploadFile) ->
             delete_media(path)
             return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash_error={exc}", 303)
 
-        delete_media(group.route_gpx)
-        group.route_gpx = path
+        await set_group_route_gpx(session, group, path)
         await session.commit()
     return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash=Маршрут загружен", 303)
