@@ -1,5 +1,12 @@
 import { api } from './client'
-import type { Group, GroupSignupState, Protocol, ProtocolRow, RouteMap } from '../types'
+import type {
+  Group,
+  GroupSignupState,
+  Protocol,
+  ProtocolRow,
+  RouteMap,
+  SignupRoster,
+} from '../types'
 
 // Raw shapes as actually returned by the backend (see backend/app/schemas/group.py) —
 // kept private to this module; every exported method returns the frontend's own
@@ -14,6 +21,8 @@ interface RawGroup {
   pace_max?: string | null
   start_time?: string | null
   route_gpx?: string | null
+  event_date: string
+  signup_count: number
 }
 
 interface RawProtocolEntry {
@@ -57,7 +66,9 @@ function mapGroup(raw: RawGroup): Group {
     pace_max: raw.pace_max ?? null,
     target_distance_km: raw.target_distance_km,
     start_time: raw.start_time ?? null,
+    event_date: raw.event_date,
     has_route_gpx: Boolean(raw.route_gpx),
+    signup_count: raw.signup_count,
   }
 }
 
@@ -108,7 +119,36 @@ function mapRouteMap(raw: RawRouteMap): RouteMap {
   }
 }
 
+interface RawSignupRosterEntry {
+  signup_id: number
+  runner_id: number
+  display_name: string
+  avatar?: string | null
+}
+
+interface RawSignupRoster {
+  group_id: number
+  count: number
+  entries: RawSignupRosterEntry[]
+}
+
+function mapSignupRoster(raw: RawSignupRoster): SignupRoster {
+  return {
+    group_id: raw.group_id,
+    count: raw.count,
+    entries: raw.entries.map((e) => ({
+      signup_id: e.signup_id,
+      runner_id: e.runner_id,
+      display_name: e.display_name,
+      avatar_url: e.avatar ?? null,
+    })),
+  }
+}
+
 export const groupsApi = {
+  list: async (eventId: number | string) =>
+    (await api.get<RawGroup[]>(`/events/${eventId}/groups`)).map(mapGroup),
+
   detail: async (id: number | string) => mapGroup(await api.get<RawGroup>(`/groups/${id}`)),
 
   update: async (id: number | string, payload: Partial<RawGroup>) =>
@@ -124,6 +164,9 @@ export const groupsApi = {
   routeGpxUrl: (id: number | string) => `${api.apiUrl}/groups/${id}/route-gpx`,
 
   signupState: (id: number | string) => api.get<GroupSignupState>(`/groups/${id}/signups/me`),
+
+  signupRoster: async (id: number | string) =>
+    mapSignupRoster(await api.get<RawSignupRoster>(`/groups/${id}/signups`)),
 
   uploadRouteGpx: async (id: number | string, file: File) => {
     const form = new FormData()

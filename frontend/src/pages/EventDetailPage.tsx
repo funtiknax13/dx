@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { eventsApi } from '../api/events'
+import { groupsApi } from '../api/groups'
 import { media } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, isPast, plural } from '../lib/format'
@@ -21,7 +22,7 @@ export function EventDetailPage() {
     const event = await eventsApi.detail(id!)
     const groups = event.groups?.length
       ? event.groups
-      : await eventsApi.groups(id!).catch(() => [])
+      : await groupsApi.list(id!).catch(() => [])
     const photos = event.photos?.length
       ? event.photos
       : await eventsApi.photos(id!).catch(() => [])

@@ -5,10 +5,11 @@ import { signupsApi } from '../api/signups'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { formatDistance, formatTime, paceRange, plural } from '../lib/format'
+import { formatDistance, formatTime, isPast, paceRange, plural } from '../lib/format'
 import { ProtocolTable } from '../components/ProtocolTable'
 import { RouteMap } from '../components/RouteMap'
 import { ElevationProfile } from '../components/ElevationProfile'
+import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { Spinner } from '../components/ui/Spinner'
@@ -21,7 +22,13 @@ import {
   IconPin,
   IconRoute,
 } from '../components/ui/icons'
-import type { Group, GroupSignupState, Protocol, RouteMap as RouteMapData } from '../types'
+import type {
+  Group,
+  GroupSignupState,
+  Protocol,
+  RouteMap as RouteMapData,
+  SignupRoster,
+} from '../types'
 
 export function GroupDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -31,13 +38,15 @@ export function GroupDetailPage() {
     group: Group
     protocol: Protocol | null
     route: RouteMapData | null
+    roster: SignupRoster | null
   }>(async () => {
-    const [group, protocol, route] = await Promise.all([
+    const [group, protocol, route, roster] = await Promise.all([
       groupsApi.detail(id!),
       groupsApi.protocol(id!).catch(() => null),
       groupsApi.routeMap(id!).catch(() => null),
+      groupsApi.signupRoster(id!).catch(() => null),
     ])
-    return { group, protocol, route }
+    return { group, protocol, route, roster }
   }, [id])
 
   if (loading) return <PageLoader />
@@ -58,9 +67,13 @@ export function GroupDetailPage() {
     )
   }
 
-  const { group, protocol, route } = data
+  const { group, protocol, route, roster } = data
   const pace = paceRange(group.pace_min, group.pace_max)
   const hasRoute = Boolean(route && route.points.length)
+  // The roster is who *plans* to come — once the event has happened, the
+  // protocol (who actually ran) is what matters, so the intent list is
+  // hidden rather than shown as stale/redundant information.
+  const isUpcoming = !isPast(group.event_date)
 
   return (
     <div>
@@ -143,6 +156,8 @@ export function GroupDetailPage() {
 
         {/* Route sidebar */}
         <aside className="order-1 space-y-5 lg:order-2">
+          {isUpcoming && roster && roster.count > 0 && <SignupRosterCard roster={roster} />}
+
           <div className="flex items-center justify-between">
             <h2 className="font-display text-xl">Маршрут</h2>
             {hasRoute && (
@@ -187,6 +202,30 @@ export function GroupDetailPage() {
           )}
         </aside>
       </div>
+    </div>
+  )
+}
+
+function SignupRosterCard({ roster }: { roster: SignupRoster }) {
+  return (
+    <div className="rounded-xl2 border border-ink/[0.08] bg-white p-4 shadow-card">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl">Кто идёт</h2>
+        <span className="font-mono text-xs text-clay">
+          {roster.count} {plural(roster.count, 'человек', 'человека', 'человек')}
+        </span>
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+        {roster.entries.map((entry) => {
+          const [first, ...rest] = entry.display_name.split(' ')
+          return (
+            <li key={entry.signup_id} className="flex items-center gap-2">
+              <Avatar first={first} last={rest.join(' ')} src={entry.avatar_url} size="sm" />
+              <span className="text-sm text-ink-700">{entry.display_name}</span>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

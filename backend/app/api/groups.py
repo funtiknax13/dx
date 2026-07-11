@@ -1,6 +1,8 @@
+from datetime import date as date_type
+
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import OrganizerUser, SessionDep
@@ -8,6 +10,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
+from app.models.signup import Signup
 from app.models.user import User
 from app.schemas.group import (
     GroupCreate,
@@ -44,12 +47,47 @@ async def _assert_can_manage_group(session: SessionDep, group: Group, user: User
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not manage this event")
 
 
-@router.get("/events/{event_id}/groups", response_model=list[GroupOut])
-async def list_groups(event_id: int, session: SessionDep) -> list[Group]:
-    groups = await session.scalars(
-        select(Group).where(Group.event_id == event_id).order_by(Group.id)
+def _group_out(group: Group, event_date: date_type, signup_count: int) -> GroupOut:
+    return GroupOut(
+        id=group.id,
+        event_id=group.event_id,
+        location=group.location,
+        name=group.name,
+        target_distance_km=group.target_distance_km,
+        pace_min=group.pace_min,
+        pace_max=group.pace_max,
+        start_time=group.start_time,
+        route_gpx=group.route_gpx,
+        event_date=event_date,
+        signup_count=signup_count,
     )
-    return list(groups)
+
+
+async def _to_group_out(session: SessionDep, group: Group, event: Event | None = None) -> GroupOut:
+    if event is None:
+        event = await session.get(Event, group.event_id)
+    assert event is not None  # FK guarantees a group's event always exists
+    count = await session.scalar(select(func.count(Signup.id)).where(Signup.group_id == group.id))
+    return _group_out(group, event.date, count or 0)
+
+
+@router.get("/events/{event_id}/groups", response_model=list[GroupOut])
+async def list_groups(event_id: int, session: SessionDep) -> list[GroupOut]:
+    event = await session.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
+    groups = list(
+        await session.scalars(select(Group).where(Group.event_id == event_id).order_by(Group.id))
+    )
+    if not groups:
+        return []
+    count_rows = await session.execute(
+        select(Signup.group_id, func.count(Signup.id))
+        .where(Signup.group_id.in_([g.id for g in groups]))
+        .group_by(Signup.group_id)
+    )
+    counts: dict[int, int] = {group_id: count for group_id, count in count_rows}
+    return [_group_out(g, event.date, counts.get(g.id, 0)) for g in groups]
 
 
 @router.post(
@@ -57,7 +95,7 @@ async def list_groups(event_id: int, session: SessionDep) -> list[Group]:
 )
 async def create_group(
     event_id: int, payload: GroupCreate, user: OrganizerUser, session: SessionDep
-) -> Group:
+) -> GroupOut:
     event = await session.get(Event, event_id)
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
@@ -68,31 +106,32 @@ async def create_group(
     session.add(group)
     await session.commit()
     await session.refresh(group)
-    return group
+    return _group_out(group, event.date, 0)
 
 
 @router.get("/groups/{group_id}", response_model=GroupOut)
-async def get_group(group_id: int, session: SessionDep) -> Group:
-    return await _get_group_or_404(session, group_id)
+async def get_group(group_id: int, session: SessionDep) -> GroupOut:
+    group = await _get_group_or_404(session, group_id)
+    return await _to_group_out(session, group)
 
 
 @router.patch("/groups/{group_id}", response_model=GroupOut)
 async def update_group(
     group_id: int, payload: GroupUpdate, user: OrganizerUser, session: SessionDep
-) -> Group:
+) -> GroupOut:
     group = await _get_group_or_404(session, group_id)
     await _assert_can_manage_group(session, group, user)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(group, field, value)
     await session.commit()
     await session.refresh(group)
-    return group
+    return await _to_group_out(session, group)
 
 
 @router.post("/groups/{group_id}/route-gpx", response_model=GroupOut)
 async def upload_route_gpx(
     group_id: int, user: OrganizerUser, session: SessionDep, file: UploadFile
-) -> Group:
+) -> GroupOut:
     group = await _get_group_or_404(session, group_id)
     await _assert_can_manage_group(session, group, user)
     try:
@@ -110,7 +149,7 @@ async def upload_route_gpx(
     await set_group_route_gpx(session, group, path)
     await session.commit()
     await session.refresh(group)
-    return group
+    return await _to_group_out(session, group)
 
 
 @router.get("/groups/{group_id}/route-gpx")

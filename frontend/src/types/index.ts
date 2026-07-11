@@ -88,6 +88,7 @@ export interface Group {
   pace_max?: string | null // e.g. "5:30"
   target_distance_km?: number | null
   start_time?: string | null // ISO
+  event_date?: string | null // ISO date, always the parent event's date
   has_route_gpx?: boolean
   signup_count?: number
   finisher_count?: number
@@ -104,6 +105,21 @@ export interface Signup {
 export interface GroupSignupState {
   signed_up: boolean
   signup_id?: number | null
+}
+
+/** Who's signed up (intent) for a group — shown only while the event is
+ * still upcoming; once it's past, the protocol is what matters. */
+export interface SignupRosterEntry {
+  signup_id: number
+  runner_id: number
+  display_name: string
+  avatar_url?: string | null
+}
+
+export interface SignupRoster {
+  group_id: number
+  count: number
+  entries: SignupRosterEntry[]
 }
 
 export interface ProtocolRow {

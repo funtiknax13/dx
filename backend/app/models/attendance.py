@@ -40,4 +40,8 @@ class AttendanceRecord(Base, TimestampMixin):
     )
 
     def __str__(self) -> str:
-        return f"{self.raw_name} (group {self.group_id})"
+        # raw_name only — no relationship traversal (e.g. self.group). SQLAdmin
+        # renders this from other views too (Result.attendance_record), where
+        # the nested relationship isn't eagerly loaded and would raise
+        # DetachedInstanceError.
+        return self.raw_name

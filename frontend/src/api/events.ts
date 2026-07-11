@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { EventDetail, EventPhoto, EventSummary, Group, Paginated } from '../types'
+import type { EventDetail, EventPhoto, EventSummary, Paginated } from '../types'
 
 // Raw shapes as actually returned by the backend (see backend/app/schemas/event.py) —
 // kept private to this module; every exported method returns the frontend's own
@@ -44,8 +44,6 @@ export const eventsApi = {
     const raw = await api.get<RawEvent>(`/events/${id}`)
     return { ...mapEvent(raw), photos: [], groups: [] }
   },
-
-  groups: (id: number | string) => api.get<Group[]>(`/events/${id}/groups`),
 
   photos: async (id: number | string) => {
     const raw = await api.get<RawEventPhoto[]>(`/events/${id}/photos`)

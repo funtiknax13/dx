@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models.group import Group
 from app.models.signup import Signup
-from app.schemas.signup import GroupSignupState, SignupOut
+from app.schemas.signup import GroupSignupState, SignupOut, SignupRoster, SignupRosterEntry
 
 router = APIRouter(tags=["signups"])
 
@@ -17,6 +18,31 @@ async def my_signup_state(
         select(Signup).where(Signup.group_id == group_id, Signup.runner_id == user.id)
     )
     return GroupSignupState(signed_up=signup is not None, signup_id=signup.id if signup else None)
+
+
+@router.get("/groups/{group_id}/signups", response_model=SignupRoster)
+async def group_signup_roster(group_id: int, session: SessionDep) -> SignupRoster:
+    """Who's signed up (intent, not the post-event protocol) — the frontend
+    only shows this for groups whose event hasn't happened yet."""
+    group = await session.get(Group, group_id)
+    if group is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
+    rows = await session.scalars(
+        select(Signup)
+        .where(Signup.group_id == group_id)
+        .options(selectinload(Signup.runner))
+        .order_by(Signup.created_at)
+    )
+    entries = [
+        SignupRosterEntry(
+            signup_id=s.id,
+            runner_id=s.runner_id,
+            display_name=f"{s.runner.first_name} {s.runner.last_name}",
+            avatar=s.runner.avatar,
+        )
+        for s in rows
+    ]
+    return SignupRoster(group_id=group_id, count=len(entries), entries=entries)
 
 
 @router.post(

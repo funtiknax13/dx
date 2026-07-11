@@ -32,4 +32,4 @@ class GuestClaim(Base, TimestampMixin):
     claimant = relationship("User", foreign_keys=[claimant_user_id])
 
     def __str__(self) -> str:
-        return f"claim #{self.id}: guest {self.guest_user_id} <- {self.claimant_user_id}"
+        return f"claim #{self.id}: {self.claimant} claims {self.guest}"

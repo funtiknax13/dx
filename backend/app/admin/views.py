@@ -38,7 +38,7 @@ class UserAdmin(ModelView, model=User):
         User.email_verified,
         User.city,
         User.is_guest,
-        User.merged_into_id,
+        User.merged_into,
     ]
     column_searchable_list = [User.first_name, User.last_name, User.email]
     column_sortable_list = [User.id, User.last_name, User.role]
@@ -78,7 +78,7 @@ class EventAdmin(ModelView, model=Event):
     name = "Event"
     name_plural = "Events"
     icon = "fa-solid fa-calendar"
-    column_list = [Event.id, Event.title, Event.date, Event.created_by]
+    column_list = [Event.id, Event.title, Event.date, Event.creator]
     column_searchable_list = [Event.title]
     column_sortable_list = [Event.id, Event.date]
 
@@ -87,7 +87,7 @@ class EventPhotoAdmin(ModelView, model=EventPhoto):
     name = "Event Photo"
     name_plural = "Event Photos"
     icon = "fa-solid fa-image"
-    column_list = [EventPhoto.id, EventPhoto.event_id, EventPhoto.image, EventPhoto.thumbnail]
+    column_list = [EventPhoto.id, EventPhoto.event, EventPhoto.image, EventPhoto.thumbnail]
 
 
 class GroupAdmin(ModelView, model=Group):
@@ -96,7 +96,7 @@ class GroupAdmin(ModelView, model=Group):
     icon = "fa-solid fa-people-group"
     column_list = [
         Group.id,
-        Group.event_id,
+        Group.event,
         Group.location,
         Group.name,
         Group.target_distance_km,
@@ -109,7 +109,7 @@ class SignupAdmin(ModelView, model=Signup):
     name = "Signup"
     name_plural = "Signups"
     icon = "fa-solid fa-clipboard-check"
-    column_list = [Signup.id, Signup.runner_id, Signup.group_id, Signup.created_at]
+    column_list = [Signup.id, Signup.runner, Signup.group, Signup.created_at]
 
 
 class AttendanceRecordAdmin(ModelView, model=AttendanceRecord):
@@ -118,9 +118,9 @@ class AttendanceRecordAdmin(ModelView, model=AttendanceRecord):
     icon = "fa-solid fa-list-check"
     column_list = [
         AttendanceRecord.id,
-        AttendanceRecord.group_id,
+        AttendanceRecord.group,
         AttendanceRecord.raw_name,
-        AttendanceRecord.runner_id,
+        AttendanceRecord.runner,
         AttendanceRecord.finish_status,
     ]
     column_searchable_list = [AttendanceRecord.raw_name, AttendanceRecord.raw_email]
@@ -132,8 +132,8 @@ class GuestClaimAdmin(ModelView, model=GuestClaim):
     icon = "fa-solid fa-user-check"
     column_list = [
         GuestClaim.id,
-        GuestClaim.guest_user_id,
-        GuestClaim.claimant_user_id,
+        GuestClaim.guest,
+        GuestClaim.claimant,
         GuestClaim.status,
         GuestClaim.created_at,
         GuestClaim.decided_at,
@@ -151,7 +151,7 @@ class ResultAdmin(ModelView, model=Result):
     icon = "fa-solid fa-stopwatch"
     column_list = [
         Result.id,
-        Result.attendance_record_id,
+        Result.attendance_record,
         Result.distance_km,
         Result.duration_seconds,
         Result.finish_status,

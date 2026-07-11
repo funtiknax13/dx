@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +35,11 @@ class GroupOut(BaseModel):
     pace_max: str | None
     start_time: datetime | None
     route_gpx: str | None
+    # Always the parent event's date (see combine_event_date_and_time) — lets
+    # the frontend decide whether this group's event is past without a
+    # second fetch, e.g. to hide the signup roster once it's happened.
+    event_date: date_type
+    signup_count: int
 
 
 class RouteMap(BaseModel):

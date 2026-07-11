@@ -45,6 +45,9 @@ class User(Base, TimestampMixin):
 
     signups = relationship("Signup", back_populates="runner", cascade="all, delete-orphan")
     attendance_records = relationship("AttendanceRecord", back_populates="runner")
+    # The real account a guest was merged into, if any — lets SQLAdmin show a
+    # name instead of the bare merged_into_id.
+    merged_into = relationship("User", remote_side=[id], foreign_keys=[merged_into_id])
 
     def __str__(self) -> str:  # nice label in SQLAdmin dropdowns
         suffix = " [guest]" if self.is_guest else ""
