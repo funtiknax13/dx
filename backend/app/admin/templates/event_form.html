@@ -1,0 +1,78 @@
+{% extends "_base.html" %}
+{% block title %}{{ 'Событие' if event else 'Новое событие' }} — DH Admin Tools{% endblock %}
+{% block content %}
+  <p><a href="/admin-tools/events">← Все события</a></p>
+  <h1>{{ event.title if event else 'Новое событие' }}</h1>
+
+  <div class="card">
+    <form method="post" action="{{ '/admin-tools/events/%d/edit' % event.id if event else '/admin-tools/events/new' }}">
+      <div class="field">
+        <label for="title">Название</label>
+        <input id="title" type="text" name="title" value="{{ event.title if event else '' }}" required />
+      </div>
+      <div class="field">
+        <label for="date">Дата</label>
+        <input id="date" type="date" name="date" value="{{ event.date if event else '' }}" required />
+      </div>
+      <div class="field">
+        <label for="description">Описание</label>
+        <textarea id="description" name="description" rows="4" style="max-width:480px; width:100%;">{{ event.description or '' if event else '' }}</textarea>
+      </div>
+      <button type="submit">{{ 'Сохранить' if event else 'Создать' }}</button>
+    </form>
+  </div>
+
+  {% if event %}
+  <div class="card">
+    <h2>Обложка</h2>
+    {% if event.cover_image %}
+    <p class="hint">Текущая: <code>{{ event.cover_image }}</code></p>
+    {% endif %}
+    <form class="inline" method="post" action="/admin-tools/events/{{ event.id }}/cover" enctype="multipart/form-data">
+      <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required />
+      <button type="submit">Загрузить</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Фотогалерея ({{ event.photos|length }})</h2>
+    {% if event.photos %}
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+      {% for p in event.photos %}
+      <img src="{{ p.thumbnail or p.image }}" alt="" width="120" height="120" style="object-fit:cover; border-radius:6px;" />
+      {% endfor %}
+    </div>
+    {% endif %}
+    <form class="inline" method="post" action="/admin-tools/events/{{ event.id }}/photos" enctype="multipart/form-data">
+      <input type="file" name="files" accept="image/png,image/jpeg,image/webp" multiple required />
+      <button type="submit">Добавить фото</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Группы ({{ event.groups|length }})</h2>
+      <a class="btn" href="/admin-tools/events/{{ event.id }}/groups/new">+ Новая группа</a>
+    </div>
+    {% if event.groups %}
+    <table style="margin-top: 12px;">
+      <thead><tr><th>Название</th><th>Локация</th><th>Дистанция</th><th></th></tr></thead>
+      <tbody>
+        {% for g in event.groups %}
+        <tr>
+          <td>{{ g.name }}</td>
+          <td>{{ g.location }}</td>
+          <td>{{ g.target_distance_km }} км</td>
+          <td><a class="btn secondary" href="/admin-tools/groups/{{ g.id }}/edit">Открыть</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="hint">Групп пока нет.</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="hint">Обложку, фото и группы можно будет добавить после создания события.</p>
+  {% endif %}
+{% endblock %}

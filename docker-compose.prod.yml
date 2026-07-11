@@ -1,0 +1,51 @@
+# Production stack: only `db` and `api` run in Docker. The frontend is a
+# static build served by nginx installed directly on the host (not
+# containerized — see DEPLOY.md), which keeps the resource footprint low on a
+# small VPS and lets nginx terminate TLS with certbot the normal way.
+#
+# Secrets come from a `.env` file in this same directory (repo root) — copy
+# `.env.example` to `.env` and fill it in before first run. That file is used
+# both for compose-level variable substitution below (${POSTGRES_PASSWORD})
+# and as the api container's runtime environment (`env_file:`).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — see .env.example}
+      POSTGRES_DB: dh
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dh -d dh"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      target: prod
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dh:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/dh
+    volumes:
+      # Bind-mounted (not a named volume) so the host nginx can serve
+      # /media/* directly from the same directory without reaching into
+      # Docker-managed storage.
+      - ${MEDIA_HOST_PATH:-./media}:/app/media
+    # Only reachable from the host itself — the host's nginx reverse-proxies
+    # to it. Never expose this port publicly.
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
+
+volumes:
+  db_data:

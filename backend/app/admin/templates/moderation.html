@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block title %}Модерация — DH Admin{% endblock %}
+{% block content %}
+  <h1>Несопоставленные записи ({{ records|length }})</h1>
+  <details>
+    <summary>Как это работает</summary>
+    <p>Каждая строка — участник из импортированного CSV, ещё не привязанный к аккаунту.
+    Если email в CSV совпадает с email зарегистрированного бегуна, ниже сразу показана
+    подсказка с готовой кнопкой «Привязать». Иначе воспользуйтесь поиском по имени/почте
+    под записью.</p>
+  </details>
+
+  {% if records %}
+  <table>
+    <thead>
+      <tr><th>Имя из CSV</th><th>Email / телефон</th><th>Группа</th><th>Сопоставление</th></tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td>{{ r.raw_name }}</td>
+        <td>{{ r.raw_email or "—" }}{% if r.raw_phone %}<br />{{ r.raw_phone }}{% endif %}</td>
+        <td>{{ r.group.name if r.group else r.group_id }}</td>
+        <td>
+          {% set suggestion = suggestions.get(r.id) %}
+          {% if suggestion %}
+          <div class="suggestion">
+            Похоже на <strong>{{ suggestion.first_name }} {{ suggestion.last_name }}</strong>
+            &lt;{{ suggestion.email }}&gt; (email совпадает)
+            <form method="post" action="/admin-tools/moderation/match">
+              <input type="hidden" name="attendance_id" value="{{ r.id }}" />
+              <input type="hidden" name="runner_id" value="{{ suggestion.id }}" />
+              <button type="submit">Привязать</button>
+            </form>
+          </div>
+          {% endif %}
+
+          <form class="inline" method="get" action="/admin-tools/moderation" style="margin-top: 8px;">
+            <input type="hidden" name="for" value="{{ r.id }}" />
+            <input type="text" name="q" value="{{ q if search_for == r.id else '' }}" placeholder="Поиск бегуна по имени/почте" />
+            <button type="submit" class="secondary">Найти</button>
+          </form>
+
+          {% if search_for == r.id %}
+            {% if search_results %}
+            <table style="margin-top: 6px;">
+              {% for u in search_results %}
+              <tr>
+                <td>{{ u.first_name }} {{ u.last_name }} &lt;{{ u.email }}&gt;</td>
+                <td>
+                  <form method="post" action="/admin-tools/moderation/match">
+                    <input type="hidden" name="attendance_id" value="{{ r.id }}" />
+                    <input type="hidden" name="runner_id" value="{{ u.id }}" />
+                    <button type="submit">Привязать</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+            {% else %}
+            <p class="hint">Никого не найдено по запросу «{{ q }}».</p>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Несопоставленных записей нет. 🎉</div>
+  {% endif %}
+{% endblock %}

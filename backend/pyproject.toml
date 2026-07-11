@@ -1,0 +1,60 @@
+[project]
+name = "dh-backend"
+version = "0.1.0"
+description = "DH running community platform — API backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "aiosqlite>=0.20",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "pyjwt>=2.10",
+    "passlib[argon2]>=1.7",
+    "sqladmin>=0.20",
+    "jinja2>=3.1",
+    "itsdangerous>=2.2",
+    "gpxpy>=1.6",
+    "fitparse>=1.2",
+    "aiosmtplib>=3.0",
+    "python-multipart>=0.0.12",
+    "pillow>=11.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]  # FastAPI Depends() in argument defaults is idiomatic
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

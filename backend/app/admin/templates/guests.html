@@ -1,0 +1,52 @@
+{% extends "_base.html" %}
+{% block title %}Гостевые профили — DH Admin{% endblock %}
+{% block content %}
+  <h1>Гостевые профили ({{ guests|length }})</h1>
+  <p class="hint">
+    Создаются автоматически при импорте CSV, если email не совпал ни с одним
+    зарегистрированным аккаунтом. Обычно объединения дожидаются заявки от самого
+    бегуна (см. «Заявки»), но здесь можно объединить и вручную, если нужно
+    сделать это раньше.
+  </p>
+
+  {% if guests %}
+  <table>
+    <thead><tr><th>Имя</th><th>Объединить с аккаунтом</th></tr></thead>
+    <tbody>
+      {% for g in guests %}
+      <tr>
+        <td>{{ g.first_name }} {{ g.last_name }} <span class="hint">#{{ g.id }}</span></td>
+        <td>
+          <form class="inline" method="get" action="/admin-tools/guests">
+            <input type="hidden" name="for" value="{{ g.id }}" />
+            <input type="text" name="q" value="{{ q if search_for == g.id else '' }}" placeholder="Поиск по имени/почте" />
+            <button type="submit" class="secondary">Найти</button>
+          </form>
+          {% if search_for == g.id %}
+            {% if search_results %}
+            <table style="margin-top: 6px;">
+              {% for u in search_results %}
+              <tr>
+                <td>{{ u.first_name }} {{ u.last_name }} &lt;{{ u.email }}&gt;</td>
+                <td>
+                  <form method="post" action="/admin-tools/guests/{{ g.id }}/merge">
+                    <input type="hidden" name="real_user_id" value="{{ u.id }}" />
+                    <button type="submit">Объединить</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+            {% else %}
+            <p class="hint">Никого не найдено по запросу «{{ q }}».</p>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Нет гостевых профилей.</div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,2 @@
+Async Alembic environment. Revisions live in alembic/versions/.
+DATABASE_URL from the environment (via app.core.config) drives the connection.

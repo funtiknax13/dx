@@ -1,0 +1,17 @@
+{% extends "_base.html" %}
+{% block title %}Поиск бегунов — DH Admin{% endblock %}
+{% block content %}
+  <h1>Поиск бегунов</h1>
+  <form class="inline" method="get" action="/admin-tools/runners">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="имя или email" />
+    <button type="submit">Найти</button>
+  </form>
+  <table style="margin-top: 16px;">
+    <thead><tr><th>ID</th><th>Имя</th><th>Email</th><th>Город</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr><td>{{ u.id }}</td><td>{{ u.first_name }} {{ u.last_name }}</td><td>{{ u.email }}</td><td>{{ u.city or "—" }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

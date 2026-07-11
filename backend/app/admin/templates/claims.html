@@ -1,0 +1,36 @@
+{% extends "_base.html" %}
+{% block title %}Заявки на объединение — DH Admin{% endblock %}
+{% block content %}
+  <h1>Заявки на объединение ({{ claims|length }})</h1>
+  <p class="hint">
+    Бегун сам находит свой гостевой профиль (по имени) и жмёт «Это я» — заявка
+    попадает сюда. Подтверждение переносит все результаты гостя на реальный
+    аккаунт; гостевой профиль остаётся в базе с пометкой «объединён».
+  </p>
+
+  {% if claims %}
+  <table>
+    <thead><tr><th>Гостевой профиль</th><th>Заявил(а)</th><th></th></tr></thead>
+    <tbody>
+      {% for c in claims %}
+      {% set guest = users_by_id.get(c.guest_user_id) %}
+      {% set claimant = users_by_id.get(c.claimant_user_id) %}
+      <tr>
+        <td>{{ guest.first_name }} {{ guest.last_name }} <span class="hint">#{{ c.guest_user_id }}</span></td>
+        <td>{{ claimant.first_name }} {{ claimant.last_name }} &lt;{{ claimant.email }}&gt;</td>
+        <td style="white-space:nowrap;">
+          <form class="inline" method="post" action="/admin-tools/claims/{{ c.id }}/approve">
+            <button type="submit">Подтвердить</button>
+          </form>
+          <form class="inline" method="post" action="/admin-tools/claims/{{ c.id }}/reject" style="margin-top:4px;">
+            <button type="submit" class="secondary">Отклонить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Нет заявок на рассмотрении. 🎉</div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "_base.html" %}
+{% block title %}Вход — DH Admin Tools{% endblock %}
+{% block content %}
+  <div class="card" style="max-width: 380px; margin: 60px auto;">
+    <h2>DH Admin Tools</h2>
+    <p class="hint">Обычно сюда попадают по кнопке «Admin Tools» на сайте — вы уже
+    авторизованы там. Эта форма нужна на случай, если ссылка устарела.</p>
+    <form method="post" action="/admin-tools/login">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" name="email" required autofocus />
+      </div>
+      <div class="field">
+        <label for="password">Пароль</label>
+        <input id="password" type="password" name="password" required />
+      </div>
+      <button type="submit">Войти</button>
+    </form>
+  </div>
+{% endblock %}

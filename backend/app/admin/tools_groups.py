@@ -1,0 +1,159 @@
+from datetime import datetime
+
+from fastapi import APIRouter, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+from app.admin.tools_common import can_manage_event, get_tools_user, login_redirect, templates
+from app.core.db import SessionLocal
+from app.models.event import Event
+from app.models.group import Group
+from app.services.gpx_service import TrackParseError, parse_gpx
+from app.services.media_service import (
+    FileTooLargeError,
+    InvalidFileTypeError,
+    delete_media,
+    save_track_file,
+)
+
+router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
+
+
+@router.get(
+    "/events/{event_id}/groups/new", response_class=HTMLResponse, response_model=None
+)
+async def group_new_form(request: Request, event_id: int) -> HTMLResponse | RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        event = await session.get(Event, event_id)
+        if event is None or not can_manage_event(user, event):
+            return RedirectResponse("/admin-tools/events", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "group_form.html",
+        {"active": "events", "tools_user": user, "event": event, "group": None},
+    )
+
+
+@router.post("/events/{event_id}/groups/new", response_model=None)
+async def group_new_submit(
+    request: Request,
+    event_id: int,
+    name: str = Form(...),
+    location: str = Form(...),
+    target_distance_km: float = Form(...),
+    pace_min: str = Form(""),
+    pace_max: str = Form(""),
+    start_time: str = Form(""),
+) -> RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        event = await session.get(Event, event_id)
+        if event is None or not can_manage_event(user, event):
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        group = Group(
+            event_id=event_id,
+            name=name,
+            location=location,
+            target_distance_km=target_distance_km,
+            pace_min=pace_min or None,
+            pace_max=pace_max or None,
+            start_time=datetime.fromisoformat(start_time) if start_time else None,
+        )
+        session.add(group)
+        await session.commit()
+        await session.refresh(group)
+    return RedirectResponse(f"/admin-tools/groups/{group.id}/edit?flash=Группа создана", 303)
+
+
+@router.get("/groups/{group_id}/edit", response_class=HTMLResponse, response_model=None)
+async def group_edit_form(request: Request, group_id: int) -> HTMLResponse | RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        group = await session.get(Group, group_id)
+        if group is None:
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        event = await session.get(Event, group.event_id)
+        if event is None or not can_manage_event(user, event):
+            return RedirectResponse("/admin-tools/events", status_code=303)
+    flash = request.query_params.get("flash")
+    return templates.TemplateResponse(
+        request,
+        "group_form.html",
+        {
+            "active": "events",
+            "tools_user": user,
+            "event": event,
+            "group": group,
+            "flash": flash,
+        },
+    )
+
+
+@router.post("/groups/{group_id}/edit", response_model=None)
+async def group_edit_submit(
+    request: Request,
+    group_id: int,
+    name: str = Form(...),
+    location: str = Form(...),
+    target_distance_km: float = Form(...),
+    pace_min: str = Form(""),
+    pace_max: str = Form(""),
+    start_time: str = Form(""),
+) -> RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        group = await session.get(Group, group_id)
+        if group is None:
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        event = await session.get(Event, group.event_id)
+        if event is None or not can_manage_event(user, event):
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        group.name = name
+        group.location = location
+        group.target_distance_km = target_distance_km
+        group.pace_min = pace_min or None
+        group.pace_max = pace_max or None
+        group.start_time = datetime.fromisoformat(start_time) if start_time else None
+        await session.commit()
+    return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash=Сохранено", 303)
+
+
+@router.post("/groups/{group_id}/gpx", response_model=None)
+async def group_gpx_upload(request: Request, group_id: int, file: UploadFile) -> RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        group = await session.get(Group, group_id)
+        if group is None:
+            return RedirectResponse("/admin-tools/events", status_code=303)
+        event = await session.get(Event, group.event_id)
+        if event is None or not can_manage_event(user, event):
+            return RedirectResponse("/admin-tools/events", status_code=303)
+
+        try:
+            path, content, ext = await save_track_file(file, "routes")
+        except (FileTooLargeError, InvalidFileTypeError) as exc:
+            return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash_error={exc}", 303)
+        if ext != ".gpx":
+            return RedirectResponse(
+                f"/admin-tools/groups/{group_id}/edit?flash_error=Нужен .gpx файл", 303
+            )
+        try:
+            parse_gpx(content)
+        except TrackParseError as exc:
+            delete_media(path)
+            return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash_error={exc}", 303)
+
+        delete_media(group.route_gpx)
+        group.route_gpx = path
+        await session.commit()
+    return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash=Маршрут загружен", 303)

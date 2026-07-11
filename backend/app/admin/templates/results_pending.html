@@ -1,0 +1,40 @@
+{% extends "_base.html" %}
+{% block title %}Результаты на проверке — DH Admin Tools{% endblock %}
+{% block content %}
+  <h1>Результаты на проверке ({{ results|length }})</h1>
+  <p class="hint">
+    Сюда попадают результаты, которые не прошли автопроверку (файл с отклонением по
+    дистанции/времени старта) и любой ручной ввод. Для точечных правок числовых
+    полей используйте <a href="/admin">SQLAdmin → Result</a>.
+  </p>
+
+  {% if results %}
+  <table>
+    <thead>
+      <tr><th>Участник</th><th>Источник</th><th>Дистанция</th><th>Время</th><th>Статус</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td>{{ r.attendance_record.raw_name if r.attendance_record else r.attendance_record_id }}</td>
+        <td>{{ 'файл' if r.source.value == 'file' else 'вручную' }}</td>
+        <td>{{ r.distance_km }} км</td>
+        <td>{{ (r.duration_seconds // 3600) }}:{{ '%02d' % ((r.duration_seconds % 3600) // 60) }}:{{ '%02d' % (r.duration_seconds % 60) }}</td>
+        <td>{{ 'пробежал' if r.finish_status.value == 'finished' else 'DNF' }}</td>
+        <td style="white-space:nowrap;">
+          <form class="inline" method="post" action="/admin-tools/results/{{ r.id }}/approve">
+            <button type="submit">Подтвердить</button>
+          </form>
+          <form class="inline" method="post" action="/admin-tools/results/{{ r.id }}/reject" style="margin-top:4px;"
+                onsubmit="return confirm('Удалить этот результат?');">
+            <button type="submit" class="danger">Отклонить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Нет результатов, ожидающих проверки. 🎉</div>
+  {% endif %}
+{% endblock %}

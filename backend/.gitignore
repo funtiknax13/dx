@@ -1,0 +1,21 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Test / local artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+test.db
+*.db
+_gen.db
+_verify.db
+
+# Local media uploads (served from MEDIA_ROOT)
+media/
+_smoke_media/

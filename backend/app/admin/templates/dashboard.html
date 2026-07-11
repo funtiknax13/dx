@@ -1,0 +1,52 @@
+{% extends "_base.html" %}
+{% block title %}Дашборд — DH Admin Tools{% endblock %}
+{% block content %}
+  <h1>Привет, {{ tools_user.first_name }}!</h1>
+  <p class="hint">
+    {% if tools_user.role.value == 'admin' %}
+    Вы вошли как администратор — доступны все инструменты ниже, для всех событий.
+    {% else %}
+    Вы вошли как организатор — доступны события и группы, которые создали вы.
+    {% endif %}
+  </p>
+
+  <div class="grid" style="margin-top: 20px;">
+    <div class="card">
+      <h2>События и группы</h2>
+      <p class="hint">Создание/редактирование событий, обложка, фотогалерея, группы, GPX-маршрут.</p>
+      <a class="btn" href="/admin-tools/events">Открыть →</a>
+    </div>
+
+    {% if tools_user.role.value == 'admin' %}
+    <div class="card">
+      <h2>Импорт CSV</h2>
+      <p class="hint">
+        Загрузить список пробежавших для группы. Email из файла сразу сопоставляется
+        с зарегистрированным аккаунтом; если совпадения нет — создаётся гостевой
+        профиль, чтобы результат не потерялся.
+      </p>
+      <a class="btn" href="/admin-tools/import">Открыть →</a>
+    </div>
+    <div class="card">
+      <h2>Заявки на объединение</h2>
+      <p class="hint">Бегун сам находит свой гостевой профиль и заявляет «это я» — подтвердите здесь.</p>
+      <a class="btn" href="/admin-tools/claims">Открыть →</a>
+    </div>
+    <div class="card">
+      <h2>Гостевые профили</h2>
+      <p class="hint">Все ещё не объединённые гостевые профили — можно объединить с аккаунтом вручную.</p>
+      <a class="btn" href="/admin-tools/guests">Открыть →</a>
+    </div>
+    <div class="card">
+      <h2>Результаты на проверке</h2>
+      <p class="hint">Подтвердить или отклонить результаты, требующие модерации.</p>
+      <a class="btn" href="/admin-tools/results">Открыть →</a>
+    </div>
+    <div class="card">
+      <h2>SQLAdmin</h2>
+      <p class="hint">Создание пользователей, назначение ролей, точечные правки в БД — для нечастых случаев.</p>
+      <a class="btn secondary" href="/admin">Открыть →</a>
+    </div>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    /* subtle grain wash for atmosphere — pure value, no hue */
+    background-color: #f6f6f5;
+    background-image:
+      radial-gradient(120% 80% at 100% 0%, rgba(14, 14, 13, 0.05), transparent 55%),
+      radial-gradient(90% 60% at 0% 100%, rgba(14, 14, 13, 0.04), transparent 60%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    @apply bg-ink text-volt;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tightest;
+    text-wrap: balance;
+  }
+
+  /* Focus ring — visible, on-brand */
+  :focus-visible {
+    outline: 2px solid theme('colors.signal.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.ink.600');
+    border-radius: 999px;
+    border: 3px solid theme('colors.paper.DEFAULT');
+  }
+}
+
+@layer components {
+  /* ---- Buttons ---- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-semibold
+           px-5 py-2.5 text-sm transition-all duration-200 select-none
+           disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply btn bg-signal text-white shadow-[0_10px_24px_-12px_rgba(14,14,13,0.85)]
+           hover:bg-signal-600 hover:-translate-y-0.5;
+  }
+  .btn-ink {
+    @apply btn bg-ink text-paper hover:bg-ink-800 hover:-translate-y-0.5;
+  }
+  .btn-volt {
+    @apply btn bg-volt text-ink hover:bg-volt-deep hover:-translate-y-0.5;
+  }
+  .btn-ghost {
+    @apply btn border border-ink/15 bg-transparent text-ink hover:border-ink/40 hover:bg-ink/[0.03];
+  }
+  .btn-lg { @apply px-7 py-3.5 text-base; }
+  .btn-sm { @apply px-3.5 py-1.5 text-xs; }
+
+  /* ---- Surfaces ---- */
+  .card {
+    @apply rounded-xl2 border border-ink/[0.08] bg-white/70 backdrop-blur-sm shadow-card;
+  }
+  .card-ink {
+    @apply rounded-xl2 bg-ink text-paper;
+  }
+
+  /* ---- Form controls ---- */
+  .field {
+    @apply w-full rounded-xl border border-ink/15 bg-white/80 px-4 py-3 text-ink
+           placeholder:text-clay/70 transition
+           focus:border-signal focus:ring-4 focus:ring-signal/15 outline-none;
+  }
+  .field-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-ink-600;
+  }
+
+  /* ---- Chips / badges ---- */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold
+           font-mono tracking-tight;
+  }
+
+  /* ---- Eyebrow label ---- */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 font-mono text-[0.68rem] font-semibold uppercase
+           tracking-[0.28em] text-signal;
+  }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .container-page { @apply mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8; }
+  .text-balance { text-wrap: balance; }
+  /* diagonal hazard stripe — black/white, no hue */
+  .stripe {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      theme('colors.paper.DEFAULT') 0 12px,
+      theme('colors.ink.DEFAULT') 12px 24px
+    );
+  }
+}
+
+/* Leaflet — keep tiles under our UI, round the container */
+.leaflet-container {
+  font-family: theme('fontFamily.sans');
+  background: #dcdcd9;
+}
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(246, 246, 245, 0.8) !important;
+}

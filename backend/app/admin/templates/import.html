@@ -1,0 +1,63 @@
+{% extends "_base.html" %}
+{% block title %}Импорт CSV — DH Admin{% endblock %}
+{% block content %}
+  <h1>Импорт списка пробежавших</h1>
+  <div class="card">
+    <form class="inline" method="post" action="/admin-tools/import" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px;">
+      <div>
+        <label for="group_id"><strong>Группа</strong></label><br />
+        <select id="group_id" name="group_id" required style="width: 100%; max-width: 480px;">
+          <option value="" disabled {{ 'selected' if not selected_group_id }}>Выберите группу…</option>
+          {% for event in events %}
+          <optgroup label="{{ event.title }} — {{ event.date }}">
+            {% for group in event.groups %}
+            <option value="{{ group.id }}" {{ 'selected' if selected_group_id == group.id }}>
+              {{ group.name }} ({{ group.location }})
+            </option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="file"><strong>CSV-файл</strong></label><br />
+        <input id="file" type="file" name="file" accept=".csv,text/csv" required />
+        <p class="hint">
+          Разделитель колонок — точка с запятой (<code>;</code>). Колонки:
+          <code>full_name</code> (обязательна), <code>email</code>, <code>phone</code>,
+          <code>result</code> (не обязательны). По умолчанию каждая строка получает статус
+          «пробежал»; если в <code>result</code> стоит <code>0</code> — статус будет DNF
+          (бежал, но не финишировал). Повторный импорт того же файла безопасен, дубли по
+          имени пропускаются.
+        </p>
+        <p class="hint">
+          Email сопоставляется с зарегистрированным аккаунтом; если email нет или он не
+          совпал — по имени/фамилии ищется уже существующий гостевой профиль (в том числе
+          уже объединённый с реальным аккаунтом — тогда запись уходит сразу на него), и
+          только если совпадения нет вообще — заводится новый гостевой профиль.
+        </p>
+      </div>
+      <div>
+        <button type="submit">Импортировать</button>
+      </div>
+    </form>
+  </div>
+
+  {% if result %}
+  <div class="card">
+    <h1 style="margin-top:0;">Результат импорта</h1>
+    <p>Добавлено записей: <strong>{{ result.created_count }}</strong></p>
+    <p>Сопоставлено по email: {{ result.auto_matched }}</p>
+    <p>Направлено на уже объединённый аккаунт (по имени): {{ result.merged_redirects }}</p>
+    <p>Использован существующий гостевой профиль (по имени): {{ result.guests_reused }}</p>
+    <p>Создано новых гостевых профилей: {{ result.guests_created }}</p>
+    <p>Пропущено дублей: {{ result.skipped_duplicates }}</p>
+    <p>Пропущено пустых строк: {{ result.skipped_empty }}</p>
+    <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
+  </div>
+  {% endif %}
+
+  {% if not events %}
+  <div class="empty">Пока нет ни одного события с группами — сначала создайте их в SQLAdmin.</div>
+  {% endif %}
+{% endblock %}
