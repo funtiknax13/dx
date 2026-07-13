@@ -162,6 +162,9 @@ export interface ProtocolRow {
 
 export interface Protocol {
   group_id: number
+  /** All group ids merged into this protocol (pace-subgroups sharing the
+   * same distance_code) — just [group_id] when it has no family. */
+  group_ids: number[]
   finishers: ProtocolRow[] // sorted by time ascending (server-side)
   pending: ProtocolRow[] // on the list, but no confirmed result yet
   dnf: ProtocolRow[]

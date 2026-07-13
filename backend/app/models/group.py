@@ -17,6 +17,12 @@ class Group(Base, TimestampMixin):
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)  # distance code / group name
 
+    # Shared tag across pace-subgroups of the same real-world distance within
+    # one event (e.g. "X-33" for both "Х-33 группа #1" and "#2") — lets the
+    # protocol endpoint merge them into one leaderboard. Null means "no family",
+    # i.e. this group's protocol stands alone.
+    distance_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     # Pace range stored as human "mm:ss" strings (e.g. 5:40 .. 5:30).
     pace_min: Mapped[str | None] = mapped_column(String(20), nullable=True)
     pace_max: Mapped[str | None] = mapped_column(String(20), nullable=True)

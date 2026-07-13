@@ -60,6 +60,7 @@ async def group_new_submit(
     event_id: int,
     name: str = Form(...),
     location: str = Form(...),
+    distance_code: str = Form(""),
     target_distance_km: float = Form(...),
     pace_min: str = Form(""),
     pace_max: str = Form(""),
@@ -77,6 +78,7 @@ async def group_new_submit(
             event_id=event_id,
             name=name,
             location=location,
+            distance_code=distance_code or None,
             target_distance_km=target_distance_km,
             pace_min=pace_min or None,
             pace_max=pace_max or None,
@@ -121,6 +123,7 @@ async def group_edit_submit(
     group_id: int,
     name: str = Form(...),
     location: str = Form(...),
+    distance_code: str = Form(""),
     target_distance_km: float = Form(...),
     pace_min: str = Form(""),
     pace_max: str = Form(""),
@@ -139,6 +142,7 @@ async def group_edit_submit(
             return RedirectResponse("/admin-tools/events", status_code=303)
         group.name = name
         group.location = location
+        group.distance_code = distance_code or None
         group.target_distance_km = target_distance_km
         group.pace_min = pace_min or None
         group.pace_max = pace_max or None
@@ -164,6 +168,7 @@ async def group_duplicate(request: Request, group_id: int) -> RedirectResponse:
             event_id=group.event_id,
             name=_next_group_name(group.name),
             location=group.location,
+            distance_code=group.distance_code,
             target_distance_km=group.target_distance_km,
             pace_min=group.pace_min,
             pace_max=group.pace_max,

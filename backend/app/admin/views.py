@@ -99,6 +99,7 @@ class GroupAdmin(ModelView, model=Group):
         Group.event,
         Group.location,
         Group.name,
+        Group.distance_code,
         Group.target_distance_km,
         Group.start_time,
         Group.counts_toward_rating,

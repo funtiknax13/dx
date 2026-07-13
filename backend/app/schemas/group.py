@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class GroupCreate(BaseModel):
     location: str = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
+    distance_code: str | None = Field(default=None, max_length=50)
     target_distance_km: float = Field(gt=0)
     pace_min: str | None = Field(default=None, max_length=20)
     pace_max: str | None = Field(default=None, max_length=20)
@@ -17,6 +18,7 @@ class GroupCreate(BaseModel):
 class GroupUpdate(BaseModel):
     location: str | None = Field(default=None, min_length=1, max_length=255)
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    distance_code: str | None = Field(default=None, max_length=50)
     target_distance_km: float | None = Field(default=None, gt=0)
     pace_min: str | None = Field(default=None, max_length=20)
     pace_max: str | None = Field(default=None, max_length=20)
@@ -30,6 +32,7 @@ class GroupOut(BaseModel):
     event_id: int
     location: str
     name: str
+    distance_code: str | None
     target_distance_km: float
     pace_min: str | None
     pace_max: str | None
@@ -63,6 +66,9 @@ class ProtocolEntry(BaseModel):
 
 class Protocol(BaseModel):
     group_id: int
+    # All group ids merged into this protocol (siblings sharing the same
+    # event + distance_code) — just [group_id] when it has no family.
+    group_ids: list[int]
     finishers: list[ProtocolEntry]
     pending: list[ProtocolEntry]
     dnf: list[ProtocolEntry]

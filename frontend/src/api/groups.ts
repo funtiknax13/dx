@@ -16,6 +16,7 @@ interface RawGroup {
   event_id: number
   location: string
   name: string
+  distance_code?: string | null
   target_distance_km: number
   pace_min?: string | null
   pace_max?: string | null
@@ -39,6 +40,7 @@ interface RawProtocolEntry {
 
 interface RawProtocol {
   group_id: number
+  group_ids: number[]
   finishers: RawProtocolEntry[]
   pending: RawProtocolEntry[]
   dnf: RawProtocolEntry[]
@@ -62,6 +64,7 @@ function mapGroup(raw: RawGroup): Group {
     event_id: raw.event_id,
     name: raw.name,
     location: raw.location,
+    distance_code: raw.distance_code ?? null,
     pace_min: raw.pace_min ?? null,
     pace_max: raw.pace_max ?? null,
     target_distance_km: raw.target_distance_km,
@@ -88,6 +91,7 @@ function mapProtocolEntry(raw: RawProtocolEntry): ProtocolRow {
 function mapProtocol(raw: RawProtocol): Protocol {
   return {
     group_id: raw.group_id,
+    group_ids: raw.group_ids,
     finishers: raw.finishers.map(mapProtocolEntry),
     pending: raw.pending.map(mapProtocolEntry),
     dnf: raw.dnf.map(mapProtocolEntry),

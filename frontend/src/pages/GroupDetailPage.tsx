@@ -143,6 +143,11 @@ export function GroupDetailPage() {
               </span>
             )}
           </div>
+          {protocol && protocol.group_ids.length > 1 && (
+            <p className="mb-4 text-sm text-ink-600">
+              Общий протокол на {protocol.group_ids.length} темповые группы этой дистанции.
+            </p>
+          )}
           {protocol ? (
             <ProtocolTable protocol={protocol} />
           ) : (

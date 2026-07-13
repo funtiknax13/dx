@@ -53,6 +53,7 @@ def _group_out(group: Group, event_date: date_type, signup_count: int) -> GroupO
         event_id=group.event_id,
         location=group.location,
         name=group.name,
+        distance_code=group.distance_code,
         target_distance_km=group.target_distance_km,
         pace_min=group.pace_min,
         pace_max=group.pace_max,
@@ -190,10 +191,21 @@ async def route_map(group_id: int, session: SessionDep) -> RouteMap:
 
 @router.get("/groups/{group_id}/protocol", response_model=Protocol)
 async def protocol(group_id: int, session: SessionDep) -> Protocol:
-    await _get_group_or_404(session, group_id)
+    group = await _get_group_or_404(session, group_id)
+
+    group_ids = [group_id]
+    if group.distance_code:
+        sibling_ids = await session.scalars(
+            select(Group.id).where(
+                Group.event_id == group.event_id,
+                Group.distance_code == group.distance_code,
+            )
+        )
+        group_ids = list(sibling_ids)
+
     scalar_records = await session.scalars(
         select(AttendanceRecord)
-        .where(AttendanceRecord.group_id == group_id)
+        .where(AttendanceRecord.group_id.in_(group_ids))
         .options(selectinload(AttendanceRecord.result), selectinload(AttendanceRecord.runner))
     )
     records = list(scalar_records)
@@ -249,6 +261,7 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
 
     return Protocol(
         group_id=group_id,
+        group_ids=group_ids,
         finishers=finisher_entries,
         pending=pending_entries,
         dnf=dnf_entries,
