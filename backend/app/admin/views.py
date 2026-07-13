@@ -101,6 +101,7 @@ class GroupAdmin(ModelView, model=Group):
         Group.name,
         Group.target_distance_km,
         Group.start_time,
+        Group.counts_toward_rating,
     ]
     column_searchable_list = [Group.name, Group.location]
 

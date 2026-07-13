@@ -127,6 +127,33 @@ async def test_month_period_excludes_events_far_in_the_future(session: AsyncSess
 
 
 @pytest.mark.asyncio
+async def test_rating_excludes_groups_opted_out_of_rating(session: AsyncSession) -> None:
+    """A social/kids group with counts_toward_rating=False shouldn't feed the
+    rating even though its finishers are perfectly valid AttendanceRecords."""
+    org = await make_user(session, "org-norating@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-norating@example.com")
+    event, rated_group = await make_event_group(session, org)
+    unrated_group = Group(
+        event_id=event.id,
+        location="Парк",
+        name="Детский забег",
+        target_distance_km=1,
+        counts_toward_rating=False,
+    )
+    session.add(unrated_group)
+    await session.flush()
+
+    await _bare_attendance(session, rated_group, runner, finish_status=FinishStatus.finished)
+    await _bare_attendance(session, unrated_group, runner, finish_status=FinishStatus.finished)
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 1
+    rating = await compute_rating(session, "all")
+    assert len(rating) == 1
+    assert rating[0].finished_count == 1
+
+
+@pytest.mark.asyncio
 async def test_rating_orders_by_count_desc(session: AsyncSession) -> None:
     org = await make_user(session, "org3@example.com", UserRole.organizer)
     r1 = await make_user(session, "r1@example.com")

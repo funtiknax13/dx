@@ -60,6 +60,7 @@ def _group_out(group: Group, event_date: date_type, signup_count: int) -> GroupO
         route_gpx=group.route_gpx,
         event_date=event_date,
         signup_count=signup_count,
+        counts_toward_rating=group.counts_toward_rating,
     )
 
 

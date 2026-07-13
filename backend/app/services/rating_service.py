@@ -38,24 +38,25 @@ def _count_query(period: str, runner_id: int | None = None) -> Select[tuple[int 
     CLAUDE.md): CSV import already marks everyone `finished` by default, and that
     alone is enough to count. Uploading a Result can later flip it to `dnf`, which
     drops it out of the count; a *pending* (not yet approved) Result doesn't change
-    finish_status, so it keeps counting either way."""
+    finish_status, so it keeps counting either way. Groups with
+    counts_toward_rating=False (e.g. a social/kids run) are excluded regardless."""
     stmt = (
         select(
             AttendanceRecord.runner_id,
             func.count(AttendanceRecord.id).label("finished_count"),
         )
+        .join(Group, Group.id == AttendanceRecord.group_id)
         .where(
             AttendanceRecord.runner_id.is_not(None),
             AttendanceRecord.finish_status == FinishStatus.finished,
+            Group.counts_toward_rating.is_(True),
         )
         .group_by(AttendanceRecord.runner_id)
     )
     window = _period_window(period)
     if window is not None:
         start, end = window
-        stmt = stmt.join(Group, Group.id == AttendanceRecord.group_id).join(
-            Event, Event.id == Group.event_id
-        )
+        stmt = stmt.join(Event, Event.id == Group.event_id)
         stmt = stmt.where(Event.date >= start.date(), Event.date <= end.date())
     if runner_id is not None:
         stmt = stmt.where(AttendanceRecord.runner_id == runner_id)

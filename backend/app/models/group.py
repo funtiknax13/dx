@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -26,6 +26,10 @@ class Group(Base, TimestampMixin):
     start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     route_gpx: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Off for e.g. a social/kids/non-competitive group whose finishers
+    # shouldn't count toward community rating standings.
+    counts_toward_rating: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     event = relationship("Event", back_populates="groups")
     signups = relationship("Signup", back_populates="group", cascade="all, delete-orphan")

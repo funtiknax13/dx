@@ -243,3 +243,88 @@ async def test_reuploading_gpx_deletes_the_old_file_when_not_shared(
     assert upload2.status_code == 303, upload2.text
 
     assert not media_path_to_fs(first_path).exists()
+
+
+@pytest.mark.asyncio
+async def test_new_group_defaults_to_counting_toward_rating_when_checkbox_checked(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-rating-on@example.com", UserRole.organizer)
+    event, _ = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/events/{event.id}/groups/new",
+        data={
+            "name": "Обычная группа",
+            "location": "Парк",
+            "target_distance_km": "10",
+            "counts_toward_rating": "on",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    group = await session.scalar(
+        select(Group).where(Group.event_id == event.id, Group.name == "Обычная группа")
+    )
+    assert group is not None
+    assert group.counts_toward_rating is True
+
+
+@pytest.mark.asyncio
+async def test_new_group_unchecked_box_excludes_it_from_rating(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """An unchecked HTML checkbox is simply absent from the submitted form —
+    the field must still resolve to False, not error or default to True."""
+    org = await make_user(session, "org-rating-off@example.com", UserRole.organizer)
+    event, _ = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/events/{event.id}/groups/new",
+        data={
+            "name": "Детский забег",
+            "location": "Парк",
+            "target_distance_km": "1",
+            # counts_toward_rating intentionally omitted, as an unchecked
+            # checkbox would be.
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    group = await session.scalar(
+        select(Group).where(Group.event_id == event.id, Group.name == "Детский забег")
+    )
+    assert group is not None
+    assert group.counts_toward_rating is False
+
+
+@pytest.mark.asyncio
+async def test_editing_group_can_toggle_counts_toward_rating(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-rating-toggle@example.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)
+    assert group.counts_toward_rating is True
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/groups/{group.id}/edit",
+        data={
+            "name": group.name,
+            "location": group.location,
+            "target_distance_km": str(group.target_distance_km),
+            # counts_toward_rating omitted -> unchecking it
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    await session.refresh(group)
+    assert group.counts_toward_rating is False

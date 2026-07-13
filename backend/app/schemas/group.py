@@ -40,6 +40,7 @@ class GroupOut(BaseModel):
     # second fetch, e.g. to hide the signup roster once it's happened.
     event_date: date_type
     signup_count: int
+    counts_toward_rating: bool
 
 
 class RouteMap(BaseModel):
