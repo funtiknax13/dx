@@ -120,7 +120,9 @@ function Hero({
           <h1 className="mt-4 font-display text-4xl leading-[1.02] sm:text-5xl lg:text-6xl">
             Длительные пробежки
             <br />
-            каждое <span className="bg-paper px-2 text-ink">воскресенье</span>.
+            <span className="inline-block leading-[1.35]">
+              каждое <span className="bg-paper px-2 text-ink">воскресенье</span>.
+            </span>
           </h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-paper/70">
             🏃 Беговое сообщество Чебоксар без формальностей и вступительных взносов — приходи,
