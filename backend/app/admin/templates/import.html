@@ -24,11 +24,12 @@
         <input id="file" type="file" name="file" accept=".csv,text/csv" required />
         <p class="hint">
           Разделитель колонок — точка с запятой (<code>;</code>). Колонки:
-          <code>full_name</code> (обязательна), <code>email</code>, <code>phone</code>,
-          <code>result</code> (не обязательны). По умолчанию каждая строка получает статус
-          «пробежал»; если в <code>result</code> стоит <code>0</code> — статус будет DNF
-          (бежал, но не финишировал). Повторный импорт того же файла безопасен, дубли по
-          имени пропускаются.
+          <code>first_name</code>, <code>last_name</code> (обязательны, раздельно — чтобы
+          не гадать, в каком порядке в файле написаны имя и фамилия), <code>email</code>,
+          <code>phone</code>, <code>result</code> (не обязательны). По умолчанию каждая
+          строка получает статус «пробежал»; если в <code>result</code> стоит
+          <code>0</code> — статус будет DNF (бежал, но не финишировал). Повторный импорт
+          того же файла безопасен, дубли по имени пропускаются.
         </p>
         <p class="hint">
           Email сопоставляется с зарегистрированным аккаунтом; если email нет или он не
@@ -36,6 +37,53 @@
           уже объединённый с реальным аккаунтом — тогда запись уходит сразу на него), и
           только если совпадения нет вообще — заводится новый гостевой профиль.
         </p>
+      </div>
+
+      <div>
+        <strong>Пример файла</strong>
+        <table style="margin-top:6px; max-width:640px;">
+          <thead>
+            <tr>
+              <th>first_name</th>
+              <th>last_name</th>
+              <th>email</th>
+              <th>phone</th>
+              <th>result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Иван</td>
+              <td>Петров</td>
+              <td>ivan@example.com</td>
+              <td>+79991234567</td>
+              <td>1</td>
+            </tr>
+            <tr>
+              <td>Мария</td>
+              <td>Сидорова</td>
+              <td></td>
+              <td></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Алексей</td>
+              <td>Кузнецов</td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="hint">
+          Мария не финишировала (<code>result = 0</code>), Алексей — без email/телефона/
+          result, что по умолчанию тоже считается «пробежал». То же самое в виде CSV-текста
+          (разделитель <code>;</code>):
+        </p>
+        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;email;phone;result
+Иван;Петров;ivan@example.com;+79991234567;1
+Мария;Сидорова;;;0
+Алексей;Кузнецов;;;</pre>
       </div>
       <div>
         <button type="submit">Импортировать</button>

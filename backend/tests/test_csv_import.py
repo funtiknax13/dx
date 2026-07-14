@@ -8,18 +8,18 @@ from app.models.user import User
 from app.services.csv_import_service import import_attendance_csv
 from tests.factories import make_event_group, make_user
 
-CSV = """full_name;email;phone
-Alice Runner;alice@example.com;+100
-Bob Runner;bob@example.com;
-Alice Runner;dup@example.com;+999
-;;
-Carol Runner;;
+CSV = """first_name;last_name;email;phone
+Alice;Runner;alice@example.com;+100
+Bob;Runner;bob@example.com;
+Alice;Runner;dup@example.com;+999
+;;;
+Carol;Runner;;
 """
 
-CSV_WITH_RESULT = """full_name;email;result
-Dana Runner;dana@example.com;1
-Erin Runner;erin@example.com;0
-Frank Runner;frank@example.com;
+CSV_WITH_RESULT = """first_name;last_name;email;result
+Dana;Runner;dana@example.com;1
+Erin;Runner;erin@example.com;0
+Frank;Runner;frank@example.com;
 """
 
 
@@ -86,9 +86,13 @@ async def test_csv_import_reuses_existing_guest_by_name(session: AsyncSession) -
     _, group_a = await make_event_group(session, org)
     _, group_b = await make_event_group(session, org)
 
-    first = await import_attendance_csv(session, group_a.id, "full_name;email\nBob Runner;\n")
+    first = await import_attendance_csv(
+        session, group_a.id, "first_name;last_name;email\nBob;Runner;\n"
+    )
     await session.commit()
-    second = await import_attendance_csv(session, group_b.id, "full_name;email\nBob Runner;\n")
+    second = await import_attendance_csv(
+        session, group_b.id, "first_name;last_name;email\nBob;Runner;\n"
+    )
     await session.commit()
 
     assert first.guests_created == 1
@@ -120,7 +124,9 @@ async def test_csv_import_redirects_to_merged_account_by_name(session: AsyncSess
 
     # A later import of the same name (no email) should resolve straight to the
     # real account — no second guest, no new claim needed.
-    result = await import_attendance_csv(session, group_a.id, "full_name;email\nBob Runner;\n")
+    result = await import_attendance_csv(
+        session, group_a.id, "first_name;last_name;email\nBob;Runner;\n"
+    )
     await session.commit()
 
     assert result.merged_redirects == 1
@@ -155,7 +161,8 @@ async def test_csv_missing_required_column_raises(session: AsyncSession) -> None
     org = await make_user(session, "org3@example.com", UserRole.organizer)
     _, group = await make_event_group(session, org)
     with pytest.raises(ValueError):
-        await import_attendance_csv(session, group.id, "name;email\nx;y\n")
+        # Missing the required last_name column.
+        await import_attendance_csv(session, group.id, "first_name;email\nx;y\n")
 
 
 @pytest.mark.asyncio

@@ -44,31 +44,33 @@ def _is_zero(value: str | None) -> bool:
 async def import_attendance_csv(
     session: AsyncSession, group_id: int, content: bytes | str
 ) -> CsvImportResult:
-    """Parse a `;`-delimited CSV (columns: full_name required; email, phone, result
-    optional) and create AttendanceRecord rows for a group, each immediately linked
-    to an account — see app.services.guest_service.resolve_runner_for_csv_row for the
-    exact resolution order (email match / merged-guest redirect / guest reuse by
-    name / new guest). No file row is ever left unmatched: results show up in the
-    protocol right away instead of sitting in a moderation queue.
+    """Parse a `;`-delimited CSV (columns: first_name, last_name required — kept
+    separate rather than one full_name column so there's no guessing which word is
+    the first name and which is the surname; email, phone, result optional) and
+    create AttendanceRecord rows for a group, each immediately linked to an account
+    — see app.services.guest_service.resolve_runner_for_csv_row for the exact
+    resolution order (email match / merged-guest redirect / guest reuse by name /
+    new guest). No file row is ever left unmatched: results show up in the protocol
+    right away instead of sitting in a moderation queue.
 
     `result` is a simple finish flag, not a stored value: `0` means DNF (started,
     didn't finish), any other non-empty value means finished. Without a `result`
     column at all (older files), every row defaults to finished, as before.
 
-    Duplicate full_names within the same group (case/space-insensitive) are skipped so
-    re-running an import is safe and doesn't double-count runners.
+    Duplicate names (first+last, case/space-insensitive) within the same group are
+    skipped so re-running an import is safe and doesn't double-count runners.
     """
     text = content.decode("utf-8-sig") if isinstance(content, bytes) else content
     reader = csv.DictReader(io.StringIO(text), delimiter=";")
 
-    if reader.fieldnames is None or "full_name" not in {
-        (f or "").strip().lower() for f in reader.fieldnames
-    }:
-        raise ValueError("CSV must have a 'full_name' column")
+    headers = {(f or "").strip().lower() for f in reader.fieldnames or []}
+    if not {"first_name", "last_name"} <= headers:
+        raise ValueError("CSV must have 'first_name' and 'last_name' columns")
 
     # Map real header names case-insensitively.
-    header_map = {(f or "").strip().lower(): f for f in reader.fieldnames}
-    name_col = header_map["full_name"]
+    header_map = {(f or "").strip().lower(): f for f in reader.fieldnames or []}
+    first_name_col = header_map["first_name"]
+    last_name_col = header_map["last_name"]
     email_col = header_map.get("email")
     phone_col = header_map.get("phone")
     result_col = header_map.get("result")
@@ -87,7 +89,9 @@ async def import_attendance_csv(
     merged_redirects = 0
 
     for row in reader:
-        raw_name = (row.get(name_col) or "").strip()
+        first_name = (row.get(first_name_col) or "").strip()
+        last_name = (row.get(last_name_col) or "").strip()
+        raw_name = f"{first_name} {last_name}".strip()
         if not raw_name:
             skipped_empty += 1
             continue
