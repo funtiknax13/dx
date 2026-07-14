@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/client'
 import { AuthShell, FormError, FormSuccess } from '../components/AuthShell'
-import { Field } from '../components/ui/Field'
+import { PasswordField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 
 export function ResetPasswordPage() {
@@ -64,20 +64,18 @@ export function ResetPasswordPage() {
       <form onSubmit={submit} className="space-y-4" noValidate>
         <FormError message={error} />
         <FormSuccess message={done ? 'Пароль обновлён. Перенаправляем ко входу…' : null} />
-        <Field
+        <PasswordField
           label="Новый пароль"
           name="password"
-          type="password"
           autoComplete="new-password"
           placeholder="Минимум 8 символов"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <Field
+        <PasswordField
           label="Повторите пароль"
           name="confirm"
-          type="password"
           autoComplete="new-password"
           placeholder="••••••••"
           value={confirm}

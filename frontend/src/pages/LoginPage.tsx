@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { ApiError } from '../api/client'
 import { AuthShell, FormError } from '../components/AuthShell'
-import { Field } from '../components/ui/Field'
+import { Field, PasswordField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 
 export function LoginPage() {
@@ -67,10 +67,9 @@ export function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <Field
+        <PasswordField
           label="Пароль"
           name="password"
-          type="password"
           autoComplete="current-password"
           placeholder="••••••••"
           value={password}

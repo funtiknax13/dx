@@ -8,7 +8,7 @@ import { ApiError } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, formatTime, fullName } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
-import { Field, SelectField } from '../components/ui/Field'
+import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { ParticipationHistory } from '../components/ParticipationHistory'
@@ -373,28 +373,25 @@ function PasswordForm() {
       <h3 className="font-display text-lg">Смена пароля</h3>
       <FormError message={error} />
       <FormSuccess message={done ? 'Пароль обновлён' : null} />
-      <Field
+      <PasswordField
         label="Текущий пароль"
         name="current_password"
-        type="password"
         autoComplete="current-password"
         value={form.current_password}
         onChange={set('current_password')}
         required
       />
-      <Field
+      <PasswordField
         label="Новый пароль"
         name="new_password"
-        type="password"
         autoComplete="new-password"
         value={form.new_password}
         onChange={set('new_password')}
         required
       />
-      <Field
+      <PasswordField
         label="Повторите новый пароль"
         name="confirm"
-        type="password"
         autoComplete="new-password"
         value={form.confirm}
         onChange={set('confirm')}

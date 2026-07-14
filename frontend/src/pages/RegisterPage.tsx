@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/client'
 import { AuthShell, FormError } from '../components/AuthShell'
-import { Field } from '../components/ui/Field'
+import { Field, PasswordField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 
 export function RegisterPage() {
@@ -107,10 +107,9 @@ export function RegisterPage() {
           error={fieldErrors.email}
           required
         />
-        <Field
+        <PasswordField
           label="Пароль"
           name="password"
-          type="password"
           autoComplete="new-password"
           placeholder="Минимум 8 символов"
           value={form.password}
@@ -118,10 +117,9 @@ export function RegisterPage() {
           error={fieldErrors.password}
           required
         />
-        <Field
+        <PasswordField
           label="Повторите пароль"
           name="confirm"
-          type="password"
           autoComplete="new-password"
           placeholder="••••••••"
           value={form.confirm}

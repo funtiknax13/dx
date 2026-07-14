@@ -133,3 +133,16 @@ export const IconSpark = (p: P) => (
     <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
   </svg>
 )
+export const IconEye = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+export const IconEyeOff = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9.9 4.24A10.94 10.94 0 0112 4c6 0 10 7 10 7a17.7 17.7 0 01-3.16 4.2M6.6 6.6C4.14 8.24 2 11 2 11s4 7 10 7a10.9 10.9 0 004.24-.86" />
+    <path d="M10.58 10.58a3 3 0 004.24 4.24" />
+    <path d="M3 3l18 18" />
+  </svg>
+)
