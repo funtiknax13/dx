@@ -51,7 +51,16 @@ class PublicProfile(BaseModel):
     first_name: str
     last_name: str
     avatar: str | None = None
+    registered_at: datetime
+    # "rating" = count of finished attendances in groups that count toward the
+    # rating (i.e. "full DX" — see app.services.stats_service) — kept under its
+    # original name since RatingPage already depends on this exact number.
     rating: int
+    first_run_date: date | None = None
+    total_runs_count: int
+    full_dx_km: float
+    current_streak: int
+    longest_streak: int
     history: list[ParticipationHistoryItem]
 
 

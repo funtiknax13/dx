@@ -33,8 +33,17 @@ export interface PublicProfile {
   first_name: string
   last_name: string
   avatar_url?: string | null
+  registered_at: string
+  /** Count of finished attendances in groups that count toward the rating —
+   * i.e. "full DX" (short/non-competitive groups like "P" are excluded). */
   rating: number
   finished_count: number
+  first_run_date?: string | null
+  /** All finished attendances, including groups that don't count toward rating. */
+  total_runs_count: number
+  full_dx_km: number
+  current_streak: number
+  longest_streak: number
   history: ParticipationEntry[]
 }
 

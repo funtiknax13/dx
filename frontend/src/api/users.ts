@@ -39,7 +39,13 @@ interface RawPublicProfile {
   first_name: string
   last_name: string
   avatar?: string | null
+  registered_at: string
   rating: number
+  first_run_date?: string | null
+  total_runs_count: number
+  full_dx_km: number
+  current_streak: number
+  longest_streak: number
   history: RawHistoryItem[]
 }
 
@@ -111,8 +117,14 @@ async function mapPublicProfile(raw: RawPublicProfile): Promise<PublicProfile> {
     first_name: raw.first_name,
     last_name: raw.last_name,
     avatar_url: raw.avatar ?? null,
+    registered_at: raw.registered_at,
     rating: raw.rating,
     finished_count: raw.rating,
+    first_run_date: raw.first_run_date ?? null,
+    total_runs_count: raw.total_runs_count,
+    full_dx_km: raw.full_dx_km,
+    current_streak: raw.current_streak,
+    longest_streak: raw.longest_streak,
     history,
   }
 }

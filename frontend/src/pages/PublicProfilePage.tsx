@@ -2,12 +2,21 @@ import { Link, useParams } from 'react-router-dom'
 import { usersApi } from '../api/users'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { fullName, plural } from '../lib/format'
+import { formatDate, formatDistance, fullName, plural } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { ParticipationHistory } from '../components/ParticipationHistory'
-import { IconArrow, IconTrophy, IconUser } from '../components/ui/icons'
+import {
+  IconArrow,
+  IconCalendar,
+  IconFlag,
+  IconRoute,
+  IconSpark,
+  IconTrophy,
+  IconUser,
+} from '../components/ui/icons'
+import type { PublicProfile } from '../types'
 
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
@@ -94,6 +103,8 @@ export function PublicProfilePage() {
         </div>
       </div>
 
+      <StatsGrid data={data} />
+
       <section className="mt-10">
         <div className="mb-5 flex items-center gap-2">
           <IconTrophy className="text-signal" width={22} height={22} />
@@ -108,6 +119,62 @@ export function PublicProfilePage() {
           onResultSubmitted={reload}
         />
       </section>
+    </div>
+  )
+}
+
+function StatsGrid({ data }: { data: PublicProfile }) {
+  const stats = [
+    {
+      icon: <IconCalendar width={18} height={18} />,
+      label: 'В сообществе с',
+      value: formatDate(data.registered_at, { day: 'numeric', month: 'long', year: 'numeric' }),
+    },
+    {
+      icon: <IconCalendar width={18} height={18} />,
+      label: 'Первая пробежка',
+      value: data.first_run_date
+        ? formatDate(data.first_run_date, { day: 'numeric', month: 'long', year: 'numeric' })
+        : '—',
+    },
+    {
+      icon: <IconRoute width={18} height={18} />,
+      label: 'Пробежек всего',
+      value: String(data.total_runs_count),
+    },
+    {
+      icon: <IconFlag width={18} height={18} />,
+      label: 'Км по полным DX',
+      value: formatDistance(data.full_dx_km),
+    },
+    {
+      icon: <IconSpark width={18} height={18} />,
+      label: 'Текущая серия',
+      value: `${data.current_streak} DX подряд`,
+    },
+    {
+      icon: <IconSpark width={18} height={18} />,
+      label: 'Лучшая серия',
+      value: `${data.longest_streak} DX подряд`,
+    },
+  ]
+
+  return (
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {stats.map((s) => (
+        <div
+          key={s.label}
+          className="rounded-xl2 border border-ink/[0.08] bg-white p-4 text-center shadow-card"
+        >
+          <div className="mx-auto mb-1 flex h-7 w-7 items-center justify-center text-signal">
+            {s.icon}
+          </div>
+          <div className="font-display text-lg leading-tight tabular text-ink">{s.value}</div>
+          <div className="mt-1 font-mono text-[0.6rem] uppercase tracking-[0.1em] text-clay">
+            {s.label}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

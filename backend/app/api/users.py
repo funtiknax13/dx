@@ -28,6 +28,7 @@ from app.services.media_service import (
     save_image,
 )
 from app.services.rating_service import runner_finished_count
+from app.services.stats_service import compute_profile_stats
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -196,11 +197,18 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
         )
 
     rating = await runner_finished_count(session, user_id, period="all")
+    stats = await compute_profile_stats(session, user_id)
     return PublicProfile(
         id=user.id,
         first_name=user.first_name,
         last_name=user.last_name,
         avatar=user.avatar,
+        registered_at=user.created_at,
         rating=rating,
+        first_run_date=stats.first_run_date,
+        total_runs_count=stats.total_runs_count,
+        full_dx_km=stats.full_dx_km,
+        current_streak=stats.current_streak,
+        longest_streak=stats.longest_streak,
         history=history,
     )
