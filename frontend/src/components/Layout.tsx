@@ -234,7 +234,12 @@ function SiteFooter() {
       </div>
       <div className="container-page flex flex-col gap-2 border-t border-paper/10 py-6 text-xs text-paper/45 sm:flex-row sm:items-center sm:justify-between">
         <span>© {new Date().getFullYear()} DАЙ ХАРD — беговое сообщество, Чебоксары</span>
-        <span className="font-mono">#diehardcheb</span>
+        <span className="flex items-center gap-4">
+          <Link to="/privacy-policy" className="hover:text-paper">
+            Политика обработки персональных данных
+          </Link>
+          <span className="font-mono">#diehardcheb</span>
+        </span>
       </div>
     </footer>
   )

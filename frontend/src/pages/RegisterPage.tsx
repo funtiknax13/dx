@@ -15,6 +15,7 @@ export function RegisterPage() {
     password: '',
     confirm: '',
   })
+  const [consent, setConsent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -29,6 +30,7 @@ export function RegisterPage() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) errs.email = 'Некорректный email'
     if (form.password.length < 8) errs.password = 'Минимум 8 символов'
     if (form.password !== form.confirm) errs.confirm = 'Пароли не совпадают'
+    if (!consent) errs.consent = 'Необходимо согласие на обработку персональных данных'
     setFieldErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -44,6 +46,7 @@ export function RegisterPage() {
         last_name: form.last_name.trim(),
         email: form.email.trim(),
         password: form.password,
+        accept_privacy_policy: consent,
       })
       navigate(`/verify-email?email=${encodeURIComponent(form.email.trim())}`, { replace: true })
     } catch (err) {
@@ -127,12 +130,36 @@ export function RegisterPage() {
           error={fieldErrors.confirm}
           required
         />
+        <div>
+          <label className="flex items-start gap-2.5 text-sm text-ink-600">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => {
+                setConsent(e.target.checked)
+                setFieldErrors((f) => ({ ...f, consent: '' }))
+              }}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink/30 text-signal focus:ring-signal/40"
+            />
+            <span>
+              Я согласен(на) с{' '}
+              <Link
+                to="/privacy-policy"
+                target="_blank"
+                className="font-semibold text-signal hover:underline"
+              >
+                политикой обработки персональных данных
+              </Link>{' '}
+              и даю согласие на обработку своих персональных данных
+            </span>
+          </label>
+          {fieldErrors.consent && (
+            <p className="mt-1.5 text-xs text-signal-600">{fieldErrors.consent}</p>
+          )}
+        </div>
         <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
           {loading ? <Spinner className="h-5 w-5" /> : 'Зарегистрироваться'}
         </button>
-        <p className="text-center text-xs text-clay">
-          Регистрируясь, вы соглашаетесь с правилами сообщества DАЙ ХАРD
-        </p>
       </form>
     </AuthShell>
   )

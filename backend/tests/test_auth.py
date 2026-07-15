@@ -1,13 +1,17 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import VERIFY, create_email_token
+from app.models.user import User
 
 REGISTER = {
     "first_name": "Nina",
     "last_name": "Kova",
     "email": "nina@example.com",
     "password": "supersecret1",
+    "accept_privacy_policy": True,
 }
 
 
@@ -74,3 +78,22 @@ async def test_login_wrong_password(client: AsyncClient) -> None:
 async def test_me_requires_auth(client: AsyncClient) -> None:
     r = await client.get("/api/v1/users/me")
     assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_registration_requires_privacy_policy_consent(client: AsyncClient) -> None:
+    payload = {**REGISTER, "accept_privacy_policy": False}
+    r = await client.post("/api/v1/auth/register", json=payload)
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_registration_records_consent_timestamp(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    r = await client.post("/api/v1/auth/register", json=REGISTER)
+    assert r.status_code == 201, r.text
+
+    user = await session.scalar(select(User).where(User.email == REGISTER["email"]))
+    assert user is not None
+    assert user.privacy_accepted_at is not None

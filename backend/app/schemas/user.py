@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -53,3 +53,41 @@ class PublicProfile(BaseModel):
     avatar: str | None = None
     rating: int
     history: list[ParticipationHistoryItem]
+
+
+class AccountExportHistoryItem(BaseModel):
+    attendance_id: int
+    group_id: int
+    group_name: str
+    event_id: int
+    event_title: str
+    event_date: date
+    finish_status: str
+    distance_km: float | None = None
+    duration_seconds: int | None = None
+    pace_seconds_per_km: float | None = None
+    moderation_status: str | None = None
+
+
+class AccountExportSignup(BaseModel):
+    signup_id: int
+    group_id: int
+    group_name: str
+    event_id: int
+    event_title: str
+    event_date: date
+
+
+class AccountExport(BaseModel):
+    """Everything the platform holds about one runner, for the self-service
+    "download my data" right under 152-FZ art. 14."""
+
+    profile: UserMe
+    account_created_at: datetime
+    privacy_accepted_at: datetime | None
+    history: list[AccountExportHistoryItem]
+    signups: list[AccountExportSignup]
+
+
+class AccountDeleteRequest(BaseModel):
+    password: str

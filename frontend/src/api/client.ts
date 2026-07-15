@@ -148,7 +148,7 @@ export const api = {
     raw<T>(path, { ...opts, method: 'POST', body }),
   patch: <T>(path: string, body?: Body, opts?: Omit<RequestOptions, 'method' | 'body'>) =>
     raw<T>(path, { ...opts, method: 'PATCH', body }),
-  del: <T>(path: string, opts?: Omit<RequestOptions, 'method' | 'body'>) =>
-    raw<T>(path, { ...opts, method: 'DELETE' }),
+  del: <T>(path: string, body?: Body, opts?: Omit<RequestOptions, 'method' | 'body'>) =>
+    raw<T>(path, { ...opts, method: 'DELETE', body }),
   apiUrl: API_URL,
 }

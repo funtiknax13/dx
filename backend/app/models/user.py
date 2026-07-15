@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, String
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -31,6 +31,13 @@ class User(Base, TimestampMixin):
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # When the user accepted the privacy policy (checkbox at registration).
+    # Null for accounts predating this field and for guests (never registered
+    # themselves, so never consented to anything).
+    privacy_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Guest accounts: auto-created from a CSV row that has no matching registered
     # email, so the run still shows up in the protocol/rating right away instead of

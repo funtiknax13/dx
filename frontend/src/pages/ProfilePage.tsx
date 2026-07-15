@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { guestsApi } from '../api/guests'
@@ -97,6 +97,8 @@ export function ProfilePage() {
                 Выйти из аккаунта
               </button>
             </div>
+            <DataExportCard />
+            <DeleteAccountCard />
           </div>
         )}
         {tab === 'stats' && (
@@ -401,6 +403,123 @@ function PasswordForm() {
         {loading ? <Spinner className="h-5 w-5" /> : 'Обновить пароль'}
       </button>
     </form>
+  )
+}
+
+function DataExportCard() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const download = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await usersApi.exportMe()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `dh-data-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось выгрузить данные')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="card p-6">
+      <h3 className="font-display text-lg">Мои данные</h3>
+      <p className="mt-2 text-sm text-ink-600">
+        Скачайте всё, что о вас хранит платформа: профиль, историю участий и записи на группы
+        — в формате JSON.
+      </p>
+      <FormError message={error} />
+      <button onClick={download} disabled={loading} className="btn-ghost mt-4">
+        {loading ? <Spinner className="h-5 w-5" /> : 'Скачать мои данные'}
+      </button>
+    </div>
+  )
+}
+
+function DeleteAccountCard() {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const [confirming, setConfirming] = useState(false)
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      await usersApi.deleteMe(password)
+      logout()
+      navigate('/events', { replace: true })
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.status === 400
+            ? 'Неверный пароль'
+            : err.message
+          : 'Не удалось удалить аккаунт',
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="card border-signal/20 p-6">
+      <h3 className="font-display text-lg text-signal-600">Удаление аккаунта</h3>
+      <p className="mt-2 text-sm text-ink-600">
+        Аккаунт удаляется безвозвратно вместе с email, телефоном и остальными личными
+        данными. Записи об участии в прошедших тренировках сохраняются в протоколе, но
+        отвязываются от вас — подробнее в{' '}
+        <Link to="/privacy-policy" className="font-semibold text-signal hover:underline">
+          политике обработки персональных данных
+        </Link>
+        .
+      </p>
+      {!confirming ? (
+        <button onClick={() => setConfirming(true)} className="btn-ghost mt-4 text-signal-600">
+          Удалить аккаунт
+        </button>
+      ) : (
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <FormError message={error} />
+          <input
+            type="password"
+            autoComplete="current-password"
+            placeholder="Введите пароль для подтверждения"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="field"
+            required
+          />
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading || !password} className="btn-primary btn-sm">
+              {loading ? <Spinner className="h-4 w-4" /> : 'Подтвердить удаление'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false)
+                setPassword('')
+                setError(null)
+              }}
+              className="btn-ghost btn-sm"
+            >
+              Отмена
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }
 

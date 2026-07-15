@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import jwt
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
@@ -40,6 +42,7 @@ async def register(payload: RegisterRequest, session: SessionDep) -> MessageResp
         last_name=payload.last_name,
         email=payload.email,
         password_hash=hash_password(payload.password),
+        privacy_accepted_at=datetime.now(UTC),
     )
     session.add(user)
     await session.commit()

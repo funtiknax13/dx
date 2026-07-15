@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -6,6 +6,14 @@ class RegisterRequest(BaseModel):
     last_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    accept_privacy_policy: bool
+
+    @field_validator("accept_privacy_policy")
+    @classmethod
+    def _must_accept(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("Consent to the privacy policy is required")
+        return v
 
 
 class LoginRequest(BaseModel):

@@ -43,6 +43,35 @@ interface RawPublicProfile {
   history: RawHistoryItem[]
 }
 
+/** Full self-service data export (152-FZ art. 14 "right to access") — passed
+ * straight through to a downloaded JSON file, no need to reshape it. */
+export interface AccountExport {
+  profile: RawUser
+  account_created_at: string
+  privacy_accepted_at: string | null
+  history: Array<{
+    attendance_id: number
+    group_id: number
+    group_name: string
+    event_id: number
+    event_title: string
+    event_date: string
+    finish_status: string
+    distance_km: number | null
+    duration_seconds: number | null
+    pace_seconds_per_km: number | null
+    moderation_status: string | null
+  }>
+  signups: Array<{
+    signup_id: number
+    group_id: number
+    group_name: string
+    event_id: number
+    event_title: string
+    event_date: string
+  }>
+}
+
 function mapUser(raw: RawUser): User {
   return { ...raw, avatar_url: raw.avatar ?? null }
 }
@@ -105,4 +134,9 @@ export const usersApi = {
 
   publicProfile: async (id: number | string) =>
     mapPublicProfile(await api.get<RawPublicProfile>(`/users/${id}`)),
+
+  exportMe: () => api.get<AccountExport>('/users/me/export'),
+
+  deleteMe: (password: string) =>
+    api.del<{ message?: string }>('/users/me', { password }),
 }

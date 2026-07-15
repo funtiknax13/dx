@@ -210,6 +210,7 @@ export interface RegisterPayload {
   last_name: string
   email: string
   password: string
+  accept_privacy_policy: boolean
 }
 
 export interface LoginPayload {
