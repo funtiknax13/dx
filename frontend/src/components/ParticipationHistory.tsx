@@ -153,18 +153,18 @@ function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: ()
 
   return (
     <form onSubmit={submit} className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 inline-flex rounded-full border border-ink/10 bg-white p-1 text-xs font-semibold">
         <button
           type="button"
           onClick={() => setMode('file')}
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${mode === 'file' ? 'bg-ink text-paper' : 'border border-ink/10 text-ink-600'}`}
+          className={`rounded-full px-3 py-1.5 transition ${mode === 'file' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
         >
           Загрузить GPX/FIT
         </button>
         <button
           type="button"
           onClick={() => setMode('manual')}
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${mode === 'manual' ? 'bg-ink text-paper' : 'border border-ink/10 text-ink-600'}`}
+          className={`rounded-full px-3 py-1.5 transition ${mode === 'manual' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
         >
           Ввести вручную
         </button>
@@ -175,7 +175,7 @@ function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: ()
           type="file"
           accept=".gpx,.fit"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-paper"
+          className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-full file:border file:border-ink/15 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-600 hover:file:border-ink/30"
         />
       ) : (
         <div className="grid grid-cols-2 gap-3">
