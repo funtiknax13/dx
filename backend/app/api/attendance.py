@@ -3,7 +3,7 @@ from sqlalchemy import select
 
 from app.api.deps import AdminUser, SessionDep
 from app.models.attendance import AttendanceRecord
-from app.models.group import Group
+from app.models.event import Event
 from app.models.user import User
 from app.schemas.attendance import (
     AttendanceOut,
@@ -17,20 +17,20 @@ router = APIRouter(tags=["attendance"])
 
 
 @router.post(
-    "/groups/{group_id}/attendance/import-csv",
+    "/events/{event_id}/attendance/import-csv",
     response_model=CsvImportResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def import_csv(
-    group_id: int, _admin: AdminUser, session: SessionDep, file: UploadFile
+    event_id: int, _admin: AdminUser, session: SessionDep, file: UploadFile
 ) -> CsvImportResponse:
-    group = await session.get(Group, group_id)
-    if group is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
+    event = await session.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
 
     content = await file.read()
     try:
-        result = await import_attendance_csv(session, group_id, content)
+        result = await import_attendance_csv(session, event_id, content)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await session.commit()
@@ -38,6 +38,9 @@ async def import_csv(
         created=result.created_count,
         skipped_duplicates=result.skipped_duplicates,
         skipped_empty=result.skipped_empty,
+        skipped_no_tag=result.skipped_no_tag,
+        skipped_unmatched_tag=result.skipped_unmatched_tag,
+        fallback_used=result.fallback_used,
     )
 
 

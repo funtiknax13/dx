@@ -41,7 +41,7 @@ async def import_page(request: Request) -> HTMLResponse | RedirectResponse:
             "active": "import",
             "tools_user": user,
             "events": events,
-            "selected_group_id": None,
+            "selected_event_id": None,
             "result": None,
         },
     )
@@ -49,7 +49,7 @@ async def import_page(request: Request) -> HTMLResponse | RedirectResponse:
 
 @router.post("/import", response_class=HTMLResponse, response_model=None)
 async def import_submit(
-    request: Request, group_id: int = Form(...), file: UploadFile | None = None
+    request: Request, event_id: int = Form(...), file: UploadFile | None = None
 ) -> HTMLResponse | RedirectResponse:
     user = await _require_admin(request)
     if user is None:
@@ -63,7 +63,7 @@ async def import_submit(
         else:
             content = await file.read()
             try:
-                result = await import_attendance_csv(session, group_id, content)
+                result = await import_attendance_csv(session, event_id, content)
                 await session.commit()
             except ValueError as exc:
                 flash_error = str(exc)
@@ -81,7 +81,7 @@ async def import_submit(
             "active": "import",
             "tools_user": user,
             "events": events,
-            "selected_group_id": group_id,
+            "selected_event_id": event_id,
             "result": result,
             "flash_error": flash_error,
         },

@@ -72,13 +72,17 @@ function mapResult(raw: RawResult): ResultData {
 
 export const attendanceApi = {
   // Admin-only
-  importCsv: (groupId: number | string, file: File) => {
+  importCsv: (eventId: number | string, file: File) => {
     const form = new FormData()
     form.append('file', file)
-    return api.post<{ created: number; skipped_duplicates: number; skipped_empty: number }>(
-      `/groups/${groupId}/attendance/import-csv`,
-      form,
-    )
+    return api.post<{
+      created: number
+      skipped_duplicates: number
+      skipped_empty: number
+      skipped_no_tag: number
+      skipped_unmatched_tag: number
+      fallback_used: boolean
+    }>(`/events/${eventId}/attendance/import-csv`, form)
   },
   unmatched: async () => {
     const raw = await api.get<RawUnmatchedRecord[]>('/attendance/unmatched')

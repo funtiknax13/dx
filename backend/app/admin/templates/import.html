@@ -5,37 +5,51 @@
   <div class="card">
     <form class="inline" method="post" action="/admin-tools/import" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px;">
       <div>
-        <label for="group_id"><strong>Группа</strong></label><br />
-        <select id="group_id" name="group_id" required style="width: 100%; max-width: 480px;">
-          <option value="" disabled {{ 'selected' if not selected_group_id }}>Выберите группу…</option>
+        <label for="event_id"><strong>Событие</strong></label><br />
+        <select id="event_id" name="event_id" required style="width: 100%; max-width: 480px;">
+          <option value="" disabled {{ 'selected' if not selected_event_id }}>Выберите событие…</option>
           {% for event in events %}
-          <optgroup label="{{ event.title }} — {{ event.date }}">
-            {% for group in event.groups %}
-            <option value="{{ group.id }}" {{ 'selected' if selected_group_id == group.id }}>
-              {{ group.name }} ({{ group.location }})
-            </option>
-            {% endfor %}
-          </optgroup>
+          <option value="{{ event.id }}" {{ 'selected' if selected_event_id == event.id }}>
+            {{ event.title }} — {{ event.date }}
+          </option>
           {% endfor %}
         </select>
+        <p class="hint">
+          Файл грузится сразу на всё событие — какому конкретно группе (дистанции)
+          принадлежит каждая строка, определяется по тегу в колонке <code>result</code>
+          (см. ниже), а не выбором группы здесь.
+        </p>
       </div>
       <div>
         <label for="file"><strong>CSV-файл</strong></label><br />
         <input id="file" type="file" name="file" accept=".csv,text/csv" required />
         <p class="hint">
           Разделитель колонок — точка с запятой (<code>;</code>). Колонки:
-          <code>first_name</code>, <code>last_name</code> (обязательны, раздельно — чтобы
-          не гадать, в каком порядке в файле написаны имя и фамилия), <code>email</code>,
-          <code>phone</code>, <code>result</code> (не обязательны). По умолчанию каждая
-          строка получает статус «пробежал»; если в <code>result</code> стоит
-          <code>0</code> — статус будет DNF (бежал, но не финишировал). Повторный импорт
-          того же файла безопасен, дубли по имени пропускаются.
+          <code>first_name</code>, <code>last_name</code>, <code>result</code>
+          (обязательны), <code>email</code>, <code>phone</code> (не обязательны).
+        </p>
+        <p class="hint">
+          <code>result</code> — тег дистанции и статус одновременно: буква — тег группы
+          (например <code>X</code> для группы с <code>distance_code</code> «X-33»,
+          <code>D</code> — «D-25», <code>P</code> — «P-10» и т.д., сопоставляется по первой
+          букве тега группы), буква с <code>n</code> на конце (<code>Xn</code>, <code>Dn</code>,
+          <code>Pn</code>) — DNF (бежал, но не финишировал), пусто — строка не
+          обрабатывается вообще (человек не попадёт в протокол). Кириллица/латиница в букве
+          («Х»/«X») не имеет значения — распознаются как одно и то же.
+        </p>
+        <p class="hint">
+          Если буква не совпала ни с одним тегом групп события — строка пропускается
+          (счётчик «Не найден тег» в результате импорта), а не угадывается наугад. Если у
+          события вообще ни одна группа не помечена тегом — все непустые строки уходят в
+          первую группу события целиком.
         </p>
         <p class="hint">
           Email сопоставляется с зарегистрированным аккаунтом; если email нет или он не
           совпал — по имени/фамилии ищется уже существующий гостевой профиль (в том числе
           уже объединённый с реальным аккаунтом — тогда запись уходит сразу на него), и
-          только если совпадения нет вообще — заводится новый гостевой профиль.
+          только если совпадения нет вообще — заводится новый гостевой профиль. Повторный
+          импорт того же файла безопасен, дубли по имени (в пределах той же группы)
+          пропускаются.
         </p>
       </div>
 
@@ -57,14 +71,14 @@
               <td>Петров</td>
               <td>ivan@example.com</td>
               <td>+79991234567</td>
-              <td>1</td>
+              <td>X</td>
             </tr>
             <tr>
               <td>Мария</td>
               <td>Сидорова</td>
               <td></td>
               <td></td>
-              <td>0</td>
+              <td>Dn</td>
             </tr>
             <tr>
               <td>Алексей</td>
@@ -76,13 +90,13 @@
           </tbody>
         </table>
         <p class="hint">
-          Мария не финишировала (<code>result = 0</code>), Алексей — без email/телефона/
-          result, что по умолчанию тоже считается «пробежал». То же самое в виде CSV-текста
-          (разделитель <code>;</code>):
+          Иван бежал группу «X» и финишировал, Мария бежала «D», но не финишировала, Алексей
+          — пустой <code>result</code>, поэтому вообще не попадёт в импорт. То же самое в
+          виде CSV-текста (разделитель <code>;</code>):
         </p>
         <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;email;phone;result
-Иван;Петров;ivan@example.com;+79991234567;1
-Мария;Сидорова;;;0
+Иван;Петров;ivan@example.com;+79991234567;X
+Мария;Сидорова;;;Dn
 Алексей;Кузнецов;;;</pre>
       </div>
       <div>
@@ -94,6 +108,10 @@
   {% if result %}
   <div class="card">
     <h1 style="margin-top:0;">Результат импорта</h1>
+    {% if result.fallback_used %}
+    <p class="hint">В этом событии ни одна группа не помечена тегом — все строки ушли в
+      первую группу события целиком.</p>
+    {% endif %}
     <p>Добавлено записей: <strong>{{ result.created_count }}</strong></p>
     <p>Сопоставлено по email: {{ result.auto_matched }}</p>
     <p>Направлено на уже объединённый аккаунт (по имени): {{ result.merged_redirects }}</p>
@@ -101,11 +119,27 @@
     <p>Создано новых гостевых профилей: {{ result.guests_created }}</p>
     <p>Пропущено дублей: {{ result.skipped_duplicates }}</p>
     <p>Пропущено пустых строк: {{ result.skipped_empty }}</p>
+    <p>Пропущено без тега (пустой result): {{ result.skipped_no_tag }}</p>
+    <p>Пропущено — тег не найден ни у одной группы: {{ result.skipped_unmatched_tag }}</p>
     <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
   </div>
   {% endif %}
 
-  {% if not events %}
+  {% if events %}
+  <details class="card">
+    <summary><strong>Теги групп по событиям</strong> (справочно, перед загрузкой файла)</summary>
+    <ul>
+      {% for event in events %}
+      <li>
+        {{ event.title }} — {{ event.date }}:
+        {% for group in event.groups %}
+          {{ group.name }} (<code>{{ group.distance_code or 'без тега' }}</code>){% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% else %}
   <div class="empty">Пока нет ни одного события с группами — сначала создайте их в SQLAdmin.</div>
   {% endif %}
 {% endblock %}

@@ -19,6 +19,9 @@ class CsvImportResponse(BaseModel):
     created: int
     skipped_duplicates: int
     skipped_empty: int
+    skipped_no_tag: int
+    skipped_unmatched_tag: int
+    fallback_used: bool
 
 
 class MatchRequest(BaseModel):
