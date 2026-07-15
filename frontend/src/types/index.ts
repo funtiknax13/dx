@@ -33,7 +33,10 @@ export interface PublicProfile {
   first_name: string
   last_name: string
   avatar_url?: string | null
-  registered_at: string
+  is_guest: boolean
+  /** Null for guest profiles — a guest was never registered, so it has no
+   * meaningful "joined on" date. */
+  registered_at?: string | null
   /** Count of finished attendances in groups that count toward the rating —
    * i.e. "full DX" (short/non-competitive groups like "P" are excluded). */
   rating: number

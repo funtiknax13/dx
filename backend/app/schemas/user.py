@@ -51,7 +51,11 @@ class PublicProfile(BaseModel):
     first_name: str
     last_name: str
     avatar: str | None = None
-    registered_at: datetime
+    is_guest: bool
+    # Null for guest profiles — a guest was never registered by anyone, its
+    # created_at is just whenever a CSV import happened to conjure it up
+    # (often *after* the run it records), not a meaningful "joined on" date.
+    registered_at: datetime | None = None
     # "rating" = count of finished attendances in groups that count toward the
     # rating (i.e. "full DX" — see app.services.stats_service) — kept under its
     # original name since RatingPage already depends on this exact number.

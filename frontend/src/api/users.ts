@@ -39,7 +39,8 @@ interface RawPublicProfile {
   first_name: string
   last_name: string
   avatar?: string | null
-  registered_at: string
+  is_guest: boolean
+  registered_at?: string | null
   rating: number
   first_run_date?: string | null
   total_runs_count: number
@@ -117,7 +118,8 @@ async function mapPublicProfile(raw: RawPublicProfile): Promise<PublicProfile> {
     first_name: raw.first_name,
     last_name: raw.last_name,
     avatar_url: raw.avatar ?? null,
-    registered_at: raw.registered_at,
+    is_guest: raw.is_guest,
+    registered_at: raw.registered_at ?? null,
     rating: raw.rating,
     finished_count: raw.rating,
     first_run_date: raw.first_run_date ?? null,

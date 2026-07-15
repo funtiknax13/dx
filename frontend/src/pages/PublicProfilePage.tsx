@@ -70,7 +70,7 @@ export function PublicProfilePage() {
             />
             <div>
               <span className="font-mono text-xs uppercase tracking-[0.2em] text-volt">
-                Профиль бегуна
+                {data.is_guest ? 'Гостевой профиль бегуна' : 'Профиль бегуна'}
               </span>
               <h1 className="mt-1 font-display text-3xl leading-tight sm:text-4xl">
                 {fullName(data.first_name, data.last_name)}
@@ -127,7 +127,7 @@ function StatsGrid({ data }: { data: PublicProfile }) {
   const stats = [
     {
       icon: <IconCalendar width={18} height={18} />,
-      label: 'В сообществе с',
+      label: 'Дата регистрации',
       value: formatDate(data.registered_at, { day: 'numeric', month: 'long', year: 'numeric' }),
     },
     {
