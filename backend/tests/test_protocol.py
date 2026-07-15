@@ -115,3 +115,29 @@ async def test_protocol_merges_groups_sharing_distance_code(
     resp2 = await client.get(f"/api/v1/groups/{other_group.id}/protocol")
     body2 = resp2.json()
     assert body2["group_ids"] == [other_group.id]
+
+
+@pytest.mark.asyncio
+async def test_protocol_entry_includes_runners_avatar(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-avatar@example.com", UserRole.organizer)
+    runner = await make_user(session, "avatar-runner@example.com")
+    runner.avatar = "/media/avatars/test.jpg"
+    _, group = await make_event_group(session, org)
+    session.add(
+        AttendanceRecord(
+            group_id=group.id,
+            raw_name="Avatar Runner",
+            runner_id=runner.id,
+            finish_status=FinishStatus.finished,
+        )
+    )
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    entries = body["finishers"] + body["pending"] + body["dnf"]
+    assert len(entries) == 1
+    assert entries[0]["avatar"] == "/media/avatars/test.jpg"

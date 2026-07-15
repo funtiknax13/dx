@@ -224,6 +224,7 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
             attendance_id=rec.id,
             runner_id=rec.runner_id,
             display_name=display_name,
+            avatar=rec.runner.avatar if rec.runner else None,
             distance_km=res.distance_km if res else None,
             duration_seconds=res.duration_seconds if res else None,
             pace_seconds_per_km=res.pace_seconds_per_km if res else None,

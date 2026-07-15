@@ -57,6 +57,7 @@ class ProtocolEntry(BaseModel):
     attendance_id: int
     runner_id: int | None
     display_name: str
+    avatar: str | None
     distance_km: float | None
     duration_seconds: int | None
     pace_seconds_per_km: float | None
