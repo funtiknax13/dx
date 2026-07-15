@@ -215,6 +215,20 @@ export interface RatingEntry {
 
 export type RatingPeriod = 'all' | 'year' | 'month'
 
+export type LeaderboardMetric = 'dx' | 'km' | 'streak'
+
+/** Informational top by count of full DX, by km (calendar-period windowed,
+ * unlike RatingEntry's rolling window), or by current consecutive-attendance
+ * streak (period-agnostic) — not the community rating. */
+export interface LeaderboardEntry {
+  rank: number
+  user_id: number
+  first_name: string
+  last_name: string
+  avatar_url?: string | null
+  value: number
+}
+
 // ---- Request payloads ----
 
 export interface RegisterPayload {

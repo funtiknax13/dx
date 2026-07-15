@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ratingApi } from '../api/rating'
+import { leaderboardApi } from '../api/leaderboard'
 import { useAsync } from '../lib/useAsync'
 import { asList } from '../lib/list'
 import { fullName, plural } from '../lib/format'
@@ -8,21 +9,81 @@ import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconTrophy } from '../components/ui/icons'
-import type { RatingEntry, RatingPeriod } from '../types'
+import type { RatingPeriod } from '../types'
+
+type View = 'rating' | 'streak' | 'km'
+
+const VIEWS: [View, string][] = [
+  ['rating', 'Рейтинг'],
+  ['streak', 'Серия'],
+  ['km', 'По километрам'],
+]
 
 const PERIODS: [RatingPeriod, string][] = [
   ['all', 'За всё время'],
-  ['year', 'За год'],
-  ['month', 'За месяц'],
+  ['year', 'За этот год'],
+  ['month', 'За этот месяц'],
 ]
 
+const VIEW_SUBTITLE: Record<View, string> = {
+  rating: 'Рейтинг строится по числу завершённых пробежек (finished), подтверждённых администратором. Чем активнее бежишь — тем выше в таблице.',
+  streak: 'Топ по текущей серии подряд посещённых DX — считается по любой группе, не только по полным дистанциям.',
+  km: 'Топ по суммарному километражу полных DX.',
+}
+
+interface DisplayEntry {
+  rank: number
+  user_id: number
+  first_name: string
+  last_name: string
+  avatar_url?: string | null
+  city?: string | null
+  value: number
+  valueLabel: string
+  secondary?: { value: number; label: string }
+}
+
+function formatValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',')
+}
+
 export function RatingPage() {
+  const [view, setView] = useState<View>('rating')
   const [period, setPeriod] = useState<RatingPeriod>('all')
-  const { data, loading, error, reload } = useAsync(() => ratingApi.list(period), [period])
-  const entries = useMemo(() => asList<RatingEntry>(data), [data])
+
+  const { data, loading, error, reload } = useAsync(async () => {
+    if (view === 'rating') {
+      const entries = await ratingApi.list(period)
+      return entries.map<DisplayEntry>((e) => ({
+        rank: e.rank,
+        user_id: e.user_id,
+        first_name: e.first_name,
+        last_name: e.last_name,
+        avatar_url: e.avatar_url,
+        city: e.city,
+        value: e.score,
+        valueLabel: 'балл',
+        secondary: { value: e.finished_count, label: 'финишей' },
+      }))
+    }
+    // Streak is period-agnostic — always fetched as "all" regardless of the
+    // period toggle (which is hidden for this view anyway).
+    const entries = await leaderboardApi.list(view, view === 'streak' ? 'all' : period)
+    return entries.map<DisplayEntry>((e) => ({
+      rank: e.rank,
+      user_id: e.user_id,
+      first_name: e.first_name,
+      last_name: e.last_name,
+      avatar_url: e.avatar_url,
+      value: e.value,
+      valueLabel: view === 'streak' ? 'DX подряд' : 'км',
+    }))
+  }, [view, period])
+  const entries = useMemo(() => asList<DisplayEntry>(data), [data])
 
   const podium = entries.slice(0, 3)
   const rest = entries.slice(3)
+  const hasSecondary = entries.some((e) => e.secondary)
 
   return (
     <div>
@@ -42,23 +103,37 @@ export function RatingPage() {
           <h1 className="mt-3 font-display text-4xl leading-tight sm:text-5xl">
             Рейтинг сообщества
           </h1>
-          <p className="mt-3 max-w-xl text-paper/65">
-            Рейтинг строится по числу завершённых пробежек (finished), подтверждённых
-            администратором. Чем активнее бежишь — тем выше в таблице.
-          </p>
+          <p className="mt-3 max-w-xl text-paper/65">{VIEW_SUBTITLE[view]}</p>
 
-          <div className="mt-7 inline-flex rounded-full border border-paper/15 bg-paper/[0.06] p-1 text-sm font-semibold">
-            {PERIODS.map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setPeriod(key)}
-                className={`rounded-full px-4 py-1.5 transition ${
-                  period === key ? 'bg-volt text-ink' : 'text-paper/70 hover:text-paper'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="mt-7 flex flex-wrap gap-3">
+            <div className="inline-flex rounded-full border border-paper/15 bg-paper/[0.06] p-1 text-sm font-semibold">
+              {VIEWS.map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  className={`rounded-full px-4 py-1.5 transition ${
+                    view === key ? 'bg-volt text-ink' : 'text-paper/70 hover:text-paper'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {view !== 'streak' && (
+              <div className="inline-flex rounded-full border border-paper/15 bg-paper/[0.06] p-1 text-sm font-semibold">
+                {PERIODS.map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setPeriod(key)}
+                    className={`rounded-full px-4 py-1.5 transition ${
+                      period === key ? 'bg-volt text-ink' : 'text-paper/70 hover:text-paper'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -79,7 +154,7 @@ export function RatingPage() {
           />
         ) : entries.length === 0 ? (
           <StatePanel
-            title="Рейтинг пока пуст"
+            title="Пока пусто"
             description="Как только появятся подтверждённые результаты, здесь выстроится таблица лидеров."
             icon={<IconTrophy />}
           />
@@ -89,17 +164,19 @@ export function RatingPage() {
 
             {rest.length > 0 && (
               <div className="mt-10 overflow-hidden rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
-                <div className="grid grid-cols-[3rem_1fr_auto] gap-3 border-b border-ink/10 bg-paper-soft/60 px-4 py-3 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-ink-600 sm:grid-cols-[3.5rem_1fr_7rem_5rem]">
+                <div
+                  className={`grid grid-cols-[3rem_1fr_auto] gap-3 border-b border-ink/10 bg-paper-soft/60 px-4 py-3 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-ink-600 ${hasSecondary ? 'sm:grid-cols-[3.5rem_1fr_7rem_5rem]' : 'sm:grid-cols-[3.5rem_1fr_5rem]'}`}
+                >
                   <span>#</span>
                   <span>Бегун</span>
-                  <span className="hidden text-right sm:block">Финишей</span>
-                  <span className="text-right">Балл</span>
+                  {hasSecondary && <span className="hidden text-right sm:block">Финишей</span>}
+                  <span className="text-right">Значение</span>
                 </div>
                 <ul className="divide-y divide-ink/[0.06]">
                   {rest.map((e) => (
                     <li
                       key={e.user_id}
-                      className="grid grid-cols-[3rem_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-signal-wash/30 sm:grid-cols-[3.5rem_1fr_7rem_5rem]"
+                      className={`grid grid-cols-[3rem_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-signal-wash/30 ${hasSecondary ? 'sm:grid-cols-[3.5rem_1fr_7rem_5rem]' : 'sm:grid-cols-[3.5rem_1fr_5rem]'}`}
                     >
                       <span className="font-display text-lg tabular text-ink-600">{e.rank}</span>
                       <Link
@@ -118,11 +195,13 @@ export function RatingPage() {
                           )}
                         </span>
                       </Link>
-                      <span className="hidden text-right font-mono text-sm tabular text-ink-600 sm:block">
-                        {e.finished_count}
-                      </span>
+                      {hasSecondary && (
+                        <span className="hidden text-right font-mono text-sm tabular text-ink-600 sm:block">
+                          {e.secondary?.value ?? '—'}
+                        </span>
+                      )}
                       <span className="text-right font-display text-lg tabular text-signal">
-                        {e.score}
+                        {formatValue(e.value)}
                       </span>
                     </li>
                   ))}
@@ -131,7 +210,7 @@ export function RatingPage() {
             )}
             <p className="mt-6 text-center font-mono text-xs text-clay">
               {entries.length} {plural(entries.length, 'участник', 'участника', 'участников')} в
-              рейтинге
+              списке
             </p>
           </>
         )}
@@ -140,7 +219,7 @@ export function RatingPage() {
   )
 }
 
-function Podium({ entries }: { entries: RatingEntry[] }) {
+function Podium({ entries }: { entries: DisplayEntry[] }) {
   // order for visual podium: 2nd, 1st, 3rd
   const order = [entries[1], entries[0], entries[2]].filter(Boolean)
   const heights = ['sm:mt-8', '', 'sm:mt-14']
@@ -176,12 +255,16 @@ function Podium({ entries }: { entries: RatingEntry[] }) {
             </h3>
             {e.city && <p className="font-mono text-xs text-clay">{e.city}</p>}
             <div className="mt-4 flex items-baseline gap-1">
-              <span className="font-display text-3xl tabular text-signal">{e.score}</span>
-              <span className="font-mono text-xs text-clay">балл</span>
+              <span className="font-display text-3xl tabular text-signal">
+                {formatValue(e.value)}
+              </span>
+              <span className="font-mono text-xs text-clay">{e.valueLabel}</span>
             </div>
-            <span className="mt-1 font-mono text-[0.65rem] uppercase tracking-wide text-ink-600">
-              {e.finished_count} финишей
-            </span>
+            {e.secondary && (
+              <span className="mt-1 font-mono text-[0.65rem] uppercase tracking-wide text-ink-600">
+                {e.secondary.value} {e.secondary.label}
+              </span>
+            )}
           </Link>
         )
       })}

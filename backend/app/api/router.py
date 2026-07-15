@@ -6,6 +6,7 @@ from app.api import (
     events,
     groups,
     guests,
+    leaderboard,
     rating,
     results,
     signups,
@@ -21,4 +22,5 @@ api_router.include_router(signups.router)
 api_router.include_router(attendance.router)
 api_router.include_router(results.router)
 api_router.include_router(rating.router)
+api_router.include_router(leaderboard.router)
 api_router.include_router(guests.router)
