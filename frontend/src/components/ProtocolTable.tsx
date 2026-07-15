@@ -99,7 +99,7 @@ export function ProtocolTable({ protocol }: { protocol: Protocol }) {
       <div className="flex items-center justify-between bg-ink px-4 py-3 text-paper">
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-volt">Протокол</span>
         <span className="font-mono text-xs tabular text-paper/60">
-          {finishers.length} финишировали
+          {finishers.length + pending.length} финишировали
         </span>
       </div>
 

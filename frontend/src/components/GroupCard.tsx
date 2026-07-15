@@ -38,7 +38,7 @@ export function GroupCard({ group, index = 0 }: { group: Group; index?: number }
           {pace && (
             <span className="inline-flex items-center gap-1.5 font-mono tabular">
               <IconRoute width={14} height={14} className="text-signal" />
-              {pace} /км
+              {pace} мин/км
             </span>
           )}
           {group.start_time && (

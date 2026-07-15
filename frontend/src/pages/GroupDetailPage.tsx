@@ -106,7 +106,7 @@ export function GroupDetailPage() {
                   {pace && (
                     <span className="inline-flex items-center gap-1.5 font-mono tabular">
                       <IconRoute width={16} height={16} className="text-signal" />
-                      {pace} /км
+                      {pace} мин/км
                     </span>
                   )}
                   {group.target_distance_km != null && (
@@ -137,8 +137,13 @@ export function GroupDetailPage() {
             <h2 className="font-display text-2xl sm:text-3xl">Протокол забега</h2>
             {protocol && (
               <span className="font-mono text-xs text-clay">
-                {protocol.finishers.length}{' '}
-                {plural(protocol.finishers.length, 'финишёр', 'финишёра', 'финишёров')}
+                {protocol.finishers.length + protocol.pending.length}{' '}
+                {plural(
+                  protocol.finishers.length + protocol.pending.length,
+                  'финишёр',
+                  'финишёра',
+                  'финишёров',
+                )}
                 {protocol.dnf.length > 0 && ` · ${protocol.dnf.length} DNF`}
               </span>
             )}

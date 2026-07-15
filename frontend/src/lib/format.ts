@@ -10,7 +10,7 @@ export function formatDuration(seconds?: number | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
 }
 
-/** Pace in seconds per km -> "m:ss /км" */
+/** Pace in seconds per km -> "m:ss" (caller appends the "мин/км" unit) */
 export function formatPace(secPerKm?: number | null): string {
   if (secPerKm == null || Number.isNaN(secPerKm) || secPerKm <= 0) return '—'
   const m = Math.floor(secPerKm / 60)
