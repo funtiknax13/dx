@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { usersApi } from '../api/users'
 import { useAuth } from '../auth/AuthContext'
@@ -13,15 +14,17 @@ import {
   IconFlag,
   IconRoute,
   IconSpark,
-  IconTrophy,
   IconUser,
 } from '../components/ui/icons'
 import type { Achievement, PublicProfile } from '../types'
+
+type Tab = 'history' | 'achievements'
 
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
   const { data, loading, error, reload } = useAsync(() => usersApi.publicProfile(id!), [id])
+  const [tab, setTab] = useState<Tab>('history')
 
   // Viewing own public profile — nudge to editable version
   const isSelf = user && String(user.id) === id
@@ -105,48 +108,51 @@ export function PublicProfilePage() {
 
       <StatsGrid data={data} />
 
-      <AchievementsSection achievements={data.achievements} />
-
-      <section className="mt-10">
-        <div className="mb-5 flex items-center gap-2">
-          <IconTrophy className="text-signal" width={22} height={22} />
-          <h2 className="font-display text-2xl sm:text-3xl">История участий</h2>
-          <span className="ml-auto font-mono text-xs text-clay">
-            {data.history.length} {plural(data.history.length, 'запись', 'записи', 'записей')}
-          </span>
-        </div>
-        <ParticipationHistory
-          history={data.history}
-          editable={Boolean(isSelf)}
-          onResultSubmitted={reload}
-        />
-      </section>
-    </div>
-  )
-}
-
-function AchievementsSection({ achievements }: { achievements: Achievement[] }) {
-  const reached = achievements.filter((a) => a.reached)
-  // Only the very next unreached milestone is shown, dimmed, as a "what's
-  // next" teaser — the rest stay hidden so the row doesn't fill up with
-  // locked placeholders.
-  const nextUp = achievements.find((a) => !a.reached)
-  const visible = nextUp ? [...reached, nextUp] : reached
-
-  if (visible.length === 0) return null
-
-  return (
-    <section className="mt-10">
-      <div className="mb-5 flex items-center gap-2">
-        <IconSpark className="text-signal" width={22} height={22} />
-        <h2 className="font-display text-2xl sm:text-3xl">Ачивки</h2>
-      </div>
-      <div className="flex flex-wrap gap-4">
-        {visible.map((a) => (
-          <AchievementBadge key={a.threshold} achievement={a} />
+      {/* Tabs */}
+      <div className="mt-10 flex gap-2 overflow-x-auto pb-1">
+        {(
+          [
+            ['history', 'История участий'],
+            ['achievements', 'Достижения'],
+          ] as [Tab, string][]
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
+              tab === key ? 'bg-ink text-paper' : 'border border-ink/10 text-ink-600 hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
         ))}
       </div>
-    </section>
+
+      {tab === 'history' && (
+        <section className="mt-6">
+          <div className="mb-5 flex items-center justify-end gap-2">
+            <span className="font-mono text-xs text-clay">
+              {data.history.length} {plural(data.history.length, 'запись', 'записи', 'записей')}
+            </span>
+          </div>
+          <ParticipationHistory
+            history={data.history}
+            editable={Boolean(isSelf)}
+            onResultSubmitted={reload}
+          />
+        </section>
+      )}
+
+      {tab === 'achievements' && (
+        <section className="mt-6">
+          <div className="flex flex-wrap gap-4">
+            {data.achievements.map((a) => (
+              <AchievementBadge key={a.threshold} achievement={a} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
   )
 }
 

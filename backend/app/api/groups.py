@@ -20,6 +20,7 @@ from app.schemas.group import (
     ProtocolEntry,
     RouteMap,
 )
+from app.services.achievement_service import get_latest_thresholds
 from app.services.gpx_service import TrackParseError, parse_gpx
 from app.services.group_service import set_group_route_gpx
 from app.services.media_service import (
@@ -210,6 +211,9 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
     )
     records = list(scalar_records)
 
+    runner_ids = [rec.runner_id for rec in records if rec.runner_id is not None]
+    latest_thresholds = await get_latest_thresholds(session, runner_ids)
+
     def to_entry(rec: AttendanceRecord) -> ProtocolEntry:
         res = rec.result
         # Once linked to an account, always show its *current* name — not the
@@ -225,6 +229,9 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
             runner_id=rec.runner_id,
             display_name=display_name,
             avatar=rec.runner.avatar if rec.runner else None,
+            latest_achievement=(
+                latest_thresholds.get(rec.runner_id) if rec.runner_id is not None else None
+            ),
             distance_km=res.distance_km if res else None,
             duration_seconds=res.duration_seconds if res else None,
             pace_seconds_per_km=res.pace_seconds_per_km if res else None,

@@ -118,6 +118,35 @@ async def test_protocol_merges_groups_sharing_distance_code(
 
 
 @pytest.mark.asyncio
+async def test_protocol_entry_includes_latest_achievement(
+    session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import achievement_service
+
+    monkeypatch.setattr(achievement_service, "ACHIEVEMENT_MILESTONES", [1, 2])
+
+    org = await make_user(session, "org-badge@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-badge@example.com")
+    _, group = await make_event_group(session, org)
+    session.add(
+        AttendanceRecord(
+            group_id=group.id,
+            raw_name="Runner",
+            runner_id=runner.id,
+            finish_status=FinishStatus.finished,
+        )
+    )
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    entries = body["finishers"] + body["pending"] + body["dnf"]
+    assert len(entries) == 1
+    assert entries[0]["latest_achievement"] == 1
+
+
+@pytest.mark.asyncio
 async def test_protocol_entry_includes_runners_avatar(
     session: AsyncSession, client: AsyncClient
 ) -> None:

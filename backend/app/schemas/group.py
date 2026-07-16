@@ -58,6 +58,9 @@ class ProtocolEntry(BaseModel):
     runner_id: int | None
     display_name: str
     avatar: str | None
+    # Highest full-DX-count achievement milestone this runner has reached, if
+    # any — shown as a small badge next to their name in the protocol.
+    latest_achievement: int | None
     distance_km: float | None
     duration_seconds: int | None
     pace_seconds_per_km: float | None

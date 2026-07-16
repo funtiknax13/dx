@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
@@ -71,3 +71,31 @@ async def compute_achievements(
                 )
             )
     return entries
+
+
+async def get_latest_thresholds(
+    session: AsyncSession, runner_ids: list[int], milestones: list[int] | None = None
+) -> dict[int, int]:
+    """Highest milestone each runner has reached, for many runners at once —
+    e.g. to badge a whole protocol table without one compute_achievements
+    call (and its own query) per row. Runners with no reached milestone are
+    simply absent from the result."""
+    if not runner_ids:
+        return {}
+    milestones = ACHIEVEMENT_MILESTONES if milestones is None else milestones
+    rows = await session.execute(
+        select(AttendanceRecord.runner_id, func.count(AttendanceRecord.id))
+        .join(Group, Group.id == AttendanceRecord.group_id)
+        .where(
+            AttendanceRecord.runner_id.in_(runner_ids),
+            AttendanceRecord.finish_status == FinishStatus.finished,
+            Group.counts_toward_rating.is_(True),
+        )
+        .group_by(AttendanceRecord.runner_id)
+    )
+    result: dict[int, int] = {}
+    for runner_id, count in rows:
+        reached = [m for m in milestones if count >= m]
+        if reached:
+            result[runner_id] = max(reached)
+    return result

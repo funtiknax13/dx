@@ -32,6 +32,7 @@ interface RawProtocolEntry {
   runner_id: number | null
   display_name: string
   avatar: string | null
+  latest_achievement: number | null
   distance_km: number | null
   duration_seconds: number | null
   pace_seconds_per_km: number | null
@@ -83,6 +84,7 @@ function mapProtocolEntry(raw: RawProtocolEntry): ProtocolRow {
     runner_id: raw.runner_id,
     runner_name: raw.display_name,
     avatar_url: raw.avatar,
+    latest_achievement: raw.latest_achievement,
     finish_status: raw.finish_status as ProtocolRow['finish_status'],
     distance_km: raw.distance_km,
     duration_seconds: raw.duration_seconds,

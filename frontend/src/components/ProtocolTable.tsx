@@ -23,7 +23,17 @@ function RunnerCell({ row }: { row: ProtocolRow }) {
         size="sm"
       />
       <span className="min-w-0">
-        <span className="block truncate font-semibold text-ink">{name}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-semibold text-ink">{name}</span>
+          {row.latest_achievement != null && (
+            <span
+              className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border border-signal px-0.5 font-display text-[0.55rem] leading-none text-signal"
+              title={`Достижение: ${row.latest_achievement} DX`}
+            >
+              {row.latest_achievement}
+            </span>
+          )}
+        </span>
         {row.runner_id == null && (
           <span className="font-mono text-[0.65rem] uppercase tracking-wide text-clay">
             без аккаунта

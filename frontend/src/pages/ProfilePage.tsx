@@ -11,18 +11,16 @@ import { Avatar } from '../components/ui/Avatar'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
-import { ParticipationHistory } from '../components/ParticipationHistory'
-import { IconArrow, IconCalendar, IconTrophy, IconUser } from '../components/ui/icons'
+import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
 import type { Gender, GuestClaim, GuestProfile, MySignupEntry, User } from '../types'
 
-type Tab = 'profile' | 'security' | 'stats' | 'guest'
+type Tab = 'profile' | 'security' | 'guest'
 
 export function ProfilePage() {
   const { user, setUser, logout } = useAuth()
   const [tab, setTab] = useState<Tab>('profile')
 
   const stats = useAsync(() => usersApi.publicProfile(user!.id), [user?.id])
-  const { reload: reloadStats } = stats
   const upcoming = useAsync(() => signupsApi.mine(), [user?.id])
 
   if (!user) return null
@@ -41,7 +39,10 @@ export function ProfilePage() {
             <span className="mt-2 inline-flex chip bg-ink text-paper">{roleLabel(user.role)}</span>
           </div>
         </div>
-        <div className="flex items-center gap-6">
+        <Link
+          to={`/users/${user.id}`}
+          className="flex items-center gap-6 rounded-xl2 border border-transparent px-2 py-1 transition hover:border-ink/10"
+        >
           <div className="text-center">
             <div className="font-display text-3xl tabular text-signal">
               {stats.data?.rating ?? user.rating ?? 0}
@@ -58,8 +59,18 @@ export function ProfilePage() {
               финишей
             </div>
           </div>
-        </div>
+          <span className="hidden text-sm font-semibold text-ink-600 hover:text-signal sm:inline-flex sm:items-center sm:gap-1">
+            Статистика и достижения <IconArrow width={14} height={14} />
+          </span>
+        </Link>
       </div>
+
+      {upcoming.data && upcoming.data.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-4 font-display text-xl">Предстоящие события</h3>
+          <UpcomingSignups entries={upcoming.data} />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mt-8 flex gap-2 overflow-x-auto pb-1">
@@ -67,7 +78,6 @@ export function ProfilePage() {
           [
             ['profile', 'Мои данные'],
             ['security', 'Безопасность'],
-            ['stats', 'Моя статистика'],
             ['guest', 'Это мои результаты?'],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -99,46 +109,6 @@ export function ProfilePage() {
             </div>
             <DataExportCard />
             <DeleteAccountCard />
-          </div>
-        )}
-        {tab === 'stats' && (
-          <div className="grid gap-8 lg:grid-cols-[300px_1fr]">
-            <div className="card-ink h-fit p-6">
-              <IconTrophy className="text-volt" width={28} height={28} />
-              <div className="mt-4 font-display text-5xl tabular text-volt">
-                {stats.data?.rating ?? 0}
-              </div>
-              <p className="mt-1 font-mono text-xs uppercase tracking-[0.16em] text-paper/55">
-                балл рейтинга
-              </p>
-              <div className="mt-6 border-t border-paper/10 pt-4">
-                <div className="font-display text-3xl tabular">{stats.data?.finished_count ?? 0}</div>
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-paper/55">
-                  завершённых пробежек
-                </p>
-              </div>
-            </div>
-            <div>
-              {upcoming.data && upcoming.data.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="mb-4 font-display text-xl">Предстоящие события</h3>
-                  <UpcomingSignups entries={upcoming.data} />
-                </div>
-              )}
-
-              <h3 className="mb-4 font-display text-xl">История участий</h3>
-              {stats.loading ? (
-                <div className="flex justify-center py-10">
-                  <Spinner className="text-signal" />
-                </div>
-              ) : (
-                <ParticipationHistory
-                  history={stats.data?.history ?? []}
-                  editable
-                  onResultSubmitted={reloadStats}
-                />
-              )}
-            </div>
           </div>
         )}
         {tab === 'guest' && <GuestClaimSection />}

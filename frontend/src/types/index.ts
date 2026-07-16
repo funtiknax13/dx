@@ -178,6 +178,8 @@ export interface ProtocolRow {
   runner_id?: number | null // null = unmatched (no account yet)
   runner_name: string
   avatar_url?: string | null
+  /** Highest full-DX-count milestone this runner has reached, if any. */
+  latest_achievement?: number | null
   finish_status: FinishStatus
   distance_km?: number | null
   duration_seconds?: number | null
