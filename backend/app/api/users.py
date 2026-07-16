@@ -227,6 +227,7 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
         rating=rating,
         first_run_date=stats.first_run_date,
         total_runs_count=stats.total_runs_count,
+        dnf_count=stats.dnf_count,
         full_dx_km=stats.full_dx_km,
         current_streak=stats.current_streak,
         longest_streak=stats.longest_streak,

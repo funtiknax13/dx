@@ -54,6 +54,7 @@ interface RawPublicProfile {
   rating: number
   first_run_date?: string | null
   total_runs_count: number
+  dnf_count: number
   full_dx_km: number
   current_streak: number
   longest_streak: number
@@ -133,6 +134,7 @@ function mapPublicProfile(raw: RawPublicProfile): PublicProfile {
     finished_count: raw.rating,
     first_run_date: raw.first_run_date ?? null,
     total_runs_count: raw.total_runs_count,
+    dnf_count: raw.dnf_count,
     full_dx_km: raw.full_dx_km,
     current_streak: raw.current_streak,
     longest_streak: raw.longest_streak,

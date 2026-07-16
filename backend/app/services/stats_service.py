@@ -14,6 +14,7 @@ from app.models.group import Group
 class ProfileStats:
     first_run_date: date | None
     total_runs_count: int
+    dnf_count: int
     full_dx_count: int
     full_dx_km: float
     current_streak: int
@@ -31,6 +32,13 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
         select(func.count(AttendanceRecord.id)).where(
             AttendanceRecord.runner_id == runner_id,
             AttendanceRecord.finish_status == FinishStatus.finished,
+        )
+    )
+
+    dnf_count = await session.scalar(
+        select(func.count(AttendanceRecord.id)).where(
+            AttendanceRecord.runner_id == runner_id,
+            AttendanceRecord.finish_status == FinishStatus.dnf,
         )
     )
 
@@ -66,6 +74,7 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
     return ProfileStats(
         first_run_date=first_run_date,
         total_runs_count=total_runs or 0,
+        dnf_count=dnf_count or 0,
         full_dx_count=full_dx_count,
         full_dx_km=full_dx_km,
         current_streak=current_streak,

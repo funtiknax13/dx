@@ -44,6 +44,7 @@ export interface PublicProfile {
   first_run_date?: string | null
   /** All finished attendances, including groups that don't count toward rating. */
   total_runs_count: number
+  dnf_count: number
   full_dx_km: number
   current_streak: number
   longest_streak: number

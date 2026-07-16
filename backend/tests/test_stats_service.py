@@ -23,6 +23,18 @@ async def _finish(session: AsyncSession, group: Group, runner_id: int) -> None:
     await session.flush()
 
 
+async def _dnf(session: AsyncSession, group: Group, runner_id: int) -> None:
+    session.add(
+        AttendanceRecord(
+            group_id=group.id,
+            raw_name="Runner",
+            runner_id=runner_id,
+            finish_status=FinishStatus.dnf,
+        )
+    )
+    await session.flush()
+
+
 @pytest.mark.asyncio
 async def test_full_dx_excludes_groups_opted_out_of_rating(session: AsyncSession) -> None:
     org = await make_user(session, "org-stats1@example.com", UserRole.organizer)
@@ -126,3 +138,26 @@ async def test_streak_is_zero_when_most_recent_past_event_was_missed(
     stats = await compute_profile_stats(session, runner.id)
     assert stats.longest_streak == 1
     assert stats.current_streak == 0
+
+
+@pytest.mark.asyncio
+async def test_dnf_count_is_tracked_separately_from_finished_runs(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-stats5@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats5@example.com")
+    _, group = await make_event_group(session, org, target_km=10)
+    event2 = Event(title="DX #2", date=date(2026, 5, 8), created_by=org.id)
+    session.add(event2)
+    await session.flush()
+    group2 = Group(event_id=event2.id, location="City", name="G2", target_distance_km=10)
+    session.add(group2)
+    await session.flush()
+
+    await _finish(session, group, runner.id)
+    await _dnf(session, group2, runner.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.total_runs_count == 1
+    assert stats.dnf_count == 1
