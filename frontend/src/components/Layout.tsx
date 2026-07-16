@@ -36,6 +36,11 @@ export function Layout() {
 
   useEffect(() => setOpen(false), [location.pathname])
 
+  const navItems =
+    isAuthenticated && user
+      ? [...NAV, { to: `/users/${user.id}`, label: 'Моя статистика' }]
+      : NAV
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper/85 backdrop-blur-md">
@@ -43,7 +48,7 @@ export function Layout() {
           <div className="flex items-center gap-8">
             <Brand />
             <nav className="hidden items-center gap-1 md:flex">
-              {NAV.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -113,7 +118,7 @@ export function Layout() {
         {open && (
           <div className="border-t border-ink/10 bg-paper md:hidden">
             <div className="container-page flex flex-col gap-1 py-4">
-              {NAV.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
