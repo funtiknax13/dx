@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ratingApi } from '../api/rating'
 import { leaderboardApi } from '../api/leaderboard'
+import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { asList } from '../lib/list'
 import { fullName, plural } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
@@ -26,9 +26,9 @@ const PERIODS: [RatingPeriod, string][] = [
 ]
 
 const VIEW_SUBTITLE: Record<View, string> = {
-  rating: 'Рейтинг строится по числу завершённых пробежек (finished), подтверждённых администратором. Чем активнее бежишь — тем выше в таблице.',
-  streak: 'Топ по текущей серии подряд посещённых DX — считается по любой группе, не только по полным дистанциям.',
-  km: 'Топ по суммарному километражу полных DX.',
+  rating: 'Рейтинг строится по числу завершённых пробежек (finished), подтверждённых администратором. Чем активнее бежишь — тем выше в таблице. Показаны первые 20.',
+  streak: 'Топ по текущей серии подряд посещённых DX — считается по любой группе, не только по полным дистанциям. Показаны первые 20.',
+  km: 'Топ по суммарному километражу полных DX. Показаны первые 20.',
 }
 
 interface DisplayEntry {
@@ -48,13 +48,14 @@ function formatValue(value: number): string {
 }
 
 export function RatingPage() {
+  const { user: authUser } = useAuth()
   const [view, setView] = useState<View>('rating')
   const [period, setPeriod] = useState<RatingPeriod>('all')
 
   const { data, loading, error, reload } = useAsync(async () => {
     if (view === 'rating') {
-      const entries = await ratingApi.list(period)
-      return entries.map<DisplayEntry>((e) => ({
+      const { entries, me } = await ratingApi.list(period)
+      const toDisplay = (e: (typeof entries)[number]): DisplayEntry => ({
         rank: e.rank,
         user_id: e.user_id,
         first_name: e.first_name,
@@ -64,12 +65,13 @@ export function RatingPage() {
         value: e.score,
         valueLabel: 'балл',
         secondary: { value: e.finished_count, label: 'финишей' },
-      }))
+      })
+      return { entries: entries.map(toDisplay), me: me ? toDisplay(me) : null }
     }
     // Streak is period-agnostic — always fetched as "all" regardless of the
     // period toggle (which is hidden for this view anyway).
-    const entries = await leaderboardApi.list(view, view === 'streak' ? 'all' : period)
-    return entries.map<DisplayEntry>((e) => ({
+    const { entries, me } = await leaderboardApi.list(view, view === 'streak' ? 'all' : period)
+    const toDisplay = (e: (typeof entries)[number]): DisplayEntry => ({
       rank: e.rank,
       user_id: e.user_id,
       first_name: e.first_name,
@@ -77,10 +79,12 @@ export function RatingPage() {
       avatar_url: e.avatar_url,
       value: e.value,
       valueLabel: view === 'streak' ? 'DX подряд' : 'км',
-    }))
+    })
+    return { entries: entries.map(toDisplay), me: me ? toDisplay(me) : null }
   }, [view, period])
-  const entries = useMemo(() => asList<DisplayEntry>(data), [data])
 
+  const entries = data?.entries ?? []
+  const meEntry = data?.me ?? null
   const podium = entries.slice(0, 3)
   const rest = entries.slice(3)
   const hasSecondary = entries.some((e) => e.secondary)
@@ -160,7 +164,7 @@ export function RatingPage() {
           />
         ) : (
           <>
-            {podium.length > 0 && <Podium entries={podium} />}
+            {podium.length > 0 && <Podium entries={podium} myId={authUser?.id} />}
 
             {rest.length > 0 && (
               <div className="mt-10 overflow-hidden rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
@@ -174,40 +178,23 @@ export function RatingPage() {
                 </div>
                 <ul className="divide-y divide-ink/[0.06]">
                   {rest.map((e) => (
-                    <li
-                      key={e.user_id}
-                      className={`grid grid-cols-[3rem_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-signal-wash/30 ${hasSecondary ? 'sm:grid-cols-[3.5rem_1fr_7rem_5rem]' : 'sm:grid-cols-[3.5rem_1fr_5rem]'}`}
-                    >
-                      <span className="font-display text-lg tabular text-ink-600">{e.rank}</span>
-                      <Link
-                        to={`/users/${e.user_id}`}
-                        className="flex min-w-0 items-center gap-3 hover:text-signal"
-                      >
-                        <Avatar first={e.first_name} last={e.last_name} src={e.avatar_url} size="sm" />
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold text-ink">
-                            {fullName(e.first_name, e.last_name)}
-                          </span>
-                          {e.city && (
-                            <span className="block truncate font-mono text-[0.65rem] text-clay">
-                              {e.city}
-                            </span>
-                          )}
-                        </span>
-                      </Link>
-                      {hasSecondary && (
-                        <span className="hidden text-right font-mono text-sm tabular text-ink-600 sm:block">
-                          {e.secondary?.value ?? '—'}
-                        </span>
-                      )}
-                      <span className="text-right font-display text-lg tabular text-signal">
-                        {formatValue(e.value)}
-                      </span>
-                    </li>
+                    <RatingRow key={e.user_id} entry={e} hasSecondary={hasSecondary} isMe={e.user_id === authUser?.id} />
                   ))}
                 </ul>
               </div>
             )}
+
+            {meEntry && (
+              <div className="mt-4 overflow-hidden rounded-xl2 border border-signal/30 bg-signal-wash shadow-card">
+                <div className="border-b border-signal/20 px-4 py-2 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-signal-600">
+                  Ваш результат
+                </div>
+                <ul>
+                  <RatingRow entry={meEntry} hasSecondary={hasSecondary} isMe />
+                </ul>
+              </div>
+            )}
+
             <p className="mt-6 text-center font-mono text-xs text-clay">
               {entries.length} {plural(entries.length, 'участник', 'участника', 'участников')} в
               списке
@@ -219,7 +206,49 @@ export function RatingPage() {
   )
 }
 
-function Podium({ entries }: { entries: DisplayEntry[] }) {
+function RatingRow({
+  entry: e,
+  hasSecondary,
+  isMe,
+}: {
+  entry: DisplayEntry
+  hasSecondary: boolean
+  isMe: boolean
+}) {
+  return (
+    <li
+      className={`grid grid-cols-[3rem_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-signal-wash/30 ${hasSecondary ? 'sm:grid-cols-[3.5rem_1fr_7rem_5rem]' : 'sm:grid-cols-[3.5rem_1fr_5rem]'} ${isMe ? 'bg-signal-wash/50' : ''}`}
+    >
+      <span className="font-display text-lg tabular text-ink-600">{e.rank}</span>
+      <Link to={`/users/${e.user_id}`} className="flex min-w-0 items-center gap-3 hover:text-signal">
+        <Avatar first={e.first_name} last={e.last_name} src={e.avatar_url} size="sm" />
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5 truncate font-semibold text-ink">
+            {fullName(e.first_name, e.last_name)}
+            {isMe && (
+              <span className="chip shrink-0 bg-signal px-1.5 py-0.5 text-white">
+                Вы
+              </span>
+            )}
+          </span>
+          {e.city && (
+            <span className="block truncate font-mono text-[0.65rem] text-clay">{e.city}</span>
+          )}
+        </span>
+      </Link>
+      {hasSecondary && (
+        <span className="hidden text-right font-mono text-sm tabular text-ink-600 sm:block">
+          {e.secondary?.value ?? '—'}
+        </span>
+      )}
+      <span className="text-right font-display text-lg tabular text-signal">
+        {formatValue(e.value)}
+      </span>
+    </li>
+  )
+}
+
+function Podium({ entries, myId }: { entries: DisplayEntry[]; myId?: number }) {
   // DOM order stays rank order (1st, 2nd, 3rd) — reads naturally top-to-bottom
   // on mobile (single column) and for screen readers. The "2nd, 1st, 3rd"
   // podium layout is a purely visual rearrangement, applied only at sm: and
@@ -235,11 +264,12 @@ function Podium({ entries }: { entries: DisplayEntry[] }) {
     <div className="grid gap-4 sm:grid-cols-3">
       {entries.map((e, i) => {
         const rank = e.rank
+        const isMe = e.user_id === myId
         return (
           <Link
             to={`/users/${e.user_id}`}
             key={e.user_id}
-            className={`group relative flex flex-col items-center rounded-xl2 border border-ink/[0.08] bg-white p-6 text-center shadow-card transition-all hover:-translate-y-1 hover:shadow-lift ${order[i]} ${heights[i]}`}
+            className={`group relative flex flex-col items-center rounded-xl2 border p-6 text-center shadow-card transition-all hover:-translate-y-1 hover:shadow-lift ${order[i]} ${heights[i]} ${isMe ? 'border-signal bg-signal-wash' : 'border-ink/[0.08] bg-white'}`}
           >
             <span
               className={`absolute -top-3 grid h-8 w-8 place-items-center rounded-full font-display text-sm ${badges[i]} ${badgeText[i]}`}
@@ -253,8 +283,13 @@ function Podium({ entries }: { entries: DisplayEntry[] }) {
               size="lg"
               className={`ring-2 ${rings[i]}`}
             />
-            <h3 className="mt-3 font-display text-lg leading-tight text-ink group-hover:text-signal">
+            <h3 className="mt-3 flex items-center gap-1.5 font-display text-lg leading-tight text-ink group-hover:text-signal">
               {fullName(e.first_name, e.last_name)}
+              {isMe && (
+                <span className="chip bg-signal px-1.5 py-0.5 text-white">
+                  Вы
+                </span>
+              )}
             </h3>
             {e.city && <p className="font-mono text-xs text-clay">{e.city}</p>}
             <div className="mt-4 flex items-baseline gap-1">

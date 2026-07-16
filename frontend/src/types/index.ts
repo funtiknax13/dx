@@ -48,7 +48,8 @@ export interface PublicProfile {
   current_streak: number
   longest_streak: number
   achievements: Achievement[]
-  history: ParticipationEntry[]
+  // Not embedded here — paginated separately via usersApi.historyPage, since
+  // an active runner's full history can run into the hundreds.
 }
 
 /** One configured "full DX count" milestone (e.g. 25, 50, 100...). Unreached

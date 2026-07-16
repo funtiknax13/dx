@@ -2,6 +2,7 @@ import { api } from './client'
 import type { RatingEntry, RatingPeriod } from '../types'
 
 interface RawRatingItem {
+  rank: number
   runner_id: number
   first_name: string
   last_name: string
@@ -12,20 +13,28 @@ interface RawRatingItem {
 interface RawRatingResponse {
   period: string
   entries: RawRatingItem[]
+  me: RawRatingItem | null
+}
+
+function mapItem(e: RawRatingItem): RatingEntry {
+  return {
+    rank: e.rank,
+    user_id: e.runner_id,
+    first_name: e.first_name,
+    last_name: e.last_name,
+    avatar_url: e.avatar ?? null,
+    city: null,
+    finished_count: e.finished_count,
+    score: e.finished_count,
+  }
 }
 
 export const ratingApi = {
-  list: async (period: RatingPeriod = 'all'): Promise<RatingEntry[]> => {
-    const res = await api.get<RawRatingResponse>('/rating', { query: { period }, auth: false })
-    return res.entries.map((e, i) => ({
-      rank: i + 1,
-      user_id: e.runner_id,
-      first_name: e.first_name,
-      last_name: e.last_name,
-      avatar_url: e.avatar ?? null,
-      city: null,
-      finished_count: e.finished_count,
-      score: e.finished_count,
-    }))
+  list: async (period: RatingPeriod = 'all'): Promise<{ entries: RatingEntry[]; me: RatingEntry | null }> => {
+    // No `auth: false` here — the request client already attaches the token
+    // when a session exists, and the endpoint stays public either way; being
+    // logged in just adds a personalized `me` row when outside the top N.
+    const res = await api.get<RawRatingResponse>('/rating', { query: { period } })
+    return { entries: res.entries.map(mapItem), me: res.me ? mapItem(res.me) : null }
   },
 }

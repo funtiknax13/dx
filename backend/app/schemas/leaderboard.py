@@ -14,3 +14,6 @@ class LeaderboardResponse(BaseModel):
     metric: str
     period: str
     entries: list[LeaderboardItem]
+    # The requesting user's own entry, only when authenticated and outside
+    # `entries` (past the top-N cutoff) — already visible there otherwise.
+    me: LeaderboardItem | None = None

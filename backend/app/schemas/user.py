@@ -74,7 +74,8 @@ class PublicProfile(BaseModel):
     current_streak: int
     longest_streak: int
     achievements: list[AchievementItem]
-    history: list[ParticipationHistoryItem]
+    # Not embedded here — paginated separately via GET /users/{id}/history,
+    # since an active runner's full history can run into the hundreds.
 
 
 class AccountExportHistoryItem(BaseModel):

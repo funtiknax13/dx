@@ -1,34 +1,57 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { eventsApi } from '../api/events'
 import { media } from '../api/client'
 import { useAsync } from '../lib/useAsync'
-import { asList } from '../lib/list'
-import { formatDate, isPast } from '../lib/format'
+import { formatDate } from '../lib/format'
 import { EventCard } from '../components/EventCard'
+import { Pager } from '../components/ui/Pager'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconArrow, IconCalendar, IconPin, IconRunner, IconSpark } from '../components/ui/icons'
 import type { EventSummary } from '../types'
 
 type Tab = 'upcoming' | 'past' | 'all'
+const PAGE_SIZE = 20
 
 export function EventsPage() {
-  const { data, loading, error, reload } = useAsync(() => eventsApi.list(), [])
   const [tab, setTab] = useState<Tab>('upcoming')
+  const [page, setPage] = useState(1)
 
-  const events = useMemo(() => asList<EventSummary>(data), [data])
-  const upcoming = useMemo(
-    () => events.filter((e) => !isPast(e.date)).sort((a, b) => a.date.localeCompare(b.date)),
-    [events],
-  )
-  const past = events.filter((e) => isPast(e.date))
-  const nextEvent = upcoming[0] ?? null
-  const shown = tab === 'upcoming' ? upcoming : tab === 'past' ? past : events
+  // Site-wide counts + the single soonest event for the hero banner — kept
+  // separate from the paginated grid below so switching tabs/pages doesn't
+  // need to re-derive them from a (possibly partial) page of results.
+  const summary = useAsync(async () => {
+    const [upcomingRes, allRes] = await Promise.all([
+      eventsApi.list({ upcoming: true, page: 1, page_size: 1 }),
+      eventsApi.list({ page: 1, page_size: 1 }),
+    ])
+    return {
+      nextEvent: upcomingRes.items[0] ?? null,
+      upcomingCount: upcomingRes.total,
+      totalCount: allRes.total,
+    }
+  }, [])
+
+  const grid = useAsync(() => {
+    const upcoming = tab === 'upcoming' ? true : tab === 'past' ? false : undefined
+    return eventsApi.list({ upcoming, page, page_size: PAGE_SIZE })
+  }, [tab, page])
+
+  const changeTab = (t: Tab) => {
+    setTab(t)
+    setPage(1)
+  }
+
+  const totalPages = grid.data ? Math.max(1, Math.ceil(grid.data.total / PAGE_SIZE)) : 1
 
   return (
     <div>
-      <Hero nextEvent={nextEvent} upcomingCount={upcoming.length} totalCount={events.length} />
+      <Hero
+        nextEvent={summary.data?.nextEvent ?? null}
+        upcomingCount={summary.data?.upcomingCount ?? 0}
+        totalCount={summary.data?.totalCount ?? 0}
+      />
 
       <section id="events" className="container-page py-12 sm:py-16">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -41,14 +64,17 @@ export function EventsPage() {
           <div className="inline-flex rounded-full border border-ink/10 bg-white p-1 text-sm font-semibold">
             {(
               [
-                ['upcoming', `Ближайшие ${upcoming.length ? `· ${upcoming.length}` : ''}`],
+                [
+                  'upcoming',
+                  `Ближайшие ${summary.data?.upcomingCount ? `· ${summary.data.upcomingCount}` : ''}`,
+                ],
                 ['past', 'Прошедшие'],
                 ['all', 'Все'],
               ] as [Tab, string][]
             ).map(([key, label]) => (
               <button
                 key={key}
-                onClick={() => setTab(key)}
+                onClick={() => changeTab(key)}
                 className={`rounded-full px-4 py-1.5 transition ${
                   tab === key ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'
                 }`}
@@ -59,32 +85,35 @@ export function EventsPage() {
           </div>
         </div>
 
-        {loading ? (
+        {grid.loading ? (
           <PageLoader />
-        ) : error ? (
+        ) : grid.error ? (
           <StatePanel
             tone="error"
             title="Не удалось загрузить события"
-            description={error}
+            description={grid.error}
             icon={<IconRunner />}
             action={
-              <button onClick={reload} className="btn-ink">
+              <button onClick={grid.reload} className="btn-ink">
                 Повторить
               </button>
             }
           />
-        ) : shown.length === 0 ? (
+        ) : !grid.data || grid.data.items.length === 0 ? (
           <StatePanel
             title={tab === 'upcoming' ? 'Пока нет запланированных событий' : 'Здесь пусто'}
             description="Загляните позже — организаторы регулярно добавляют новые старты и тренировки."
             icon={<IconSpark />}
           />
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((event, i) => (
-              <EventCard key={event.id} event={event} index={i} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {grid.data.items.map((event, i) => (
+                <EventCard key={event.id} event={event} index={i} />
+              ))}
+            </div>
+            <Pager page={page} totalPages={totalPages} onChange={setPage} />
+          </>
         )}
       </section>
     </div>

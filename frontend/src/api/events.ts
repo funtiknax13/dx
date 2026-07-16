@@ -36,8 +36,15 @@ function mapPhoto(raw: RawEventPhoto): EventPhoto {
 export const eventsApi = {
   list: async (params?: { page?: number; page_size?: number; upcoming?: boolean }) => {
     const res = await api.get<Paginated<RawEvent> | RawEvent[]>('/events', { query: params })
-    const items = Array.isArray(res) ? res : res.items
-    return items.map(mapEvent)
+    if (Array.isArray(res)) {
+      return { items: res.map(mapEvent), total: res.length, page: 1, page_size: res.length }
+    }
+    return {
+      items: res.items.map(mapEvent),
+      total: res.total,
+      page: res.page ?? 1,
+      page_size: res.page_size ?? res.items.length,
+    }
   },
 
   detail: async (id: number | string): Promise<EventDetail> => {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +10,7 @@ from app.models.group import Group
 from app.models.signup import Signup
 from app.models.user import User
 from app.schemas.auth import MessageResponse
+from app.schemas.common import Page
 from app.schemas.user import (
     AccountDeleteRequest,
     AccountExport,
@@ -165,27 +166,34 @@ async def delete_me(
     return MessageResponse(detail="Аккаунт удалён")
 
 
-@router.get("/{user_id}", response_model=PublicProfile)
-async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
+@router.get("/{user_id}/history", response_model=Page[ParticipationHistoryItem])
+async def user_history(
+    user_id: int,
+    session: SessionDep,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> Page[ParticipationHistoryItem]:
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
+    base = select(AttendanceRecord).where(AttendanceRecord.runner_id == user_id)
+    total = await session.scalar(select(func.count()).select_from(base.subquery()))
     records = await session.scalars(
-        select(AttendanceRecord)
-        .where(AttendanceRecord.runner_id == user_id)
-        .options(
+        base.options(
             selectinload(AttendanceRecord.group).selectinload(Group.event),
             selectinload(AttendanceRecord.result),
         )
         .order_by(AttendanceRecord.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
 
-    history: list[ParticipationHistoryItem] = []
+    items: list[ParticipationHistoryItem] = []
     for rec in records:
         group: Group = rec.group
         event: Event = group.event
-        history.append(
+        items.append(
             ParticipationHistoryItem(
                 attendance_id=rec.id,
                 group_id=group.id,
@@ -197,6 +205,14 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
                 has_result=rec.result is not None,
             )
         )
+    return Page(items=items, total=total or 0, page=page, page_size=page_size)
+
+
+@router.get("/{user_id}", response_model=PublicProfile)
+async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
     rating = await runner_finished_count(session, user_id, period="all")
     stats = await compute_profile_stats(session, user_id)
@@ -224,5 +240,4 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
             )
             for a in achievements
         ],
-        history=history,
     )

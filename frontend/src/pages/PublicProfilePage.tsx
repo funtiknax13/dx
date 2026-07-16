@@ -5,8 +5,9 @@ import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, formatDistance, fullName, plural } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
-import { PageLoader } from '../components/ui/Spinner'
+import { PageLoader, Spinner } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
+import { Pager } from '../components/ui/Pager'
 import { ParticipationHistory } from '../components/ParticipationHistory'
 import {
   IconArrow,
@@ -25,6 +26,8 @@ export function PublicProfilePage() {
   const { user } = useAuth()
   const { data, loading, error, reload } = useAsync(() => usersApi.publicProfile(id!), [id])
   const [tab, setTab] = useState<Tab>('history')
+  const [historyPage, setHistoryPage] = useState(1)
+  const history = useAsync(() => usersApi.historyPage(id!, historyPage), [id, historyPage])
 
   // Viewing own public profile — nudge to editable version
   const isSelf = user && String(user.id) === id
@@ -48,7 +51,8 @@ export function PublicProfilePage() {
     )
   }
 
-  const finishedCount = data.finished_count ?? data.history.filter((h) => h.finish_status === 'finished').length
+  const finishedCount = data.finished_count
+  const historyTotalPages = Math.max(1, Math.ceil((history.data?.total ?? 0) / 20))
 
   return (
     <div className="container-page py-10 sm:py-14">
@@ -132,14 +136,27 @@ export function PublicProfilePage() {
         <section className="mt-6">
           <div className="mb-5 flex items-center justify-end gap-2">
             <span className="font-mono text-xs text-clay">
-              {data.history.length} {plural(data.history.length, 'запись', 'записи', 'записей')}
+              {history.data?.total ?? 0}{' '}
+              {plural(history.data?.total ?? 0, 'запись', 'записи', 'записей')}
             </span>
           </div>
-          <ParticipationHistory
-            history={data.history}
-            editable={Boolean(isSelf)}
-            onResultSubmitted={reload}
-          />
+          {history.loading ? (
+            <div className="flex justify-center py-10">
+              <Spinner className="text-signal" />
+            </div>
+          ) : (
+            <>
+              <ParticipationHistory
+                history={history.data?.items ?? []}
+                editable={Boolean(isSelf)}
+                onResultSubmitted={() => {
+                  history.reload()
+                  reload()
+                }}
+              />
+              <Pager page={historyPage} totalPages={historyTotalPages} onChange={setHistoryPage} />
+            </>
+          )}
         </section>
       )}
 

@@ -3,6 +3,7 @@ import { attendanceApi } from './attendance'
 import type {
   Achievement,
   ChangePasswordPayload,
+  Paginated,
   ParticipationEntry,
   PublicProfile,
   UpdateProfilePayload,
@@ -57,7 +58,6 @@ interface RawPublicProfile {
   current_streak: number
   longest_streak: number
   achievements: RawAchievement[]
-  history: RawHistoryItem[]
 }
 
 /** Full self-service data export (152-FZ art. 14 "right to access") — passed
@@ -121,8 +121,7 @@ async function mapHistoryItem(raw: RawHistoryItem): Promise<ParticipationEntry> 
   }
 }
 
-async function mapPublicProfile(raw: RawPublicProfile): Promise<PublicProfile> {
-  const history = await Promise.all(raw.history.map(mapHistoryItem))
+function mapPublicProfile(raw: RawPublicProfile): PublicProfile {
   return {
     id: raw.id,
     first_name: raw.first_name,
@@ -138,7 +137,6 @@ async function mapPublicProfile(raw: RawPublicProfile): Promise<PublicProfile> {
     current_streak: raw.current_streak,
     longest_streak: raw.longest_streak,
     achievements: raw.achievements.map(mapAchievement),
-    history,
   }
 }
 
@@ -169,6 +167,17 @@ export const usersApi = {
 
   publicProfile: async (id: number | string) =>
     mapPublicProfile(await api.get<RawPublicProfile>(`/users/${id}`)),
+
+  historyPage: async (
+    id: number | string,
+    page: number,
+    pageSize = 20,
+  ): Promise<Paginated<ParticipationEntry>> => {
+    const raw = await api.get<Paginated<RawHistoryItem>>(`/users/${id}/history`, {
+      query: { page, page_size: pageSize },
+    })
+    return { ...raw, items: await Promise.all(raw.items.map(mapHistoryItem)) }
+  },
 
   exportMe: () => api.get<AccountExport>('/users/me/export'),
 

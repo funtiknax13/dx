@@ -12,6 +12,7 @@ from app.models.enums import UserRole
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=True)
+bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -35,6 +36,25 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_user_optional(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme_optional)],
+    session: SessionDep,
+) -> User | None:
+    """Like get_current_user, but for public-but-personalizable endpoints — a
+    missing or invalid token just means "anonymous", not a 401."""
+    if credentials is None:
+        return None
+    try:
+        subject = decode_token(credentials.credentials, ACCESS)
+        user_id = int(subject)
+    except (jwt.PyJWTError, ValueError):
+        return None
+    return await session.get(User, user_id)
+
+
+OptionalUser = Annotated[User | None, Depends(get_current_user_optional)]
 
 
 def require_roles(*roles: UserRole) -> Callable[..., Awaitable[User]]:
