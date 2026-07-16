@@ -1,6 +1,7 @@
 import { api } from './client'
 import { attendanceApi } from './attendance'
 import type {
+  Achievement,
   ChangePasswordPayload,
   ParticipationEntry,
   PublicProfile,
@@ -34,6 +35,14 @@ interface RawHistoryItem {
   has_result: boolean
 }
 
+interface RawAchievement {
+  threshold: number
+  reached: boolean
+  reached_at?: string | null
+  event_id?: number | null
+  event_title?: string | null
+}
+
 interface RawPublicProfile {
   id: number
   first_name: string
@@ -47,6 +56,7 @@ interface RawPublicProfile {
   full_dx_km: number
   current_streak: number
   longest_streak: number
+  achievements: RawAchievement[]
   history: RawHistoryItem[]
 }
 
@@ -127,7 +137,18 @@ async function mapPublicProfile(raw: RawPublicProfile): Promise<PublicProfile> {
     full_dx_km: raw.full_dx_km,
     current_streak: raw.current_streak,
     longest_streak: raw.longest_streak,
+    achievements: raw.achievements.map(mapAchievement),
     history,
+  }
+}
+
+function mapAchievement(raw: RawAchievement): Achievement {
+  return {
+    threshold: raw.threshold,
+    reached: raw.reached,
+    reached_at: raw.reached_at ?? null,
+    event_id: raw.event_id ?? null,
+    event_title: raw.event_title ?? null,
   }
 }
 

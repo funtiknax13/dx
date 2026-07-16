@@ -47,7 +47,19 @@ export interface PublicProfile {
   full_dx_km: number
   current_streak: number
   longest_streak: number
+  achievements: Achievement[]
   history: ParticipationEntry[]
+}
+
+/** One configured "full DX count" milestone (e.g. 25, 50, 100...). Unreached
+ * ones have reached=false and no date/event — kept in the list so a "next
+ * up" teaser can be rendered without a second request. */
+export interface Achievement {
+  threshold: number
+  reached: boolean
+  reached_at?: string | null
+  event_id?: number | null
+  event_title?: string | null
 }
 
 export interface ParticipationEntry {

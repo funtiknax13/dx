@@ -46,6 +46,14 @@ class ParticipationHistoryItem(BaseModel):
     has_result: bool
 
 
+class AchievementItem(BaseModel):
+    threshold: int
+    reached: bool
+    reached_at: date | None = None
+    event_id: int | None = None
+    event_title: str | None = None
+
+
 class PublicProfile(BaseModel):
     id: int
     first_name: str
@@ -65,6 +73,7 @@ class PublicProfile(BaseModel):
     full_dx_km: float
     current_streak: int
     longest_streak: int
+    achievements: list[AchievementItem]
     history: list[ParticipationHistoryItem]
 
 

@@ -15,12 +15,14 @@ from app.schemas.user import (
     AccountExport,
     AccountExportHistoryItem,
     AccountExportSignup,
+    AchievementItem,
     ParticipationHistoryItem,
     PasswordChangeRequest,
     PublicProfile,
     UserMe,
     UserUpdate,
 )
+from app.services.achievement_service import compute_achievements
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -198,6 +200,7 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
 
     rating = await runner_finished_count(session, user_id, period="all")
     stats = await compute_profile_stats(session, user_id)
+    achievements = await compute_achievements(session, user_id)
     return PublicProfile(
         id=user.id,
         first_name=user.first_name,
@@ -211,5 +214,15 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
         full_dx_km=stats.full_dx_km,
         current_streak=stats.current_streak,
         longest_streak=stats.longest_streak,
+        achievements=[
+            AchievementItem(
+                threshold=a.threshold,
+                reached=a.reached,
+                reached_at=a.reached_at,
+                event_id=a.event_id,
+                event_title=a.event_title,
+            )
+            for a in achievements
+        ],
         history=history,
     )
