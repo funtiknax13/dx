@@ -16,7 +16,7 @@ import {
   IconTrophy,
   IconUser,
 } from '../components/ui/icons'
-import type { PublicProfile } from '../types'
+import type { Achievement, PublicProfile } from '../types'
 
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
@@ -105,6 +105,8 @@ export function PublicProfilePage() {
 
       <StatsGrid data={data} />
 
+      <AchievementsSection achievements={data.achievements} />
+
       <section className="mt-10">
         <div className="mb-5 flex items-center gap-2">
           <IconTrophy className="text-signal" width={22} height={22} />
@@ -119,6 +121,64 @@ export function PublicProfilePage() {
           onResultSubmitted={reload}
         />
       </section>
+    </div>
+  )
+}
+
+function AchievementsSection({ achievements }: { achievements: Achievement[] }) {
+  const reached = achievements.filter((a) => a.reached)
+  // Only the very next unreached milestone is shown, dimmed, as a "what's
+  // next" teaser — the rest stay hidden so the row doesn't fill up with
+  // locked placeholders.
+  const nextUp = achievements.find((a) => !a.reached)
+  const visible = nextUp ? [...reached, nextUp] : reached
+
+  if (visible.length === 0) return null
+
+  return (
+    <section className="mt-10">
+      <div className="mb-5 flex items-center gap-2">
+        <IconSpark className="text-signal" width={22} height={22} />
+        <h2 className="font-display text-2xl sm:text-3xl">Ачивки</h2>
+      </div>
+      <div className="flex flex-wrap gap-4">
+        {visible.map((a) => (
+          <AchievementBadge key={a.threshold} achievement={a} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function AchievementBadge({ achievement }: { achievement: Achievement }) {
+  const { threshold, reached, reached_at, event_title } = achievement
+  return (
+    <div
+      className={`flex w-32 flex-col items-center gap-2 rounded-xl2 border p-4 text-center shadow-card ${
+        reached ? 'border-ink/[0.08] bg-white' : 'border-dashed border-ink/15 bg-white/40'
+      }`}
+    >
+      <div
+        className={`grid h-16 w-16 shrink-0 place-items-center rounded-full border-4 font-display text-2xl tabular ${
+          reached ? 'border-signal text-ink' : 'border-ink/15 text-ink/30'
+        }`}
+      >
+        {threshold}
+      </div>
+      {reached ? (
+        <div className="min-w-0">
+          <p className="font-mono text-[0.65rem] tabular text-ink-600">
+            {formatDate(reached_at, { day: 'numeric', month: 'short', year: 'numeric' })}
+          </p>
+          {event_title && (
+            <p className="mt-0.5 truncate font-mono text-[0.6rem] text-clay" title={event_title}>
+              {event_title}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="font-mono text-[0.6rem] uppercase tracking-wide text-clay">Впереди</p>
+      )}
     </div>
   )
 }

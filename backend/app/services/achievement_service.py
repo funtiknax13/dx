@@ -9,10 +9,8 @@ from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
 
-# Full-DX-count thresholds that have (or will have) badge artwork. Every 25 is
-# a placeholder guess — the real list depends on which images exist; update
-# this the moment that's confirmed, nothing else needs to change.
-ACHIEVEMENT_MILESTONES: list[int] = [25, 50, 75, 100, 125, 150, 175, 200]
+# Full-DX-count thresholds shown as milestone badges.
+ACHIEVEMENT_MILESTONES: list[int] = [25, 50, 100, 150, 200, 250, 300]
 
 
 @dataclass
