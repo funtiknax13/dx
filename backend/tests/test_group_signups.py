@@ -3,6 +3,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import UserRole
+from app.models.group import Group
 from app.models.signup import Signup
 from tests.factories import make_event_group, make_user
 
@@ -28,6 +29,39 @@ async def test_group_out_includes_event_date_and_signup_count(
     listed = next(g for g in list_resp.json() if g["id"] == group.id)
     assert listed["event_date"] == event.date.isoformat()
     assert listed["signup_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_groups_are_sorted_by_distance_then_id_not_creation_order(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-sort@example.com", UserRole.organizer)
+    event, group_d1 = await make_event_group(session, org, target_km=24.0)
+    group_p1 = Group(
+        event_id=event.id,
+        location="City",
+        name="P-10",
+        target_distance_km=10.0,
+        start_time=group_d1.start_time,
+    )
+    session.add(group_p1)
+    await session.flush()
+    # Created last, but belongs with the longest distance — must not sort to
+    # the bottom just because it has the highest id.
+    group_x2 = Group(
+        event_id=event.id,
+        location="City",
+        name="X-30 группа #2",
+        target_distance_km=30.0,
+        start_time=group_d1.start_time,
+    )
+    session.add(group_x2)
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/events/{event.id}/groups")
+    assert resp.status_code == 200, resp.text
+    ordered_ids = [g["id"] for g in resp.json()]
+    assert ordered_ids == [group_x2.id, group_d1.id, group_p1.id]
 
 
 @pytest.mark.asyncio

@@ -80,7 +80,15 @@ async def list_groups(event_id: int, session: SessionDep) -> list[GroupOut]:
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
     groups = list(
-        await session.scalars(select(Group).where(Group.event_id == event_id).order_by(Group.id))
+        await session.scalars(
+            select(Group)
+            .where(Group.event_id == event_id)
+            # Longest distance first, so same-distance groups always sit
+            # together regardless of when each was added — otherwise a group
+            # created later (e.g. an extra pace tier) sorts to the very
+            # bottom by id, split apart from its own distance family.
+            .order_by(Group.target_distance_km.desc(), Group.id)
+        )
     )
     if not groups:
         return []
