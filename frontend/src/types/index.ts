@@ -42,9 +42,9 @@ export interface PublicProfile {
   rating: number
   finished_count: number
   first_run_date?: string | null
-  /** All finished attendances, including groups that don't count toward rating. */
+  /** All attendances (finished + DNF), including groups that don't count
+   * toward rating — a DNF is still a run, just not a completed one. */
   total_runs_count: number
-  dnf_count: number
   full_dx_km: number
   current_streak: number
   longest_streak: number

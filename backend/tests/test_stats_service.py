@@ -141,7 +141,7 @@ async def test_streak_is_zero_when_most_recent_past_event_was_missed(
 
 
 @pytest.mark.asyncio
-async def test_dnf_count_is_tracked_separately_from_finished_runs(
+async def test_total_runs_counts_dnf_attempts_too(
     session: AsyncSession,
 ) -> None:
     org = await make_user(session, "org-stats5@example.com", UserRole.organizer)
@@ -159,5 +159,4 @@ async def test_dnf_count_is_tracked_separately_from_finished_runs(
     await session.commit()
 
     stats = await compute_profile_stats(session, runner.id)
-    assert stats.total_runs_count == 1
-    assert stats.dnf_count == 1
+    assert stats.total_runs_count == 2

@@ -70,7 +70,6 @@ class PublicProfile(BaseModel):
     rating: int
     first_run_date: date | None = None
     total_runs_count: int
-    dnf_count: int
     full_dx_km: float
     current_streak: int
     longest_streak: int

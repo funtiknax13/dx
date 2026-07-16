@@ -16,7 +16,6 @@ import {
   IconRoute,
   IconSpark,
   IconUser,
-  IconX,
 } from '../components/ui/icons'
 import type { Achievement, PublicProfile } from '../types'
 
@@ -227,11 +226,6 @@ function StatsGrid({ data }: { data: PublicProfile }) {
       value: String(data.total_runs_count),
     },
     {
-      icon: <IconX width={18} height={18} />,
-      label: 'DNF',
-      value: String(data.dnf_count),
-    },
-    {
       icon: <IconFlag width={18} height={18} />,
       label: 'Км по полным DX',
       value: formatDistance(data.full_dx_km),
@@ -249,7 +243,7 @@ function StatsGrid({ data }: { data: PublicProfile }) {
   ]
 
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {stats.map((s) => (
         <div
           key={s.label}

@@ -14,7 +14,6 @@ from app.models.group import Group
 class ProfileStats:
     first_run_date: date | None
     total_runs_count: int
-    dnf_count: int
     full_dx_count: int
     full_dx_km: float
     current_streak: int
@@ -26,20 +25,10 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
     finished attendance in a group with counts_toward_rating=True — the same
     flag already used to keep social/kids groups (e.g. the short "P" group)
     out of the community rating, reused here for the same "does this count as
-    a real DX" distinction. "Total runs" counts every finished attendance,
-    including those excluded groups."""
+    a real DX" distinction. "Total runs" counts every attendance regardless of
+    finish_status — a DNF is still a run, just not a completed one."""
     total_runs = await session.scalar(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.runner_id == runner_id,
-            AttendanceRecord.finish_status == FinishStatus.finished,
-        )
-    )
-
-    dnf_count = await session.scalar(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.runner_id == runner_id,
-            AttendanceRecord.finish_status == FinishStatus.dnf,
-        )
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.runner_id == runner_id)
     )
 
     full_dx_row = (
@@ -74,7 +63,6 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
     return ProfileStats(
         first_run_date=first_run_date,
         total_runs_count=total_runs or 0,
-        dnf_count=dnf_count or 0,
         full_dx_count=full_dx_count,
         full_dx_km=full_dx_km,
         current_streak=current_streak,
