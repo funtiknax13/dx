@@ -220,23 +220,26 @@ export function RatingPage() {
 }
 
 function Podium({ entries }: { entries: DisplayEntry[] }) {
-  // order for visual podium: 2nd, 1st, 3rd
-  const order = [entries[1], entries[0], entries[2]].filter(Boolean)
-  const heights = ['sm:mt-8', '', 'sm:mt-14']
+  // DOM order stays rank order (1st, 2nd, 3rd) — reads naturally top-to-bottom
+  // on mobile (single column) and for screen readers. The "2nd, 1st, 3rd"
+  // podium layout is a purely visual rearrangement, applied only at sm: and
+  // up via CSS order, so it never affects the underlying document order.
+  const order = ['sm:order-2', 'sm:order-1', 'sm:order-3']
+  const heights = ['', 'sm:mt-8', 'sm:mt-14']
   // Rank communicated by value, not hue: 1st = ink black, 2nd/3rd = a step lighter each.
-  const rings = ['ring-[#B4B4AF]', 'ring-ink', 'ring-[#D6D6D2]']
-  const badges = ['bg-[#B4B4AF]', 'bg-ink', 'bg-[#D6D6D2]']
-  const badgeText = ['text-ink', 'text-paper', 'text-ink']
+  const rings = ['ring-ink', 'ring-[#B4B4AF]', 'ring-[#D6D6D2]']
+  const badges = ['bg-ink', 'bg-[#B4B4AF]', 'bg-[#D6D6D2]']
+  const badgeText = ['text-paper', 'text-ink', 'text-ink']
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
-      {order.map((e, i) => {
+      {entries.map((e, i) => {
         const rank = e.rank
         return (
           <Link
             to={`/users/${e.user_id}`}
             key={e.user_id}
-            className={`group relative flex flex-col items-center rounded-xl2 border border-ink/[0.08] bg-white p-6 text-center shadow-card transition-all hover:-translate-y-1 hover:shadow-lift ${heights[i]}`}
+            className={`group relative flex flex-col items-center rounded-xl2 border border-ink/[0.08] bg-white p-6 text-center shadow-card transition-all hover:-translate-y-1 hover:shadow-lift ${order[i]} ${heights[i]}`}
           >
             <span
               className={`absolute -top-3 grid h-8 w-8 place-items-center rounded-full font-display text-sm ${badges[i]} ${badgeText[i]}`}
