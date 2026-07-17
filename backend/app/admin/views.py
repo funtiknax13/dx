@@ -1,7 +1,10 @@
 from typing import Any
 
 from sqladmin import ModelView
+from sqladmin.filters import BooleanFilter, OperationColumnFilter, StaticValuesFilter
 from sqladmin.widgets import BooleanInputWidget
+from sqlalchemy import select
+from sqlalchemy.sql.expression import Select
 from starlette.requests import Request
 from wtforms import PasswordField
 from wtforms.validators import Length
@@ -25,9 +28,17 @@ if not hasattr(BooleanInputWidget, "validation_attrs"):
     BooleanInputWidget.validation_attrs = []
 
 
-class UserAdmin(ModelView, model=User):
-    name = "User"
-    name_plural = "Users"
+class BaseAdmin(ModelView):
+    """Shared defaults for every SQLAdmin view — 25/page instead of the
+    default 10, so a name/date/status search doesn't need to hop pages."""
+
+    page_size = 25
+    page_size_options = [25, 50, 100]
+
+
+class UserAdmin(BaseAdmin, model=User):
+    name = "Пользователь"
+    name_plural = "Пользователи"
     icon = "fa-solid fa-user"
     column_list = [
         User.id,
@@ -42,6 +53,14 @@ class UserAdmin(ModelView, model=User):
     ]
     column_searchable_list = [User.first_name, User.last_name, User.email]
     column_sortable_list = [User.id, User.last_name, User.role]
+    column_filters = [
+        StaticValuesFilter(
+            User.role,
+            title="Роль",
+            values=[("runner", "Бегун"), ("organizer", "Организатор"), ("admin", "Админ")],
+        ),
+        BooleanFilter(User.is_guest, title="Гостевой аккаунт"),
+    ]
     form_excluded_columns = [User.signups, User.attendance_records]
 
     # `password_hash` is a real (NOT NULL) column, so it can't just be excluded from
@@ -74,25 +93,26 @@ class UserAdmin(ModelView, model=User):
             data["password_hash"] = hash_password(data["password_hash"])
 
 
-class EventAdmin(ModelView, model=Event):
-    name = "Event"
-    name_plural = "Events"
+class EventAdmin(BaseAdmin, model=Event):
+    name = "Событие"
+    name_plural = "События"
     icon = "fa-solid fa-calendar"
     column_list = [Event.id, Event.title, Event.date, Event.creator]
     column_searchable_list = [Event.title]
     column_sortable_list = [Event.id, Event.date]
+    column_filters = [OperationColumnFilter(Event.date, title="Дата")]
 
 
-class EventPhotoAdmin(ModelView, model=EventPhoto):
-    name = "Event Photo"
-    name_plural = "Event Photos"
+class EventPhotoAdmin(BaseAdmin, model=EventPhoto):
+    name = "Фото события"
+    name_plural = "Фотографии событий"
     icon = "fa-solid fa-image"
     column_list = [EventPhoto.id, EventPhoto.event, EventPhoto.image, EventPhoto.thumbnail]
 
 
-class GroupAdmin(ModelView, model=Group):
-    name = "Group"
-    name_plural = "Groups"
+class GroupAdmin(BaseAdmin, model=Group):
+    name = "Группа"
+    name_plural = "Группы"
     icon = "fa-solid fa-people-group"
     column_list = [
         Group.id,
@@ -105,18 +125,20 @@ class GroupAdmin(ModelView, model=Group):
         Group.counts_toward_rating,
     ]
     column_searchable_list = [Group.name, Group.location]
+    column_filters = [BooleanFilter(Group.counts_toward_rating, title="Учитывается в рейтинге")]
 
 
-class SignupAdmin(ModelView, model=Signup):
-    name = "Signup"
-    name_plural = "Signups"
+class SignupAdmin(BaseAdmin, model=Signup):
+    name = "Запись на группу"
+    name_plural = "Записи на группы"
     icon = "fa-solid fa-clipboard-check"
     column_list = [Signup.id, Signup.runner, Signup.group, Signup.created_at]
+    column_filters = [OperationColumnFilter(Signup.created_at, title="Дата записи")]
 
 
-class AttendanceRecordAdmin(ModelView, model=AttendanceRecord):
-    name = "Attendance Record"
-    name_plural = "Attendance Records"
+class AttendanceRecordAdmin(BaseAdmin, model=AttendanceRecord):
+    name = "Факт участия"
+    name_plural = "Протокол (факты участия)"
     icon = "fa-solid fa-list-check"
     column_list = [
         AttendanceRecord.id,
@@ -126,11 +148,29 @@ class AttendanceRecordAdmin(ModelView, model=AttendanceRecord):
         AttendanceRecord.finish_status,
     ]
     column_searchable_list = [AttendanceRecord.raw_name, AttendanceRecord.raw_email]
+    column_filters = [
+        StaticValuesFilter(
+            AttendanceRecord.finish_status,
+            title="Статус",
+            values=[("finished", "Пробежал"), ("dnf", "DNF")],
+        ),
+        # AttendanceRecord itself has no date column — the group's parent
+        # event does, and that's what "when did this happen" actually means
+        # here. Requires the base query to join group -> event (below).
+        OperationColumnFilter(Event.date, title="Дата события"),
+    ]
+
+    def list_query(self, request: Request) -> Select[tuple[AttendanceRecord]]:
+        return (
+            select(AttendanceRecord)
+            .join(Group, AttendanceRecord.group_id == Group.id)
+            .join(Event, Group.event_id == Event.id)
+        )
 
 
-class GuestClaimAdmin(ModelView, model=GuestClaim):
-    name = "Guest Claim"
-    name_plural = "Guest Claims"
+class GuestClaimAdmin(BaseAdmin, model=GuestClaim):
+    name = "Заявка на объединение"
+    name_plural = "Заявки на объединение"
     icon = "fa-solid fa-user-check"
     column_list = [
         GuestClaim.id,
@@ -141,15 +181,26 @@ class GuestClaimAdmin(ModelView, model=GuestClaim):
         GuestClaim.decided_at,
     ]
     column_sortable_list = [GuestClaim.id, GuestClaim.status]
+    column_filters = [
+        StaticValuesFilter(
+            GuestClaim.status,
+            title="Статус",
+            values=[
+                ("pending", "На рассмотрении"),
+                ("approved", "Одобрена"),
+                ("rejected", "Отклонена"),
+            ],
+        ),
+    ]
     # Normal handling is the /admin-tools/claims queue (which also performs the
     # merge on approval) — this view is a fallback for inspecting/correcting
     # stray records, not the everyday moderation path.
     form_columns = [GuestClaim.status, GuestClaim.decided_at]
 
 
-class ResultAdmin(ModelView, model=Result):
-    name = "Result"
-    name_plural = "Results"
+class ResultAdmin(BaseAdmin, model=Result):
+    name = "Результат"
+    name_plural = "Результаты"
     icon = "fa-solid fa-stopwatch"
     column_list = [
         Result.id,
@@ -161,6 +212,18 @@ class ResultAdmin(ModelView, model=Result):
         Result.source,
     ]
     column_sortable_list = [Result.id, Result.status, Result.finish_status]
+    column_filters = [
+        StaticValuesFilter(
+            Result.status,
+            title="Модерация",
+            values=[("pending", "На проверке"), ("approved", "Подтверждён")],
+        ),
+        StaticValuesFilter(
+            Result.finish_status,
+            title="Статус",
+            values=[("finished", "Пробежал"), ("dnf", "DNF")],
+        ),
+    ]
     # Admin approves results by editing the `status` field here.
     form_columns = [
         Result.distance_km,
