@@ -11,6 +11,7 @@ from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
 from app.models.user import User
+from app.services.baseline_service import get_all_baselines
 
 Metric = Literal["dx", "km"]
 
@@ -65,7 +66,16 @@ async def compute_leaderboard(
         )
 
     rows = (await session.execute(stmt)).all()
-    value_map = {row.runner_id: float(row.value) for row in rows}
+    value_map: dict[int, float] = {row.runner_id: float(row.value) for row in rows}
+
+    if window is None:
+        # Carry-over counts apply to the unwindowed total only — a runner with
+        # a baseline but no tracked attendance yet should still show up.
+        for runner_id, baseline in (await get_all_baselines(session)).items():
+            addend = baseline.dx_count if metric == "dx" else baseline.total_km
+            if addend:
+                value_map[runner_id] = value_map.get(runner_id, 0.0) + addend
+
     if not value_map:
         return []
 

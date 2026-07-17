@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.attendance import AttendanceRecord
 from app.models.enums import ClaimStatus, FinishStatus, UserRole
 from app.models.guest_claim import GuestClaim
+from app.models.runner_baseline import RunnerBaseline
 from app.services.guest_service import create_guest, merge_guest_into, split_name
-from tests.factories import make_event_group, make_user
+from tests.factories import make_baseline, make_event_group, make_user
 
 
 def test_split_name() -> None:
@@ -104,3 +105,50 @@ async def test_merge_guest_into_moves_signups_and_drops_collisions(
     # The guest's duplicate signup for the same group was dropped, not duplicated.
     assert len(signups) == 1
     assert signups[0].runner_id == real_user.id
+
+
+@pytest.mark.asyncio
+async def test_merge_guest_into_moves_baseline_when_real_user_has_none(
+    session: AsyncSession,
+) -> None:
+    real_user = await make_user(session, "real-base1@example.com")
+    guest = await create_guest(session, "Carol Runner")
+    await make_baseline(session, guest, dx_count=47, total_runs=50, total_km=623.5)
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    moved = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    assert moved is not None
+    assert moved.dx_count == 47
+    assert (
+        await session.scalar(select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id))
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_merge_guest_into_sums_baseline_when_real_user_already_has_one(
+    session: AsyncSession,
+) -> None:
+    real_user = await make_user(session, "real-base2@example.com")
+    guest = await create_guest(session, "Dave Runner")
+    await make_baseline(session, real_user, dx_count=10, total_runs=12, total_km=100.0)
+    await make_baseline(session, guest, dx_count=5, total_runs=6, total_km=50.0)
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    real_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    assert real_baseline is not None
+    assert real_baseline.dx_count == 15
+    assert real_baseline.total_runs == 18
+    assert real_baseline.total_km == 150.0
+    assert (
+        await session.scalar(select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id))
+        is None
+    )

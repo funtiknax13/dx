@@ -9,6 +9,7 @@ from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
 from app.models.user import User
+from app.services.baseline_service import get_all_baselines, get_baseline
 
 
 @dataclass
@@ -65,7 +66,15 @@ def _count_query(period: str, runner_id: int | None = None) -> Select[tuple[int 
 
 async def compute_rating(session: AsyncSession, period: str = "all") -> list[RatingEntry]:
     counts = (await session.execute(_count_query(period))).all()
-    count_map = {row.runner_id: row.finished_count for row in counts}
+    count_map: dict[int, int] = {row.runner_id: row.finished_count for row in counts}
+
+    if period == "all":
+        # Carry-over counts apply to the unwindowed total only — a runner with
+        # a baseline but no tracked attendance yet should still show up.
+        for runner_id, baseline in (await get_all_baselines(session)).items():
+            if baseline.dx_count:
+                count_map[runner_id] = count_map.get(runner_id, 0) + baseline.dx_count
+
     if not count_map:
         return []
 
@@ -88,4 +97,9 @@ async def runner_finished_count(
     session: AsyncSession, runner_id: int, period: str = "all"
 ) -> int:
     row = (await session.execute(_count_query(period, runner_id=runner_id))).first()
-    return int(row.finished_count) if row else 0
+    count = int(row.finished_count) if row else 0
+    if period == "all":
+        baseline = await get_baseline(session, runner_id)
+        if baseline:
+            count += baseline.dx_count
+    return count

@@ -12,6 +12,7 @@ from app.models.event import Event, EventPhoto
 from app.models.group import Group
 from app.models.guest_claim import GuestClaim
 from app.models.result import Result
+from app.models.runner_baseline import RunnerBaseline
 from app.models.signup import Signup
 from app.models.user import User
 
@@ -25,6 +26,7 @@ __all__ = [
     "AttendanceRecord",
     "Result",
     "GuestClaim",
+    "RunnerBaseline",
     "UserRole",
     "Gender",
     "FinishStatus",

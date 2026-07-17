@@ -8,7 +8,12 @@ from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
 from app.services.rating_service import compute_rating, runner_finished_count
-from tests.factories import make_attendance_with_result, make_event_group, make_user
+from tests.factories import (
+    make_attendance_with_result,
+    make_baseline,
+    make_event_group,
+    make_user,
+)
 
 
 async def _bare_attendance(
@@ -174,3 +179,52 @@ async def test_rating_orders_by_count_desc(session: AsyncSession) -> None:
     rating = await compute_rating(session, "all")
     assert [e.runner_id for e in rating] == [r1.id, r2.id]
     assert rating[0].finished_count == 2
+
+
+@pytest.mark.asyncio
+async def test_baseline_adds_to_all_time_rating_but_not_year_or_month(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-baseline1@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-baseline1@example.com")
+    now = datetime.now(UTC)
+    event = Event(title="DX Today", date=now.date(), created_by=org.id)
+    session.add(event)
+    await session.flush()
+    group = Group(event_id=event.id, location="City", name="A", target_distance_km=10)
+    session.add(group)
+    await session.flush()
+    await make_baseline(session, runner, dx_count=47)
+
+    await _bare_attendance(session, group, runner, finish_status=FinishStatus.finished)
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 1 + 47
+    assert await runner_finished_count(session, runner.id, "year") == 1
+    assert await runner_finished_count(session, runner.id, "month") == 1
+
+    rating = await compute_rating(session, "all")
+    assert rating[0].finished_count == 1 + 47
+    year_rating = await compute_rating(session, "year")
+    assert year_rating[0].finished_count == 1
+
+
+@pytest.mark.asyncio
+async def test_baseline_only_runner_still_appears_in_all_time_rating(
+    session: AsyncSession,
+) -> None:
+    """A veteran runner might have a carry-over count but zero attendance
+    tracked by this app yet — they should still show up in the all-time
+    rating, not just runners already in AttendanceRecord data."""
+    runner = await make_user(session, "runner-baseline2@example.com")
+    await make_baseline(session, runner, dx_count=100)
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 100
+    assert await runner_finished_count(session, runner.id, "year") == 0
+
+    rating = await compute_rating(session, "all")
+    assert len(rating) == 1
+    assert rating[0].runner_id == runner.id
+    assert rating[0].finished_count == 100
+    assert await compute_rating(session, "year") == []

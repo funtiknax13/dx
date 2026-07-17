@@ -8,7 +8,7 @@ from app.models.enums import FinishStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
 from app.services.stats_service import compute_profile_stats
-from tests.factories import make_event_group, make_user
+from tests.factories import make_baseline, make_event_group, make_user
 
 
 async def _finish(session: AsyncSession, group: Group, runner_id: int) -> None:
@@ -160,3 +160,38 @@ async def test_total_runs_counts_dnf_attempts_too(
 
     stats = await compute_profile_stats(session, runner.id)
     assert stats.total_runs_count == 2
+
+
+@pytest.mark.asyncio
+async def test_baseline_adds_to_lifetime_totals_but_not_streak(session: AsyncSession) -> None:
+    org = await make_user(session, "org-stats6@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats6@example.com")
+    _, group = await make_event_group(session, org, target_km=10)
+    await make_baseline(session, runner, dx_count=47, total_runs=50, total_km=623.5)
+
+    await _finish(session, group, runner.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.total_runs_count == 1 + 50
+    assert stats.full_dx_count == 1 + 47
+    assert stats.full_dx_km == 10 + 623.5
+    # A carry-over count has no dated events behind it, so it can't
+    # participate in a *consecutive* events streak.
+    assert stats.current_streak == 1
+    assert stats.longest_streak == 1
+
+
+@pytest.mark.asyncio
+async def test_no_baseline_is_a_no_op(session: AsyncSession) -> None:
+    org = await make_user(session, "org-stats7@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats7@example.com")
+    _, group = await make_event_group(session, org, target_km=10)
+
+    await _finish(session, group, runner.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.total_runs_count == 1
+    assert stats.full_dx_count == 1
+    assert stats.full_dx_km == 10

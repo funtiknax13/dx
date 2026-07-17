@@ -17,6 +17,7 @@ from app.core.security import hash_password
 from app.models.attendance import AttendanceRecord
 from app.models.enums import ClaimStatus, UserRole
 from app.models.guest_claim import GuestClaim
+from app.models.runner_baseline import RunnerBaseline
 from app.models.signup import Signup
 from app.models.user import User
 
@@ -142,6 +143,26 @@ async def merge_guest_into(session: AsyncSession, guest: User, real_user: User) 
         else:
             signup.runner_id = real_user.id
             existing_event_ids.add(signup.event_id)
+
+    # An admin-entered baseline (see RunnerBaseline) is often set on a guest
+    # before the real person ever registers — carry it over so it isn't
+    # stranded on a now-empty guest profile. runner_id is unique, so if the
+    # real account somehow already has its own baseline too, fold the
+    # guest's numbers into it instead of reassigning.
+    guest_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id)
+    )
+    if guest_baseline is not None:
+        real_baseline = await session.scalar(
+            select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+        )
+        if real_baseline is None:
+            guest_baseline.runner_id = real_user.id
+        else:
+            real_baseline.dx_count += guest_baseline.dx_count
+            real_baseline.total_runs += guest_baseline.total_runs
+            real_baseline.total_km += guest_baseline.total_km
+            await session.delete(guest_baseline)
 
     guest.merged_into_id = real_user.id
 

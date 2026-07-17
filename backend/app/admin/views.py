@@ -15,6 +15,7 @@ from app.models.event import Event, EventPhoto
 from app.models.group import Group
 from app.models.guest_claim import GuestClaim
 from app.models.result import Result
+from app.models.runner_baseline import RunnerBaseline
 from app.models.signup import Signup
 from app.models.user import User
 
@@ -235,6 +236,29 @@ class ResultAdmin(BaseAdmin, model=Result):
     ]
 
 
+class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
+    name = "Стартовые показатели"
+    name_plural = "Стартовые показатели"
+    icon = "fa-solid fa-clock-rotate-left"
+    column_list = [
+        RunnerBaseline.id,
+        RunnerBaseline.runner,
+        RunnerBaseline.dx_count,
+        RunnerBaseline.total_runs,
+        RunnerBaseline.total_km,
+    ]
+    # Carry-over totals from before this platform existed (e.g. a runner's
+    # community history that predates CSV imports) — admin-only, never
+    # editable by the runner themselves. Folded into lifetime totals and the
+    # all-time rating/leaderboard only (see app.services.baseline_service).
+    form_columns = [
+        RunnerBaseline.runner,
+        RunnerBaseline.dx_count,
+        RunnerBaseline.total_runs,
+        RunnerBaseline.total_km,
+    ]
+
+
 ALL_VIEWS = [
     UserAdmin,
     EventAdmin,
@@ -244,4 +268,5 @@ ALL_VIEWS = [
     AttendanceRecordAdmin,
     ResultAdmin,
     GuestClaimAdmin,
+    RunnerBaselineAdmin,
 ]

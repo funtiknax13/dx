@@ -8,6 +8,7 @@ from app.models.enums import FinishStatus, ModerationStatus, ResultSource, UserR
 from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
+from app.models.runner_baseline import RunnerBaseline
 from app.models.user import User
 
 
@@ -73,3 +74,19 @@ async def make_attendance_with_result(
     session.add(result)
     await session.flush()
     return rec
+
+
+async def make_baseline(
+    session: AsyncSession,
+    runner: User,
+    *,
+    dx_count: int = 0,
+    total_runs: int = 0,
+    total_km: float = 0.0,
+) -> RunnerBaseline:
+    baseline = RunnerBaseline(
+        runner_id=runner.id, dx_count=dx_count, total_runs=total_runs, total_km=total_km
+    )
+    session.add(baseline)
+    await session.flush()
+    return baseline

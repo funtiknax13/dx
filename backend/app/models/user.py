@@ -55,6 +55,9 @@ class User(Base, TimestampMixin):
     # The real account a guest was merged into, if any — lets SQLAdmin show a
     # name instead of the bare merged_into_id.
     merged_into = relationship("User", remote_side=[id], foreign_keys=[merged_into_id])
+    baseline = relationship(
+        "RunnerBaseline", back_populates="runner", uselist=False, cascade="all, delete-orphan"
+    )
 
     def __str__(self) -> str:  # nice label in SQLAdmin dropdowns
         suffix = " [guest]" if self.is_guest else ""

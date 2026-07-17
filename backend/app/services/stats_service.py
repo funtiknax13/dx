@@ -8,6 +8,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
+from app.services.baseline_service import get_baseline
 
 
 @dataclass
@@ -60,11 +61,19 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
 
     current_streak, longest_streak = await _compute_streak(session, runner_id)
 
+    # Admin-entered carry-over from before this platform existed (see
+    # RunnerBaseline) — a flat addition to lifetime totals only. Never touches
+    # streaks, which need real dated events to mean anything.
+    baseline = await get_baseline(session, runner_id)
+    baseline_dx = baseline.dx_count if baseline else 0
+    baseline_runs = baseline.total_runs if baseline else 0
+    baseline_km = baseline.total_km if baseline else 0.0
+
     return ProfileStats(
         first_run_date=first_run_date,
-        total_runs_count=total_runs or 0,
-        full_dx_count=full_dx_count,
-        full_dx_km=full_dx_km,
+        total_runs_count=(total_runs or 0) + baseline_runs,
+        full_dx_count=full_dx_count + baseline_dx,
+        full_dx_km=full_dx_km + baseline_km,
         current_streak=current_streak,
         longest_streak=longest_streak,
     )

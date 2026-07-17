@@ -8,7 +8,7 @@ from app.models.enums import FinishStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
 from app.services.leaderboard_service import compute_leaderboard, compute_streak_leaderboard
-from tests.factories import make_event_group, make_user
+from tests.factories import make_baseline, make_event_group, make_user
 
 
 async def _finish(session: AsyncSession, group: Group, runner_id: int) -> None:
@@ -183,3 +183,44 @@ async def test_streak_leaderboard_excludes_runners_with_zero_streak(
 
     entries = await compute_streak_leaderboard(session)
     assert entries == []
+
+
+@pytest.mark.asyncio
+async def test_baseline_adds_to_all_time_dx_and_km_but_not_month(session: AsyncSession) -> None:
+    org = await make_user(session, "org-lb-base@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-lb-base@example.com")
+    now = datetime.now(UTC)
+    event = Event(title="DX Today", date=now.date(), created_by=org.id)
+    session.add(event)
+    await session.flush()
+    group = Group(event_id=event.id, location="City", name="A", target_distance_km=10)
+    session.add(group)
+    await session.flush()
+    await make_baseline(session, runner, dx_count=47, total_km=623.5)
+
+    await _finish(session, group, runner.id)
+    await session.commit()
+
+    dx_all = await compute_leaderboard(session, "dx", "all")
+    assert dx_all[0].value == 1 + 47
+    km_all = await compute_leaderboard(session, "km", "all")
+    assert km_all[0].value == 10 + 623.5
+
+    dx_month = await compute_leaderboard(session, "dx", "month")
+    assert dx_month[0].value == 1.0
+
+
+@pytest.mark.asyncio
+async def test_baseline_only_runner_still_appears_in_all_time_leaderboard(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-lb-base2@example.com")
+    await make_baseline(session, runner, dx_count=25, total_km=300.0)
+    await session.commit()
+
+    dx_all = await compute_leaderboard(session, "dx", "all")
+    assert len(dx_all) == 1
+    assert dx_all[0].runner_id == runner.id
+    assert dx_all[0].value == 25.0
+
+    assert await compute_leaderboard(session, "dx", "month") == []
