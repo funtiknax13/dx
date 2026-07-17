@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { Protocol, ProtocolRow } from '../types'
 import { Avatar } from './ui/Avatar'
 import { formatDistance, formatDuration, formatPace } from '../lib/format'
+import { ACHIEVEMENT_BADGE_IMAGES } from '../lib/achievementBadges'
 import { IconFlag } from './ui/icons'
 
 function medal(place?: number | null) {
@@ -10,6 +11,22 @@ function medal(place?: number | null) {
   if (place === 2) return 'bg-[#B4B4AF] text-ink'
   if (place === 3) return 'bg-[#D6D6D2] text-ink'
   return 'bg-ink text-paper'
+}
+
+function AchievementChip({ threshold }: { threshold: number }) {
+  const image = ACHIEVEMENT_BADGE_IMAGES[threshold]
+  const title = `Достижение: ${threshold} DX`
+  if (image) {
+    return <img src={image} alt={title} title={title} className="h-6 w-auto shrink-0" />
+  }
+  return (
+    <span
+      className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border border-signal px-0.5 font-display text-[0.55rem] leading-none text-signal"
+      title={title}
+    >
+      {threshold}
+    </span>
+  )
 }
 
 function RunnerCell({ row }: { row: ProtocolRow }) {
@@ -26,12 +43,7 @@ function RunnerCell({ row }: { row: ProtocolRow }) {
         <span className="flex items-center gap-1.5">
           <span className="truncate font-semibold text-ink">{name}</span>
           {row.latest_achievement != null && (
-            <span
-              className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border border-signal px-0.5 font-display text-[0.55rem] leading-none text-signal"
-              title={`Достижение: ${row.latest_achievement} DX`}
-            >
-              {row.latest_achievement}
-            </span>
+            <AchievementChip threshold={row.latest_achievement} />
           )}
         </span>
         {row.runner_id == null && (

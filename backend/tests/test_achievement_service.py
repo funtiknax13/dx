@@ -8,7 +8,7 @@ from app.models.enums import FinishStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
 from app.services.achievement_service import compute_achievements, get_latest_thresholds
-from tests.factories import make_event_group, make_user
+from tests.factories import make_baseline, make_event_group, make_user
 
 
 async def _dx_event(session: AsyncSession, org, when: date, runner_id: int) -> None:
@@ -125,3 +125,57 @@ async def test_get_latest_thresholds_picks_the_highest_reached_per_runner(
     result = await get_latest_thresholds(session, [r1.id, r2.id, r3.id], milestones=[1, 2, 3])
     assert result == {r1.id: 3, r2.id: 1}
     assert r3.id not in result
+
+
+@pytest.mark.asyncio
+async def test_baseline_covered_milestone_is_reached_with_no_date(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-ach5@example.com")
+    await make_baseline(session, runner, dx_count=47)
+    await session.commit()
+
+    entries = await compute_achievements(session, runner.id, milestones=[25, 50])
+    by_threshold = {e.threshold: e for e in entries}
+
+    assert by_threshold[25].reached is True
+    assert by_threshold[25].reached_at is None
+    assert by_threshold[25].event_id is None
+    assert by_threshold[50].reached is False
+
+
+@pytest.mark.asyncio
+async def test_baseline_plus_real_runs_attributes_crossing_to_the_real_run(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-ach6@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-ach6@example.com")
+    await make_baseline(session, runner, dx_count=48)
+    # Two real runs on top of the baseline's 48 -> crosses the 50 milestone
+    # on the 2nd one (48 + 2 = 50).
+    await _dx_event(session, org, date(2026, 1, 4), runner.id)
+    await _dx_event(session, org, date(2026, 1, 11), runner.id)
+    await session.commit()
+
+    entries = await compute_achievements(session, runner.id, milestones=[25, 50, 100])
+    by_threshold = {e.threshold: e for e in entries}
+
+    assert by_threshold[25].reached is True
+    assert by_threshold[25].reached_at is None  # fully covered by baseline
+
+    assert by_threshold[50].reached is True
+    assert by_threshold[50].reached_at == date(2026, 1, 11)
+
+    assert by_threshold[100].reached is False
+
+
+@pytest.mark.asyncio
+async def test_get_latest_thresholds_includes_baseline_only_runner(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-ach7@example.com")
+    await make_baseline(session, runner, dx_count=25)
+    await session.commit()
+
+    result = await get_latest_thresholds(session, [runner.id], milestones=[25, 50])
+    assert result == {runner.id: 25}

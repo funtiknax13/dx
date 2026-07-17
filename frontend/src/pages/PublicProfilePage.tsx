@@ -1,14 +1,10 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import badge25 from '../assets/achievements/badge-25.png'
-import badge50 from '../assets/achievements/badge-50.png'
-import badge100 from '../assets/achievements/badge-100.png'
-import badge150 from '../assets/achievements/badge-150.png'
-import badge200 from '../assets/achievements/badge-200.png'
 import { usersApi } from '../api/users'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, formatDistance, fullName, plural } from '../lib/format'
+import { ACHIEVEMENT_BADGE_IMAGES } from '../lib/achievementBadges'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader, Spinner } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
@@ -25,16 +21,6 @@ import {
 import type { Achievement, PublicProfile } from '../types'
 
 type Tab = 'history' | 'achievements'
-
-// Artwork only exists for some milestones so far — thresholds without an
-// entry (e.g. 250/300) fall back to the plain numbered circle below.
-const ACHIEVEMENT_BADGE_IMAGES: Record<number, string> = {
-  25: badge25,
-  50: badge50,
-  100: badge100,
-  150: badge150,
-  200: badge200,
-}
 
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
@@ -214,9 +200,17 @@ function AchievementBadge({ achievement }: { achievement: Achievement }) {
       )}
       {reached ? (
         <div className="min-w-0">
-          <p className="font-mono text-[0.65rem] tabular text-ink-600">
-            {formatDate(reached_at, { day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
+          {reached_at ? (
+            <p className="font-mono text-[0.65rem] tabular text-ink-600">
+              {formatDate(reached_at, { day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+          ) : (
+            // Covered entirely by an admin-entered starting balance (see
+            // RunnerBaseline) — there's no specific run to attribute it to.
+            <p className="font-mono text-[0.6rem] uppercase tracking-wide text-clay">
+              Стартовые данные
+            </p>
+          )}
           {event_title && (
             <p className="mt-0.5 truncate font-mono text-[0.6rem] text-clay" title={event_title}>
               {event_title}
