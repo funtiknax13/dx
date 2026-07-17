@@ -24,6 +24,7 @@ from app.schemas.user import (
     UserUpdate,
 )
 from app.services.achievement_service import compute_achievements
+from app.services.guest_service import move_baseline_to_guest
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -157,6 +158,11 @@ async def delete_me(
         .where(AttendanceRecord.runner_id == user.id)
         .values(raw_email=None, raw_phone=None)
     )
+
+    # An admin-entered RunnerBaseline has no identity of its own to survive
+    # on (unlike AttendanceRecord's frozen raw_name) — reattach it to a guest
+    # profile under this user's name instead of letting it cascade-delete.
+    await move_baseline_to_guest(session, user)
 
     if user.avatar:
         delete_media(user.avatar)

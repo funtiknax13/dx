@@ -6,7 +6,13 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import ClaimStatus, FinishStatus, UserRole
 from app.models.guest_claim import GuestClaim
 from app.models.runner_baseline import RunnerBaseline
-from app.services.guest_service import create_guest, merge_guest_into, split_name
+from app.models.user import User
+from app.services.guest_service import (
+    create_guest,
+    merge_guest_into,
+    move_baseline_to_guest,
+    split_name,
+)
 from tests.factories import make_baseline, make_event_group, make_user
 
 
@@ -99,9 +105,7 @@ async def test_merge_guest_into_moves_signups_and_drops_collisions(
     await merge_guest_into(session, guest, real_user)
     await session.commit()
 
-    signups = list(
-        await session.scalars(select(Signup).where(Signup.group_id == group.id))
-    )
+    signups = list(await session.scalars(select(Signup).where(Signup.group_id == group.id)))
     # The guest's duplicate signup for the same group was dropped, not duplicated.
     assert len(signups) == 1
     assert signups[0].runner_id == real_user.id
@@ -152,3 +156,99 @@ async def test_merge_guest_into_sums_baseline_when_real_user_already_has_one(
         await session.scalar(select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id))
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_move_baseline_to_guest_is_a_no_op_without_a_baseline(
+    session: AsyncSession,
+) -> None:
+    real_user = await make_user(session, "no-baseline@example.com")
+    await session.commit()
+
+    await move_baseline_to_guest(session, real_user)
+    await session.commit()
+
+    assert await session.scalar(select(User).where(User.is_guest.is_(True))) is None
+
+
+@pytest.mark.asyncio
+async def test_move_baseline_to_guest_creates_a_fresh_guest(session: AsyncSession) -> None:
+    real_user = await make_user(session, "has-baseline@example.com")
+    real_user.first_name, real_user.last_name = "Eve", "Baseline"
+    await make_baseline(session, real_user, dx_count=47, total_runs=50, total_km=623.5)
+    await session.commit()
+
+    await move_baseline_to_guest(session, real_user)
+    await session.commit()
+
+    guest = await session.scalar(
+        select(User).where(
+            User.is_guest.is_(True), User.first_name == "Eve", User.last_name == "Baseline"
+        )
+    )
+    assert guest is not None
+    guest_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id)
+    )
+    assert guest_baseline is not None
+    assert guest_baseline.dx_count == 47
+    assert (
+        await session.scalar(select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id))
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_move_baseline_to_guest_reuses_existing_unmerged_guest(
+    session: AsyncSession,
+) -> None:
+    real_user = await make_user(session, "has-baseline2@example.com")
+    real_user.first_name, real_user.last_name = "Frank", "Baseline"
+    await make_baseline(session, real_user, dx_count=10)
+    existing_guest = await create_guest(session, "Frank Baseline")
+    await make_baseline(session, existing_guest, dx_count=5)
+    await session.commit()
+
+    await move_baseline_to_guest(session, real_user)
+    await session.commit()
+
+    guest_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == existing_guest.id)
+    )
+    assert guest_baseline is not None
+    assert guest_baseline.dx_count == 15  # summed, not overwritten
+
+
+@pytest.mark.asyncio
+async def test_move_baseline_to_guest_falls_back_when_matched_guest_is_self(
+    session: AsyncSession,
+) -> None:
+    """If a same-named guest was already merged into this very account, the
+    name-resolution would otherwise point right back at the account being
+    deleted — must fall back to a brand-new guest instead of a no-op."""
+    real_user = await make_user(session, "has-baseline3@example.com")
+    real_user.first_name, real_user.last_name = "Grace", "Baseline"
+    already_merged_guest = await create_guest(session, "Grace Baseline")
+    await merge_guest_into(session, already_merged_guest, real_user)
+    await make_baseline(session, real_user, dx_count=10)
+    await session.commit()
+
+    await move_baseline_to_guest(session, real_user)
+    await session.commit()
+
+    fresh_guests = list(
+        await session.scalars(
+            select(User).where(
+                User.is_guest.is_(True),
+                User.first_name == "Grace",
+                User.last_name == "Baseline",
+                User.id != already_merged_guest.id,
+            )
+        )
+    )
+    assert len(fresh_guests) == 1
+    fresh_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == fresh_guests[0].id)
+    )
+    assert fresh_baseline is not None
+    assert fresh_baseline.dx_count == 10

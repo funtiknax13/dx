@@ -7,8 +7,9 @@ from app.core.security import create_access_token
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, ResultSource, UserRole
 from app.models.result import Result
+from app.models.runner_baseline import RunnerBaseline
 from app.models.user import User
-from tests.factories import make_event_group, make_user
+from tests.factories import make_baseline, make_event_group, make_user
 
 
 def _auth_headers(user: User) -> dict[str, str]:
@@ -114,6 +115,39 @@ async def test_delete_me_removes_account_and_anonymizes_attendance(
     assert refreshed.raw_phone is None
     # The historical record itself (who ran, what result) is kept.
     assert refreshed.raw_name == "Runner Delete"
+
+
+@pytest.mark.asyncio
+async def test_delete_me_moves_baseline_to_a_guest(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner = await make_user(session, "runner-baseline-del@example.com")
+    runner.first_name, runner.last_name = "Vera", "Baseline"
+    await make_baseline(session, runner, dx_count=47, total_runs=50, total_km=623.5)
+    await session.commit()
+
+    resp = await client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        json={"password": "password123"},
+        headers=_auth_headers(runner),
+    )
+    assert resp.status_code == 200, resp.text
+
+    session.expire_all()
+    guest = await session.scalar(
+        select(User).where(
+            User.is_guest.is_(True), User.first_name == "Vera", User.last_name == "Baseline"
+        )
+    )
+    assert guest is not None
+    baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id)
+    )
+    assert baseline is not None
+    assert baseline.dx_count == 47
+    assert baseline.total_runs == 50
+    assert baseline.total_km == 623.5
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,85 @@
+{% extends "_base.html" %}
+{% block title %}Стартовые данные — DH Admin{% endblock %}
+{% block content %}
+  <h1>Импорт стартовых данных</h1>
+  <div class="card">
+    <form class="inline" method="post" action="/admin-tools/import-baselines" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px;">
+      <div>
+        <label for="file"><strong>CSV-файл</strong></label><br />
+        <input id="file" type="file" name="file" accept=".csv,text/csv" required />
+        <p class="hint">
+          Разделитель колонок — точка с запятой (<code>;</code>). Колонки:
+          <code>first_name</code>, <code>last_name</code> (обязательны),
+          <code>dx_count</code>, <code>total_runs</code>, <code>total_km</code>,
+          <code>email</code> (не обязательны — пустая ячейка у чисел считается
+          нулём).
+        </p>
+        <p class="hint">
+          Это разовый перенос истории с «до этой платформы» — сколько полных DX,
+          пробежек и километров у бегуна уже накопилось раньше. Плюсуется только
+          к общим (пожизненным) цифрам профиля и к рейтингу «за всё время» — в
+          серию (streak) и в рейтинг за год/месяц не попадает.
+        </p>
+        <p class="hint">
+          Email/имя сопоставляются с аккаунтом по тому же правилу, что и импорт
+          протокола: совпал email зарегистрированного — сразу на него; иначе по
+          имени/фамилии ищется существующий гостевой профиль (в том числе уже
+          объединённый — тогда данные уходят сразу на реальный аккаунт); если
+          совпадения нет вообще — заводится новый гостевой профиль. Повторная
+          загрузка того же файла безопасна — стартовые данные конкретного
+          бегуна перезаписываются, а не суммируются.
+        </p>
+      </div>
+
+      <div>
+        <strong>Пример файла</strong>
+        <table style="margin-top:6px; max-width:640px;">
+          <thead>
+            <tr>
+              <th>first_name</th>
+              <th>last_name</th>
+              <th>dx_count</th>
+              <th>total_runs</th>
+              <th>total_km</th>
+              <th>email</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Иван</td>
+              <td>Петров</td>
+              <td>47</td>
+              <td>50</td>
+              <td>623.5</td>
+              <td>ivan@example.com</td>
+            </tr>
+          </tbody>
+        </table>
+        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;email
+Иван;Петров;47;50;623.5;ivan@example.com</pre>
+      </div>
+      <div>
+        <button type="submit">Импортировать</button>
+      </div>
+    </form>
+  </div>
+
+  {% if flash_error %}
+  <div class="card"><p class="hint" style="color:#b00;">{{ flash_error }}</p></div>
+  {% endif %}
+
+  {% if result %}
+  <div class="card">
+    <h1 style="margin-top:0;">Результат импорта</h1>
+    <p>Создано новых стартовых записей: <strong>{{ result.created }}</strong></p>
+    <p>Обновлено существующих: <strong>{{ result.updated }}</strong></p>
+    <p>Сопоставлено по email: {{ result.auto_matched }}</p>
+    <p>Направлено на уже объединённый аккаунт (по имени): {{ result.merged_redirects }}</p>
+    <p>Использован существующий гостевой профиль (по имени): {{ result.guests_reused }}</p>
+    <p>Создано новых гостевых профилей: {{ result.guests_created }}</p>
+    <p>Пропущено пустых строк: {{ result.skipped_empty }}</p>
+    <p>Пропущено — число не распозналось: {{ result.skipped_invalid_number }}</p>
+    <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
+  </div>
+  {% endif %}
+{% endblock %}

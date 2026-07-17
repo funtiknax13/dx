@@ -55,6 +55,7 @@
       <a href="/admin-tools/events" class="{{ 'active' if active == 'events' }}">События</a>
       {% if tools_user and tools_user.role.value == 'admin' %}
       <a href="/admin-tools/import" class="{{ 'active' if active == 'import' }}">Импорт CSV</a>
+      <a href="/admin-tools/import-baselines" class="{{ 'active' if active == 'import-baselines' }}">Стартовые данные</a>
       <a href="/admin-tools/claims" class="{{ 'active' if active == 'claims' }}">Заявки</a>
       <a href="/admin-tools/guests" class="{{ 'active' if active == 'guests' }}">Гости</a>
       <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты</a>

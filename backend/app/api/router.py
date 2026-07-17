@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api import (
     attendance,
     auth,
+    baselines,
     events,
     groups,
     guests,
@@ -24,3 +25,4 @@ api_router.include_router(results.router)
 api_router.include_router(rating.router)
 api_router.include_router(leaderboard.router)
 api_router.include_router(guests.router)
+api_router.include_router(baselines.router)

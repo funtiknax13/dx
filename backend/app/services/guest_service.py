@@ -89,6 +89,49 @@ async def resolve_runner_for_csv_row(
     return guest, "guest_created"
 
 
+async def _fold_baseline_into(
+    session: AsyncSession, baseline: RunnerBaseline, target_runner_id: int
+) -> None:
+    """Move `baseline` onto `target_runner_id` — runner_id is unique, so if a
+    baseline already exists there, sum into it and drop the source instead of
+    colliding."""
+    existing = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == target_runner_id)
+    )
+    if existing is None:
+        baseline.runner_id = target_runner_id
+    else:
+        existing.dx_count += baseline.dx_count
+        existing.total_runs += baseline.total_runs
+        existing.total_km += baseline.total_km
+        await session.delete(baseline)
+
+
+async def move_baseline_to_guest(session: AsyncSession, real_user: User) -> None:
+    """Called right before a real (non-guest) account is deleted — if they had
+    an admin-entered RunnerBaseline, don't let it vanish with them: attach it
+    to a guest profile under their name instead, the same "never orphaned"
+    rule CSV import already follows for attendance data. Reuses the exact
+    same name-matching priority as resolve_runner_for_csv_row (an existing
+    unmerged guest, or the real account an existing merged guest points at)
+    so this doesn't duplicate a guest CSV import already created."""
+    baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    if baseline is None:
+        return
+
+    full_name = f"{real_user.first_name} {real_user.last_name}"
+    target, _resolution = await resolve_runner_for_csv_row(session, full_name, None)
+    if target.id == real_user.id:
+        # Resolved back to the very account being deleted (e.g. a guest under
+        # the same name had already been merged into them) — a fresh guest is
+        # the only option left to hold the data.
+        target = await create_guest(session, full_name)
+
+    await _fold_baseline_into(session, baseline, target.id)
+
+
 async def create_guest(session: AsyncSession, raw_name: str) -> User:
     first_name, last_name = split_name(raw_name)
     guest = User(
@@ -146,23 +189,12 @@ async def merge_guest_into(session: AsyncSession, guest: User, real_user: User) 
 
     # An admin-entered baseline (see RunnerBaseline) is often set on a guest
     # before the real person ever registers — carry it over so it isn't
-    # stranded on a now-empty guest profile. runner_id is unique, so if the
-    # real account somehow already has its own baseline too, fold the
-    # guest's numbers into it instead of reassigning.
+    # stranded on a now-empty guest profile.
     guest_baseline = await session.scalar(
         select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id)
     )
     if guest_baseline is not None:
-        real_baseline = await session.scalar(
-            select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
-        )
-        if real_baseline is None:
-            guest_baseline.runner_id = real_user.id
-        else:
-            real_baseline.dx_count += guest_baseline.dx_count
-            real_baseline.total_runs += guest_baseline.total_runs
-            real_baseline.total_km += guest_baseline.total_km
-            await session.delete(guest_baseline)
+        await _fold_baseline_into(session, guest_baseline, real_user.id)
 
     guest.merged_into_id = real_user.id
 
