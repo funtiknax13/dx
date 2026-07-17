@@ -1,5 +1,10 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import badge25 from '../assets/achievements/badge-25.png'
+import badge50 from '../assets/achievements/badge-50.png'
+import badge100 from '../assets/achievements/badge-100.png'
+import badge150 from '../assets/achievements/badge-150.png'
+import badge200 from '../assets/achievements/badge-200.png'
 import { usersApi } from '../api/users'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
@@ -20,6 +25,16 @@ import {
 import type { Achievement, PublicProfile } from '../types'
 
 type Tab = 'history' | 'achievements'
+
+// Artwork only exists for some milestones so far — thresholds without an
+// entry (e.g. 250/300) fall back to the plain numbered circle below.
+const ACHIEVEMENT_BADGE_IMAGES: Record<number, string> = {
+  25: badge25,
+  50: badge50,
+  100: badge100,
+  150: badge150,
+  200: badge200,
+}
 
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
@@ -175,19 +190,28 @@ export function PublicProfilePage() {
 
 function AchievementBadge({ achievement }: { achievement: Achievement }) {
   const { threshold, reached, reached_at, event_title } = achievement
+  const image = ACHIEVEMENT_BADGE_IMAGES[threshold]
   return (
     <div
       className={`flex w-32 flex-col items-center gap-2 rounded-xl2 border p-4 text-center shadow-card ${
         reached ? 'border-ink/[0.08] bg-white' : 'border-dashed border-ink/15 bg-white/40'
       }`}
     >
-      <div
-        className={`grid h-16 w-16 shrink-0 place-items-center rounded-full border-4 font-display text-2xl tabular ${
-          reached ? 'border-signal text-ink' : 'border-ink/15 text-ink/30'
-        }`}
-      >
-        {threshold}
-      </div>
+      {image ? (
+        <img
+          src={image}
+          alt={`Достижение: ${threshold} DX`}
+          className={`h-24 w-auto shrink-0 ${reached ? '' : 'opacity-30 grayscale'}`}
+        />
+      ) : (
+        <div
+          className={`grid h-16 w-16 shrink-0 place-items-center rounded-full border-4 font-display text-2xl tabular ${
+            reached ? 'border-signal text-ink' : 'border-ink/15 text-ink/30'
+          }`}
+        >
+          {threshold}
+        </div>
+      )}
       {reached ? (
         <div className="min-w-0">
           <p className="font-mono text-[0.65rem] tabular text-ink-600">
