@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import type { Protocol, ProtocolRow } from '../types'
 import { Avatar } from './ui/Avatar'
 import { formatDistance, formatDuration, formatPace } from '../lib/format'
-import { ACHIEVEMENT_BADGE_IMAGES } from '../lib/achievementBadges'
 import { IconFlag } from './ui/icons'
 
 function medal(place?: number | null) {
@@ -14,15 +13,12 @@ function medal(place?: number | null) {
 }
 
 function AchievementChip({ threshold }: { threshold: number }) {
-  const image = ACHIEVEMENT_BADGE_IMAGES[threshold]
-  const title = `Достижение: ${threshold} DX`
-  if (image) {
-    return <img src={image} alt={title} title={title} className="h-6 w-auto shrink-0" />
-  }
+  // A small square nods at the badge artwork's own square frame without
+  // trying to render the (illegible at this size) full illustration.
   return (
     <span
-      className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border border-signal px-0.5 font-display text-[0.55rem] leading-none text-signal"
-      title={title}
+      className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-ink px-1 font-display text-[0.55rem] leading-none text-paper"
+      title={`Достижение: ${threshold} DX`}
     >
       {threshold}
     </span>
