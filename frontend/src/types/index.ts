@@ -46,6 +46,7 @@ export interface PublicProfile {
    * toward rating — a DNF is still a run, just not a completed one. */
   total_runs_count: number
   full_dx_km: number
+  km_this_month: number
   current_streak: number
   longest_streak: number
   achievements: Achievement[]

@@ -22,6 +22,11 @@ export function ProfilePage() {
 
   const stats = useAsync(() => usersApi.publicProfile(user!.id), [user?.id])
   const upcoming = useAsync(() => signupsApi.mine(), [user?.id])
+  const claims = useAsync(() => guestsApi.myClaims(), [user?.id])
+  // Once a guest profile has already been claimed and approved, there's
+  // nothing left to look for — keep offering the search only to accounts
+  // that haven't matched one yet.
+  const hasApprovedClaim = claims.data?.some((c) => c.status === 'approved') ?? false
 
   if (!user) return null
 
@@ -78,7 +83,7 @@ export function ProfilePage() {
           [
             ['profile', 'Мои данные'],
             ['security', 'Безопасность'],
-            ['guest', 'Это мои результаты?'],
+            ...(hasApprovedClaim ? [] : [['guest', 'Это мои результаты?']]),
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -111,7 +116,7 @@ export function ProfilePage() {
             <DeleteAccountCard />
           </div>
         )}
-        {tab === 'guest' && <GuestClaimSection />}
+        {tab === 'guest' && !hasApprovedClaim && <GuestClaimSection />}
       </div>
     </div>
   )

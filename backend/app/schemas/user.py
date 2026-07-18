@@ -71,6 +71,7 @@ class PublicProfile(BaseModel):
     first_run_date: date | None = None
     total_runs_count: int
     full_dx_km: float
+    km_this_month: float
     current_streak: int
     longest_streak: int
     achievements: list[AchievementItem]

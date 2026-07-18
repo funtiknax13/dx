@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -119,3 +121,37 @@ async def test_import_redirects_to_merged_real_account(session: AsyncSession) ->
     )
     assert baseline is not None
     assert baseline.dx_count == 20  # overwritten by the new CSV row
+
+
+@pytest.mark.asyncio
+async def test_import_first_run_date_is_parsed(session: AsyncSession) -> None:
+    csv = "first_name;last_name;first_run_date\nDave;Runner;2019-03-01\n"
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 1
+    baseline = await session.scalar(select(RunnerBaseline))
+    assert baseline is not None
+    assert baseline.first_run_date == date(2019, 3, 1)
+
+
+@pytest.mark.asyncio
+async def test_import_blank_first_run_date_is_null(session: AsyncSession) -> None:
+    csv = "first_name;last_name;first_run_date\nDave;Runner;\n"
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 1
+    baseline = await session.scalar(select(RunnerBaseline))
+    assert baseline is not None
+    assert baseline.first_run_date is None
+
+
+@pytest.mark.asyncio
+async def test_import_invalid_first_run_date_is_skipped(session: AsyncSession) -> None:
+    csv = "first_name;last_name;first_run_date\nDave;Runner;not-a-date\n"
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 0
+    assert result.skipped_invalid_number == 1

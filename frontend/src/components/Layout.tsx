@@ -4,6 +4,10 @@ import { useAuth } from '../auth/AuthContext'
 import { adminToolsUrl } from '../api/client'
 import { Avatar } from './ui/Avatar'
 import { IconMenu, IconX } from './ui/icons'
+import logoMarkDark from '../assets/brand/logo-mark-dark.png'
+import logoMarkLight from '../assets/brand/logo-mark-light.png'
+import logoFullDark from '../assets/brand/logo-full-dark.png'
+import logoFullLight from '../assets/brand/logo-full-light.png'
 
 function isStaff(role?: string) {
   return role === 'organizer' || role === 'admin'
@@ -14,17 +18,19 @@ const NAV = [
   { to: '/rating', label: 'Рейтинг' },
 ]
 
-function Brand({ onClick }: { onClick?: () => void }) {
+function Brand({ onClick, light = false }: { onClick?: () => void; light?: boolean }) {
   return (
-    <Link to="/events" onClick={onClick} className="group flex items-center gap-2.5">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink text-volt shadow-sm transition-transform group-hover:-rotate-6">
-        <span className="font-display text-sm font-black leading-none tracking-tighter" aria-hidden>
-          DX
-        </span>
-      </span>
-      <span className="font-display text-lg font-extrabold leading-none tracking-tightest">
-        DАЙ ХАРD
-      </span>
+    <Link to="/events" onClick={onClick} className="group flex items-center gap-3">
+      <img
+        src={light ? logoMarkLight : logoMarkDark}
+        alt=""
+        className="h-8 w-auto shrink-0 transition-transform group-hover:-rotate-6"
+      />
+      <img
+        src={light ? logoFullLight : logoFullDark}
+        alt="DАЙ ХАРD"
+        className="h-5 w-auto"
+      />
     </Link>
   )
 }
@@ -185,14 +191,7 @@ function SiteFooter() {
       <div className="stripe h-1.5 w-full" />
       <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="sm:col-span-2 lg:col-span-2">
-          <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-paper/10 text-volt">
-              <span className="font-display text-sm font-black leading-none tracking-tighter" aria-hidden>
-                DX
-              </span>
-            </span>
-            <span className="font-display text-lg tracking-tightest">DАЙ ХАРD</span>
-          </div>
+          <Brand light />
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-paper/60">
             🏃 Воскресные длительные тренировки. Беговое сообщество Чебоксар — события, группы,
             протоколы забегов, маршруты и рейтинг активности участников.

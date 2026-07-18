@@ -246,6 +246,7 @@ class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
         RunnerBaseline.dx_count,
         RunnerBaseline.total_runs,
         RunnerBaseline.total_km,
+        RunnerBaseline.first_run_date,
     ]
     # Carry-over totals from before this platform existed (e.g. a runner's
     # community history that predates CSV imports) — admin-only, never
@@ -256,6 +257,7 @@ class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
         RunnerBaseline.dx_count,
         RunnerBaseline.total_runs,
         RunnerBaseline.total_km,
+        RunnerBaseline.first_run_date,
     ]
 
 

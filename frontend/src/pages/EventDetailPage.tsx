@@ -200,11 +200,6 @@ export function EventDetailPage() {
                   <dd className="font-mono">{past ? 'завершено' : 'предстоит'}</dd>
                 </div>
               </dl>
-              {groups[0] && (
-                <Link to={`/groups/${groups[0].id}`} className="btn-volt mt-6 w-full">
-                  Открыть первую группу
-                </Link>
-              )}
             </div>
           </div>
         </aside>

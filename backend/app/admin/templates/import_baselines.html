@@ -11,8 +11,9 @@
           Разделитель колонок — точка с запятой (<code>;</code>). Колонки:
           <code>first_name</code>, <code>last_name</code> (обязательны),
           <code>dx_count</code>, <code>total_runs</code>, <code>total_km</code>,
+          <code>first_run_date</code> (формат <code>ГГГГ-ММ-ДД</code>),
           <code>email</code> (не обязательны — пустая ячейка у чисел считается
-          нулём).
+          нулём, у даты — «неизвестно»).
         </p>
         <p class="hint">
           Это разовый перенос истории с «до этой платформы» — сколько полных DX,
@@ -41,6 +42,7 @@
               <th>dx_count</th>
               <th>total_runs</th>
               <th>total_km</th>
+              <th>first_run_date</th>
               <th>email</th>
             </tr>
           </thead>
@@ -51,12 +53,13 @@
               <td>47</td>
               <td>50</td>
               <td>623.5</td>
+              <td>2023-05-14</td>
               <td>ivan@example.com</td>
             </tr>
           </tbody>
         </table>
-        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;email
-Иван;Петров;47;50;623.5;ivan@example.com</pre>
+        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;email
+Иван;Петров;47;50;623.5;2023-05-14;ivan@example.com</pre>
       </div>
       <div>
         <button type="submit">Импортировать</button>

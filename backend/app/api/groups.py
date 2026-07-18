@@ -224,6 +224,17 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
     runner_ids = [rec.runner_id for rec in records if rec.runner_id is not None]
     latest_thresholds = await get_latest_thresholds(session, runner_ids)
 
+    def name_key(rec: AttendanceRecord) -> tuple[str, str]:
+        """Last name, then first name — used as a tiebreak when the primary
+        sort (finish time, or nothing at all for pending/DNF) is equal, so
+        the order is stable and alphabetically readable rather than
+        whatever order the DB happened to return rows in."""
+        if rec.runner:
+            return (rec.runner.last_name.lower(), rec.runner.first_name.lower())
+        # No account yet — raw_name is one blob (see csv_import_service),
+        # so there's no reliable first/last split to sort by separately.
+        return (rec.raw_name.strip().lower(), "")
+
     def to_entry(rec: AttendanceRecord) -> ProtocolEntry:
         res = rec.result
         # Once linked to an account, always show its *current* name — not the
@@ -257,7 +268,7 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
         and rec.result.status == ModerationStatus.approved
         and rec.result.finish_status == FinishStatus.finished
     ]
-    finishers.sort(key=lambda r: r.result.duration_seconds)
+    finishers.sort(key=lambda r: (r.result.duration_seconds, *name_key(r)))
     finisher_entries = []
     for i, rec in enumerate(finishers, start=1):
         entry = to_entry(rec)
@@ -266,15 +277,24 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
 
     finisher_ids = {rec.id for rec in finishers}
     dnf_entries = [
-        to_entry(rec) for rec in records if rec.finish_status == FinishStatus.dnf
+        to_entry(rec)
+        for rec in sorted(
+            (r for r in records if r.finish_status == FinishStatus.dnf), key=name_key
+        )
     ]
     # Everyone else who's on the list (from CSV import / auto-match / guest
     # creation) but doesn't have an approved+finished result yet — without this
     # bucket they'd be on the group but invisible in the protocol entirely.
     pending_entries = [
         to_entry(rec)
-        for rec in records
-        if rec.id not in finisher_ids and rec.finish_status != FinishStatus.dnf
+        for rec in sorted(
+            (
+                r
+                for r in records
+                if r.id not in finisher_ids and r.finish_status != FinishStatus.dnf
+            ),
+            key=name_key,
+        )
     ]
 
     return Protocol(

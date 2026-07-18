@@ -55,6 +55,7 @@ interface RawPublicProfile {
   first_run_date?: string | null
   total_runs_count: number
   full_dx_km: number
+  km_this_month: number
   current_streak: number
   longest_streak: number
   achievements: RawAchievement[]
@@ -134,6 +135,7 @@ function mapPublicProfile(raw: RawPublicProfile): PublicProfile {
     first_run_date: raw.first_run_date ?? null,
     total_runs_count: raw.total_runs_count,
     full_dx_km: raw.full_dx_km,
+    km_this_month: raw.km_this_month,
     current_streak: raw.current_streak,
     longest_streak: raw.longest_streak,
     achievements: raw.achievements.map(mapAchievement),

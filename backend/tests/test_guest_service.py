@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,6 +158,25 @@ async def test_merge_guest_into_sums_baseline_when_real_user_already_has_one(
         await session.scalar(select(RunnerBaseline).where(RunnerBaseline.runner_id == guest.id))
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_merge_guest_into_keeps_the_earlier_first_run_date(
+    session: AsyncSession,
+) -> None:
+    real_user = await make_user(session, "real-base3@example.com")
+    guest = await create_guest(session, "Erin Runner")
+    await make_baseline(session, real_user, first_run_date=date(2020, 1, 1))
+    await make_baseline(session, guest, first_run_date=date(2018, 6, 15))
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    real_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    assert real_baseline is not None
+    assert real_baseline.first_run_date == date(2018, 6, 15)  # earlier of the two wins
 
 
 @pytest.mark.asyncio

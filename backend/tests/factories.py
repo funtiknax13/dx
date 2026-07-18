@@ -83,9 +83,14 @@ async def make_baseline(
     dx_count: int = 0,
     total_runs: int = 0,
     total_km: float = 0.0,
+    first_run_date: date | None = None,
 ) -> RunnerBaseline:
     baseline = RunnerBaseline(
-        runner_id=runner.id, dx_count=dx_count, total_runs=total_runs, total_km=total_km
+        runner_id=runner.id,
+        dx_count=dx_count,
+        total_runs=total_runs,
+        total_km=total_km,
+        first_run_date=first_run_date,
     )
     session.add(baseline)
     await session.flush()

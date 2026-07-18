@@ -200,15 +200,12 @@ function AchievementBadge({ achievement }: { achievement: Achievement }) {
       )}
       {reached ? (
         <div className="min-w-0">
-          {reached_at ? (
+          {reached_at && (
+            // Covered entirely by an admin-entered starting balance (see
+            // RunnerBaseline) when absent — there's no specific run to
+            // attribute it to, so just leave the date blank.
             <p className="font-mono text-[0.65rem] tabular text-ink-600">
               {formatDate(reached_at, { day: 'numeric', month: 'short', year: 'numeric' })}
-            </p>
-          ) : (
-            // Covered entirely by an admin-entered starting balance (see
-            // RunnerBaseline) — there's no specific run to attribute it to.
-            <p className="font-mono text-[0.6rem] uppercase tracking-wide text-clay">
-              Стартовые данные
             </p>
           )}
           {event_title && (
@@ -249,6 +246,11 @@ function StatsGrid({ data }: { data: PublicProfile }) {
       value: formatDistance(data.full_dx_km),
     },
     {
+      icon: <IconFlag width={18} height={18} />,
+      label: 'Км за последний месяц',
+      value: formatDistance(data.km_this_month),
+    },
+    {
       icon: <IconSpark width={18} height={18} />,
       label: 'Текущая серия',
       value: `${data.current_streak} DX подряд`,
@@ -261,7 +263,7 @@ function StatsGrid({ data }: { data: PublicProfile }) {
   ]
 
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
       {stats.map((s) => (
         <div
           key={s.label}

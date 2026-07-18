@@ -59,8 +59,11 @@ async def test_rating_counts_finished_with_pending_result(session: AsyncSession)
     _, group = await make_event_group(session, org)
 
     await make_attendance_with_result(
-        session, group, runner,
-        finish_status=FinishStatus.finished, moderation=ModerationStatus.pending,
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.pending,
     )
     await session.commit()
 
@@ -75,8 +78,11 @@ async def test_rating_excludes_dnf(session: AsyncSession) -> None:
 
     await _bare_attendance(session, group, runner, finish_status=FinishStatus.dnf)
     await make_attendance_with_result(
-        session, group, runner,
-        finish_status=FinishStatus.dnf, moderation=ModerationStatus.approved,
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.dnf,
+        moderation=ModerationStatus.approved,
     )
     await session.commit()
 
@@ -90,8 +96,11 @@ async def test_rating_ignores_unmatched_records(session: AsyncSession) -> None:
     _, group = await make_event_group(session, org)
     # Unmatched (runner_id None), finished -> still not counted.
     await make_attendance_with_result(
-        session, group, None,
-        finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+        session,
+        group,
+        None,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
     )
     await session.commit()
 
@@ -167,12 +176,18 @@ async def test_rating_orders_by_count_desc(session: AsyncSession) -> None:
 
     for _ in range(2):
         await make_attendance_with_result(
-            session, group, r1,
-            finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+            session,
+            group,
+            r1,
+            finish_status=FinishStatus.finished,
+            moderation=ModerationStatus.approved,
         )
     await make_attendance_with_result(
-        session, group, r2,
-        finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+        session,
+        group,
+        r2,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
     )
     await session.commit()
 
@@ -228,3 +243,113 @@ async def test_baseline_only_runner_still_appears_in_all_time_rating(
     assert rating[0].runner_id == runner.id
     assert rating[0].finished_count == 100
     assert await compute_rating(session, "year") == []
+
+
+async def _event_group(
+    session: AsyncSession,
+    org,
+    when,
+    target_km: float,
+    runner,
+    *,
+    finish_status=FinishStatus.finished,
+) -> None:
+    event = Event(title=f"DX {when.isoformat()}", date=when, created_by=org.id)
+    session.add(event)
+    await session.flush()
+    group = Group(event_id=event.id, location="City", name="A", target_distance_km=target_km)
+    session.add(group)
+    await session.flush()
+    await _bare_attendance(session, group, runner, finish_status=finish_status)
+
+
+@pytest.mark.asyncio
+async def test_month_tie_breaks_on_km_this_month(session: AsyncSession) -> None:
+    org = await make_user(session, "org-tie1@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie1@example.com")
+    r2 = await make_user(session, "r2-tie1@example.com")
+    today = datetime.now(UTC).date()
+
+    await _event_group(session, org, today, 30, r1)  # same finishes_month (1 each)
+    await _event_group(session, org, today, 10, r2)  # but r1 ran further
+    await session.commit()
+
+    rating = await compute_rating(session, "month")
+    assert [e.runner_id for e in rating] == [r1.id, r2.id]
+    assert rating[0].finished_count == rating[1].finished_count == 1
+
+
+@pytest.mark.asyncio
+async def test_month_tie_cascades_to_finishes_this_year(session: AsyncSession) -> None:
+    org = await make_user(session, "org-tie2@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie2@example.com")
+    r2 = await make_user(session, "r2-tie2@example.com")
+    today = datetime.now(UTC).date()
+    two_months_ago = today - timedelta(days=60)
+
+    # Both tied at month level (1 finish, 10km) -> r1 has an extra finish
+    # earlier this year (outside the rolling month window) to win on the
+    # next cascade level (finishes_year).
+    await _event_group(session, org, today, 10, r1)
+    await _event_group(session, org, two_months_ago, 10, r1)
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    rating = await compute_rating(session, "month")
+    assert [e.runner_id for e in rating] == [r1.id, r2.id]
+    # The displayed count is still just this month's, unaffected by the tiebreak.
+    assert rating[0].finished_count == 1
+    assert rating[1].finished_count == 1
+
+
+@pytest.mark.asyncio
+async def test_month_tie_cascades_all_the_way_to_finishes_all_time(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-tie3@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie3@example.com")
+    r2 = await make_user(session, "r2-tie3@example.com")
+    today = datetime.now(UTC).date()
+    two_years_ago = today - timedelta(days=730)
+
+    # Tied on month (1/10km) and year (1/10km) -> r1 has an extra finish
+    # outside the rolling year window to win on finishes_all.
+    await _event_group(session, org, today, 10, r1)
+    await _event_group(session, org, two_years_ago, 5, r1)
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    rating = await compute_rating(session, "month")
+    assert [e.runner_id for e in rating] == [r1.id, r2.id]
+
+
+@pytest.mark.asyncio
+async def test_year_tie_breaks_on_km_this_year_then_finishes_all(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-tie4@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie4@example.com")
+    r2 = await make_user(session, "r2-tie4@example.com")
+    today = datetime.now(UTC).date()
+
+    await _event_group(session, org, today, 30, r1)
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    rating = await compute_rating(session, "year")
+    assert [e.runner_id for e in rating] == [r1.id, r2.id]
+
+
+@pytest.mark.asyncio
+async def test_all_time_tie_breaks_on_km(session: AsyncSession) -> None:
+    org = await make_user(session, "org-tie5@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie5@example.com")
+    r2 = await make_user(session, "r2-tie5@example.com")
+    today = datetime.now(UTC).date()
+
+    await _event_group(session, org, today, 30, r1)
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    rating = await compute_rating(session, "all")
+    assert [e.runner_id for e in rating] == [r1.id, r2.id]

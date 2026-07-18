@@ -224,3 +224,70 @@ async def test_baseline_only_runner_still_appears_in_all_time_leaderboard(
     assert dx_all[0].value == 25.0
 
     assert await compute_leaderboard(session, "dx", "month") == []
+
+
+async def _event_group(session: AsyncSession, org, when, target_km: float, runner) -> None:
+    event = Event(title=f"DX {when.isoformat()}", date=when, created_by=org.id)
+    session.add(event)
+    await session.flush()
+    group = Group(event_id=event.id, location="City", name="A", target_distance_km=target_km)
+    session.add(group)
+    await session.flush()
+    await _finish(session, group, runner.id)
+
+
+@pytest.mark.asyncio
+async def test_dx_leaderboard_month_tie_breaks_on_km(session: AsyncSession) -> None:
+    org = await make_user(session, "org-tie-dx@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie-dx@example.com")
+    r2 = await make_user(session, "r2-tie-dx@example.com")
+    today = datetime.now(UTC).date()
+
+    await _event_group(session, org, today, 30, r1)  # same finishes (1), r1 ran further
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    entries = await compute_leaderboard(session, "dx", "month")
+    assert [e.runner_id for e in entries] == [r1.id, r2.id]
+    assert entries[0].value == entries[1].value == 1.0
+
+
+@pytest.mark.asyncio
+async def test_km_leaderboard_month_tie_breaks_on_finishes(session: AsyncSession) -> None:
+    """km is the *primary* sort for this leaderboard — tied km should fall
+    back to finish count, the mirror image of the dx leaderboard's cascade."""
+    org = await make_user(session, "org-tie-km@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie-km@example.com")
+    r2 = await make_user(session, "r2-tie-km@example.com")
+    today = datetime.now(UTC).date()
+
+    await _event_group(session, org, today, 20, r1)  # 20km in one run
+    await _event_group(session, org, today, 10, r2)  # 20km across two runs
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    entries = await compute_leaderboard(session, "km", "month")
+    assert [e.runner_id for e in entries] == [r2.id, r1.id]
+    assert entries[0].value == entries[1].value == 20.0
+
+
+@pytest.mark.asyncio
+async def test_km_leaderboard_month_tie_cascades_to_year_then_all(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-tie-km2@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-tie-km2@example.com")
+    r2 = await make_user(session, "r2-tie-km2@example.com")
+    today = datetime.now(UTC).date()
+    this_month_start = today.replace(day=1)
+    last_month_date = this_month_start - timedelta(days=1)
+
+    # Tied this month (10km, 1 finish each) -> r1 has extra km earlier this
+    # year (outside the calendar month window) to win on km_year.
+    await _event_group(session, org, today, 10, r1)
+    await _event_group(session, org, last_month_date, 15, r1)
+    await _event_group(session, org, today, 10, r2)
+    await session.commit()
+
+    entries = await compute_leaderboard(session, "km", "month")
+    assert [e.runner_id for e in entries] == [r1.id, r2.id]

@@ -104,6 +104,10 @@ async def _fold_baseline_into(
         existing.dx_count += baseline.dx_count
         existing.total_runs += baseline.total_runs
         existing.total_km += baseline.total_km
+        if baseline.first_run_date is not None and (
+            existing.first_run_date is None or baseline.first_run_date < existing.first_run_date
+        ):
+            existing.first_run_date = baseline.first_run_date
         await session.delete(baseline)
 
 

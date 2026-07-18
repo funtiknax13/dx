@@ -62,6 +62,10 @@ function RunnerCell({ row }: { row: ProtocolRow }) {
 function ProtocolRowLine({ row }: { row: ProtocolRow }) {
   const isDnf = row.finish_status === 'dnf'
   const hasTime = row.duration_seconds != null
+  // On the list (CSV import / auto-match) but no result uploaded yet — no
+  // time/pace/distance to show, so skip the dashes and just center the
+  // status word instead of right-aligning it like a real time would be.
+  const isPending = !isDnf && !hasTime
   return (
     <tr className="border-b border-ink/[0.06] transition-colors hover:bg-signal-wash/30">
       <td className="py-3 pl-4 pr-2">
@@ -76,7 +80,11 @@ function ProtocolRowLine({ row }: { row: ProtocolRow }) {
       <td className="py-3 pr-3">
         <RunnerCell row={row} />
       </td>
-      <td className="py-3 pr-3 text-right font-mono text-sm font-semibold tabular text-ink">
+      <td
+        className={`py-3 pr-3 font-mono text-sm font-semibold tabular text-ink ${
+          isPending ? 'text-center' : 'text-right'
+        }`}
+      >
         {isDnf ? (
           <span className="text-xs uppercase tracking-wide text-clay">DNF</span>
         ) : hasTime ? (
@@ -86,10 +94,10 @@ function ProtocolRowLine({ row }: { row: ProtocolRow }) {
         )}
       </td>
       <td className="hidden py-3 pr-3 text-right font-mono text-sm tabular text-ink-600 sm:table-cell">
-        {formatPace(row.pace_seconds_per_km)}
+        {isPending ? '' : formatPace(row.pace_seconds_per_km)}
       </td>
       <td className="hidden py-3 pr-4 text-right font-mono text-sm tabular text-ink-600 md:table-cell">
-        {formatDistance(row.distance_km)}
+        {isPending ? '' : formatDistance(row.distance_km)}
       </td>
     </tr>
   )

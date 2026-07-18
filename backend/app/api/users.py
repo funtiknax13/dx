@@ -183,14 +183,21 @@ async def user_history(
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
-    base = select(AttendanceRecord).where(AttendanceRecord.runner_id == user_id)
+    base = (
+        select(AttendanceRecord)
+        .join(Group, Group.id == AttendanceRecord.group_id)
+        .join(Event, Event.id == Group.event_id)
+        .where(AttendanceRecord.runner_id == user_id)
+    )
     total = await session.scalar(select(func.count()).select_from(base.subquery()))
     records = await session.scalars(
         base.options(
             selectinload(AttendanceRecord.group).selectinload(Group.event),
             selectinload(AttendanceRecord.result),
         )
-        .order_by(AttendanceRecord.id.desc())
+        # Most recent event first — not insertion order, so a late CSV
+        # import of an older event doesn't jump to the top.
+        .order_by(Event.date.desc(), AttendanceRecord.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -234,6 +241,7 @@ async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
         first_run_date=stats.first_run_date,
         total_runs_count=stats.total_runs_count,
         full_dx_km=stats.full_dx_km,
+        km_this_month=stats.km_this_month,
         current_streak=stats.current_streak,
         longest_streak=stats.longest_streak,
         achievements=[

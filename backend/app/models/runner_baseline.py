@@ -1,4 +1,6 @@
-from sqlalchemy import Float, ForeignKey, Integer
+from datetime import date
+
+from sqlalchemy import Date, Float, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -27,6 +29,11 @@ class RunnerBaseline(Base, TimestampMixin):
     dx_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_runs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_km: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # When this runner's *actual* first run happened, pre-dating anything
+    # tracked by this platform — lets the profile's "первая пробежка" stat
+    # show the real date instead of the first tracked (CSV-imported) one.
+    first_run_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     runner = relationship("User", back_populates="baseline")
 

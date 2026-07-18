@@ -3,10 +3,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus, UserRole
+from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.group import Group
 from app.services.guest_service import create_guest, merge_guest_into
-from tests.factories import make_event_group, make_user
+from tests.factories import make_attendance_with_result, make_event_group, make_user
 
 
 @pytest.mark.asyncio
@@ -170,3 +170,89 @@ async def test_protocol_entry_includes_runners_avatar(
     entries = body["finishers"] + body["pending"] + body["dnf"]
     assert len(entries) == 1
     assert entries[0]["avatar"] == "/media/avatars/test.jpg"
+
+
+@pytest.mark.asyncio
+async def test_protocol_finishers_with_equal_time_break_tie_by_name(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-nametie@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    runner_b = await make_user(session, "runner-b-nametie@example.com")
+    runner_b.first_name, runner_b.last_name = "Иван", "Борисов"
+    runner_a = await make_user(session, "runner-a-nametie@example.com")
+    runner_a.first_name, runner_a.last_name = "Пётр", "Антонов"
+
+    # Same fixed duration_seconds=3000 for both (see factories.make_attendance_with_result)
+    # -> only the name tiebreak can decide the order.
+    await make_attendance_with_result(
+        session, group, runner_b,
+        finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+    )
+    await make_attendance_with_result(
+        session, group, runner_a,
+        finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+    )
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert [e["runner_id"] for e in body["finishers"]] == [runner_a.id, runner_b.id]
+    assert [e["rank"] for e in body["finishers"]] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_protocol_pending_entries_sorted_by_name(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-pendingsort@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    runner_z = await make_user(session, "runner-z-pending@example.com")
+    runner_z.first_name, runner_z.last_name = "Анна", "Яковлева"
+    runner_a = await make_user(session, "runner-a-pending@example.com")
+    runner_a.first_name, runner_a.last_name = "Борис", "Волков"
+
+    for runner in (runner_z, runner_a):
+        session.add(
+            AttendanceRecord(
+                group_id=group.id,
+                raw_name=f"{runner.first_name} {runner.last_name}",
+                runner_id=runner.id,
+                finish_status=FinishStatus.finished,
+            )
+        )
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert [e["runner_id"] for e in body["pending"]] == [runner_a.id, runner_z.id]
+
+
+@pytest.mark.asyncio
+async def test_protocol_dnf_entries_sorted_by_name(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-dnfsort@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    runner_z = await make_user(session, "runner-z-dnf@example.com")
+    runner_z.first_name, runner_z.last_name = "Анна", "Яковлева"
+    runner_a = await make_user(session, "runner-a-dnf@example.com")
+    runner_a.first_name, runner_a.last_name = "Борис", "Волков"
+
+    for runner in (runner_z, runner_a):
+        session.add(
+            AttendanceRecord(
+                group_id=group.id,
+                raw_name=f"{runner.first_name} {runner.last_name}",
+                runner_id=runner.id,
+                finish_status=FinishStatus.dnf,
+            )
+        )
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert [e["runner_id"] for e in body["dnf"]] == [runner_a.id, runner_z.id]

@@ -1,6 +1,7 @@
 import csv
 import io
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,11 +42,23 @@ def _parse_float(raw: str | None) -> float | None:
         return None
 
 
+def _parse_date(raw: str | None) -> tuple[date | None, bool]:
+    """(value, is_valid) — blank is valid (nothing provided); a non-blank
+    string that doesn't parse as YYYY-MM-DD is invalid."""
+    value = (raw or "").strip()
+    if not value:
+        return None, True
+    try:
+        return date.fromisoformat(value), True
+    except ValueError:
+        return None, False
+
+
 async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> BaselineImportResult:
     """Parse a `;`-delimited CSV of admin-entered carry-over stats (columns:
-    first_name, last_name required; dx_count, total_runs, total_km, email
-    optional, missing/blank numbers default to 0) and upsert one
-    RunnerBaseline per row.
+    first_name, last_name required; dx_count, total_runs, total_km,
+    first_run_date (YYYY-MM-DD), email optional, missing/blank numbers
+    default to 0) and upsert one RunnerBaseline per row.
 
     Runner resolution reuses the exact same rule as attendance CSV import —
     see app.services.guest_service.resolve_runner_for_csv_row (email match /
@@ -69,6 +82,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     dx_count_col = header_map.get("dx_count")
     total_runs_col = header_map.get("total_runs")
     total_km_col = header_map.get("total_km")
+    first_run_date_col = header_map.get("first_run_date")
     email_col = header_map.get("email")
 
     created = 0
@@ -91,7 +105,15 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         dx_count = _parse_int(row.get(dx_count_col) if dx_count_col else None)
         total_runs = _parse_int(row.get(total_runs_col) if total_runs_col else None)
         total_km = _parse_float(row.get(total_km_col) if total_km_col else None)
-        if dx_count is None or total_runs is None or total_km is None:
+        first_run_date, first_run_date_valid = _parse_date(
+            row.get(first_run_date_col) if first_run_date_col else None
+        )
+        if (
+            dx_count is None
+            or total_runs is None
+            or total_km is None
+            or not first_run_date_valid
+        ):
             skipped_invalid_number += 1
             continue
 
@@ -116,6 +138,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
                     dx_count=dx_count,
                     total_runs=total_runs,
                     total_km=total_km,
+                    first_run_date=first_run_date,
                 )
             )
             created += 1
@@ -123,6 +146,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
             baseline.dx_count = dx_count
             baseline.total_runs = total_runs
             baseline.total_km = total_km
+            baseline.first_run_date = first_run_date
             updated += 1
 
     await session.flush()

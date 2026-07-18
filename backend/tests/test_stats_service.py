@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,9 +71,7 @@ async def test_first_run_date_is_earliest_finished_event(session: AsyncSession) 
     late_event = Event(title="DX #2", date=date(2026, 5, 1), created_by=org.id)
     session.add_all([early_event, late_event])
     await session.flush()
-    early_group = Group(
-        event_id=early_event.id, location="P", name="A", target_distance_km=10
-    )
+    early_group = Group(event_id=early_event.id, location="P", name="A", target_distance_km=10)
     late_group = Group(event_id=late_event.id, location="P", name="B", target_distance_km=10)
     session.add_all([early_group, late_group])
     await session.flush()
@@ -195,3 +193,107 @@ async def test_no_baseline_is_a_no_op(session: AsyncSession) -> None:
     assert stats.total_runs_count == 1
     assert stats.full_dx_count == 1
     assert stats.full_dx_km == 10
+
+
+async def _dx_event(
+    session: AsyncSession, org, when: date, runner_id: int, target_km: float = 10
+) -> None:
+    event = Event(title=f"DX {when.isoformat()}", date=when, created_by=org.id)
+    session.add(event)
+    await session.flush()
+    group = Group(event_id=event.id, location="City", name="A", target_distance_km=target_km)
+    session.add(group)
+    await session.flush()
+    await _finish(session, group, runner_id)
+
+
+@pytest.mark.asyncio
+async def test_km_this_month_only_counts_this_calendar_month(session: AsyncSession) -> None:
+    org = await make_user(session, "org-stats8@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats8@example.com")
+    today = datetime.now(UTC).date()
+    last_month = today.replace(day=1) - timedelta(days=1)
+
+    await _dx_event(session, org, today, runner.id, target_km=12)
+    await _dx_event(session, org, last_month, runner.id, target_km=99)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.km_this_month == 12
+
+
+@pytest.mark.asyncio
+async def test_km_this_month_excludes_non_rating_groups(session: AsyncSession) -> None:
+    org = await make_user(session, "org-stats9@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats9@example.com")
+    today = datetime.now(UTC).date()
+    event = Event(title="DX today", date=today, created_by=org.id)
+    session.add(event)
+    await session.flush()
+    p_group = Group(
+        event_id=event.id,
+        location="P",
+        name="P-10",
+        target_distance_km=10,
+        counts_toward_rating=False,
+    )
+    session.add(p_group)
+    await session.flush()
+    await _finish(session, p_group, runner.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.km_this_month == 0
+
+
+@pytest.mark.asyncio
+async def test_km_this_month_is_unaffected_by_baseline(session: AsyncSession) -> None:
+    org = await make_user(session, "org-stats10@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats10@example.com")
+    await make_baseline(session, runner, dx_count=50, total_km=500)
+    today = datetime.now(UTC).date()
+    await _dx_event(session, org, today, runner.id, target_km=5)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.km_this_month == 5  # baseline never leaks into a windowed figure
+
+
+@pytest.mark.asyncio
+async def test_first_run_date_prefers_the_earlier_of_tracked_and_baseline(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-stats11@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats11@example.com")
+    await make_baseline(session, runner, first_run_date=date(2019, 3, 1))
+    await _dx_event(session, org, date(2026, 5, 1), runner.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.first_run_date == date(2019, 3, 1)
+
+
+@pytest.mark.asyncio
+async def test_first_run_date_ignores_baseline_if_tracked_is_earlier(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-stats12@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats12@example.com")
+    await make_baseline(session, runner, first_run_date=date(2024, 1, 1))
+    await _dx_event(session, org, date(2019, 5, 1), runner.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.first_run_date == date(2019, 5, 1)
+
+
+@pytest.mark.asyncio
+async def test_first_run_date_from_baseline_alone_when_no_tracked_runs(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-stats13@example.com")
+    await make_baseline(session, runner, first_run_date=date(2019, 3, 1))
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.first_run_date == date(2019, 3, 1)
