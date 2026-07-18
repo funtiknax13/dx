@@ -13,6 +13,8 @@ class GroupCreate(BaseModel):
     pace_min: str | None = Field(default=None, max_length=20)
     pace_max: str | None = Field(default=None, max_length=20)
     start_time: datetime | None = None
+    start_lat: float | None = Field(default=None, ge=-90, le=90)
+    start_lng: float | None = Field(default=None, ge=-180, le=180)
 
 
 class GroupUpdate(BaseModel):
@@ -23,6 +25,8 @@ class GroupUpdate(BaseModel):
     pace_min: str | None = Field(default=None, max_length=20)
     pace_max: str | None = Field(default=None, max_length=20)
     start_time: datetime | None = None
+    start_lat: float | None = Field(default=None, ge=-90, le=90)
+    start_lng: float | None = Field(default=None, ge=-180, le=180)
 
 
 class GroupOut(BaseModel):
@@ -37,6 +41,8 @@ class GroupOut(BaseModel):
     pace_min: str | None
     pace_max: str | None
     start_time: datetime | None
+    start_lat: float | None
+    start_lng: float | None
     route_gpx: str | None
     # Always the parent event's date (see combine_event_date_and_time) — lets
     # the frontend decide whether this group's event is past without a

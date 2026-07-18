@@ -22,6 +22,18 @@
         <input id="location" type="text" name="location" placeholder="Город Мастеров" value="{{ group.location if group else '' }}" required />
       </div>
       <div class="field">
+        <label for="start_lat">Координаты старта (необязательно)</label>
+        <div style="display:flex; gap:8px;">
+          <input id="start_lat" type="number" step="any" min="-90" max="90" name="start_lat" placeholder="широта, напр. 56.130352" value="{{ group.start_lat if group and group.start_lat is not none else '' }}" style="flex:1;" />
+          <input id="start_lng" type="number" step="any" min="-180" max="180" name="start_lng" placeholder="долгота, напр. 47.226109" value="{{ group.start_lng if group and group.start_lng is not none else '' }}" style="flex:1;" />
+        </div>
+        <p class="hint">
+          Показывается на карте и ссылкой на карточке группы. Найти координаты:
+          открой точку старта в <a href="https://yandex.ru/maps" target="_blank" rel="noreferrer">Яндекс.Картах</a>,
+          щёлкни по месту правой кнопкой → «Что здесь» — координаты появятся снизу, скопируй широту и долготу сюда.
+        </p>
+      </div>
+      <div class="field">
         <label for="distance_code">Тег дистанции</label>
         <input id="distance_code" type="text" name="distance_code" placeholder="X-33" value="{{ group.distance_code or '' if group else '' }}" />
         <p class="hint">Одинаковый тег у нескольких групп события (например, разных темповых подгрупп одной дистанции) объединяет их в один общий протокол. Оставь пустым, если у группы протокол должен быть отдельный.</p>

@@ -114,6 +114,8 @@ export interface Group {
   pace_max?: string | null // e.g. "5:30"
   target_distance_km?: number | null
   start_time?: string | null // ISO
+  start_lat?: number | null
+  start_lng?: number | null
   event_date?: string | null // ISO date, always the parent event's date
   has_route_gpx?: boolean
   signup_count?: number

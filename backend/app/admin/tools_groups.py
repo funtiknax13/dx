@@ -27,6 +27,11 @@ router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schem
 _TRAILING_GROUP_NUMBER = re.compile(r"^(.*#)(\d+)$")
 
 
+def _parse_optional_float(value: str) -> float | None:
+    value = value.strip()
+    return float(value) if value else None
+
+
 def _next_group_name(name: str) -> str:
     """"X-33 группа #1" -> "X-33 группа #2"; falls back to a "(копия)" suffix
     for names that don't end in a #N group number."""
@@ -65,6 +70,8 @@ async def group_new_submit(
     pace_min: str = Form(""),
     pace_max: str = Form(""),
     start_time: str = Form(""),
+    start_lat: str = Form(""),
+    start_lng: str = Form(""),
     counts_toward_rating: bool = Form(False),
 ) -> RedirectResponse:
     user = await get_tools_user(request)
@@ -83,6 +90,8 @@ async def group_new_submit(
             pace_min=pace_min or None,
             pace_max=pace_max or None,
             start_time=combine_event_date_and_time(event.date, start_time),
+            start_lat=_parse_optional_float(start_lat),
+            start_lng=_parse_optional_float(start_lng),
             counts_toward_rating=counts_toward_rating,
         )
         session.add(group)
@@ -128,6 +137,8 @@ async def group_edit_submit(
     pace_min: str = Form(""),
     pace_max: str = Form(""),
     start_time: str = Form(""),
+    start_lat: str = Form(""),
+    start_lng: str = Form(""),
     counts_toward_rating: bool = Form(False),
 ) -> RedirectResponse:
     user = await get_tools_user(request)
@@ -147,6 +158,8 @@ async def group_edit_submit(
         group.pace_min = pace_min or None
         group.pace_max = pace_max or None
         group.start_time = combine_event_date_and_time(event.date, start_time)
+        group.start_lat = _parse_optional_float(start_lat)
+        group.start_lng = _parse_optional_float(start_lng)
         group.counts_toward_rating = counts_toward_rating
         await session.commit()
     return RedirectResponse(f"/admin-tools/groups/{group_id}/edit?flash=Сохранено", 303)
@@ -173,6 +186,8 @@ async def group_duplicate(request: Request, group_id: int) -> RedirectResponse:
             pace_min=group.pace_min,
             pace_max=group.pace_max,
             start_time=group.start_time,
+            start_lat=group.start_lat,
+            start_lng=group.start_lng,
             route_gpx=group.route_gpx,
             counts_toward_rating=group.counts_toward_rating,
         )

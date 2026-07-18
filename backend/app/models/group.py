@@ -17,6 +17,12 @@ class Group(Base, TimestampMixin):
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)  # distance code / group name
 
+    # Optional coordinates for the start location — the text `location` field
+    # above stays the source of truth for display, these just add a map/link.
+    # Nullable: an organizer can add a GPX route without ever setting these.
+    start_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    start_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Shared tag across pace-subgroups of the same real-world distance within
     # one event (e.g. "X-33" for both "Х-33 группа #1" and "#2") — lets the
     # protocol endpoint merge them into one leaderboard. Null means "no family",

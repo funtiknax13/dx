@@ -8,7 +8,9 @@ import { useAsync } from '../lib/useAsync'
 import { formatDistance, formatTime, isPast, paceRange, plural } from '../lib/format'
 import { ProtocolTable } from '../components/ProtocolTable'
 import { RouteMap } from '../components/RouteMap'
+import { LocationMap } from '../components/LocationMap'
 import { ElevationProfile } from '../components/ElevationProfile'
+import { yandexMapsUrl } from '../lib/maps'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
@@ -167,6 +169,28 @@ export function GroupDetailPage() {
         {/* Route sidebar */}
         <aside className="order-1 space-y-5 lg:order-2">
           {isUpcoming && roster && roster.count > 0 && <SignupRosterCard roster={roster} />}
+
+          {group.start_lat != null && group.start_lng != null && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-xl">Место старта</h2>
+                <a
+                  href={yandexMapsUrl(group.start_lat, group.start_lng)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-ink-600 hover:text-signal"
+                >
+                  Открыть в картах <IconArrow width={14} height={14} className="-rotate-45" />
+                </a>
+              </div>
+              <LocationMap
+                lat={group.start_lat}
+                lng={group.start_lng}
+                label={group.location ?? undefined}
+                className="h-[180px]"
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <h2 className="font-display text-xl">Маршрут</h2>

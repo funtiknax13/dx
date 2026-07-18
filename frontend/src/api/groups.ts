@@ -21,6 +21,8 @@ interface RawGroup {
   pace_min?: string | null
   pace_max?: string | null
   start_time?: string | null
+  start_lat?: number | null
+  start_lng?: number | null
   route_gpx?: string | null
   event_date: string
   signup_count: number
@@ -71,6 +73,8 @@ function mapGroup(raw: RawGroup): Group {
     pace_max: raw.pace_max ?? null,
     target_distance_km: raw.target_distance_km,
     start_time: raw.start_time ?? null,
+    start_lat: raw.start_lat ?? null,
+    start_lng: raw.start_lng ?? null,
     event_date: raw.event_date,
     has_route_gpx: Boolean(raw.route_gpx),
     signup_count: raw.signup_count,

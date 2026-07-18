@@ -328,3 +328,90 @@ async def test_editing_group_can_toggle_counts_toward_rating(
 
     await session.refresh(group)
     assert group.counts_toward_rating is False
+
+
+@pytest.mark.asyncio
+async def test_new_group_saves_start_coordinates(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-coords@example.com", UserRole.organizer)
+    event, _existing_group = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/events/{event.id}/groups/new",
+        data={
+            "name": "X-10 группа #2",
+            "location": "Парк",
+            "target_distance_km": "10",
+            "start_lat": "56.130352",
+            "start_lng": "47.226109",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    group = await session.scalar(
+        select(Group).where(Group.event_id == event.id, Group.name == "X-10 группа #2")
+    )
+    assert group is not None
+    assert group.start_lat == 56.130352
+    assert group.start_lng == 47.226109
+
+    edit_resp = await client.get(f"/admin-tools/groups/{group.id}/edit")
+    assert edit_resp.status_code == 200
+    assert 'value="56.130352"' in edit_resp.text
+    assert 'value="47.226109"' in edit_resp.text
+
+
+@pytest.mark.asyncio
+async def test_new_group_without_coordinates_leaves_them_null(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-nocoords@example.com", UserRole.organizer)
+    event, _existing_group = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/events/{event.id}/groups/new",
+        data={"name": "X-10 группа #2", "location": "Парк", "target_distance_km": "10"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    group = await session.scalar(
+        select(Group).where(Group.event_id == event.id, Group.name == "X-10 группа #2")
+    )
+    assert group is not None
+    assert group.start_lat is None
+    assert group.start_lng is None
+
+
+@pytest.mark.asyncio
+async def test_editing_group_can_clear_start_coordinates(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-clearcoords@example.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)
+    group.start_lat = 56.130352
+    group.start_lng = 47.226109
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/groups/{group.id}/edit",
+        data={
+            "name": group.name,
+            "location": group.location,
+            "target_distance_km": str(group.target_distance_km),
+            # start_lat/start_lng omitted -> clearing them, same as pace_min/max
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    await session.refresh(group)
+    assert group.start_lat is None
+    assert group.start_lng is None

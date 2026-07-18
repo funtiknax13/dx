@@ -32,6 +32,38 @@ async def test_group_out_includes_event_date_and_signup_count(
 
 
 @pytest.mark.asyncio
+async def test_group_out_includes_start_coordinates(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-coords-api@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    group.start_lat = 56.130352
+    group.start_lng = 47.226109
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["start_lat"] == 56.130352
+    assert body["start_lng"] == 47.226109
+
+
+@pytest.mark.asyncio
+async def test_group_out_start_coordinates_default_to_null(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-nocoords-api@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["start_lat"] is None
+    assert body["start_lng"] is None
+
+
+@pytest.mark.asyncio
 async def test_groups_are_sorted_by_distance_then_id_not_creation_order(
     session: AsyncSession, client: AsyncClient
 ) -> None:

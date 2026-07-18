@@ -59,6 +59,8 @@ def _group_out(group: Group, event_date: date_type, signup_count: int) -> GroupO
         pace_min=group.pace_min,
         pace_max=group.pace_max,
         start_time=group.start_time,
+        start_lat=group.start_lat,
+        start_lng=group.start_lng,
         route_gpx=group.route_gpx,
         event_date=event_date,
         signup_count=signup_count,
