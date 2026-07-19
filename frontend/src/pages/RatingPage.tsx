@@ -26,9 +26,9 @@ const PERIODS: [RatingPeriod, string][] = [
 ]
 
 const VIEW_SUBTITLE: Record<View, string> = {
-  rating: 'Рейтинг строится по числу завершённых пробежек (finished), подтверждённых администратором. Чем активнее бежишь — тем выше в таблице. Показаны первые 20.',
-  streak: 'Топ по текущей серии подряд посещённых DX — считается по любой группе, не только по полным дистанциям. Показаны первые 20.',
-  km: 'Топ по суммарному километражу полных DX. Показаны первые 20.',
+  rating: 'Рейтинг строится по числу завершённых пробежек (finished), подтверждённых администратором. Чем активнее бежишь — тем выше в таблице.',
+  streak: 'Топ по текущей серии подряд посещённых DX — считается по любой группе, не только по полным дистанциям.',
+  km: 'Топ по суммарному километражу полных DX.',
 }
 
 interface DisplayEntry {
@@ -101,9 +101,14 @@ export function RatingPage() {
         />
         <div className="stripe absolute inset-x-0 top-0 h-1.5" />
         <div className="container-page relative py-14 sm:py-16">
-          <span className="eyebrow text-volt">
-            <IconTrophy width={16} height={16} /> Лидерборд
-          </span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="eyebrow text-volt">
+              <IconTrophy width={16} height={16} /> Лидерборд
+            </span>
+            <span className="chip border border-paper/15 bg-paper/[0.06] text-paper/60">
+              Топ-20
+            </span>
+          </div>
           <h1 className="mt-3 font-display text-4xl leading-tight sm:text-5xl">
             Рейтинг сообщества
           </h1>

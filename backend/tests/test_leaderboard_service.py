@@ -223,6 +223,76 @@ async def test_streak_ignores_a_not_yet_imported_event(session: AsyncSession) ->
 
 
 @pytest.mark.asyncio
+async def test_streak_tie_cascades_to_finishes_this_month(session: AsyncSession) -> None:
+    """Same current streak (1) for both -> r1 wins the tie via a higher
+    finishes_month, exactly the same cascade the dx/km leaderboards use."""
+    org = await make_user(session, "org-streak-tie1@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-streak-tie1@example.com")
+    r2 = await make_user(session, "r2-streak-tie1@example.com")
+    today = datetime.now(UTC).date()
+
+    shared_event = Event(title="DX Shared", date=today, created_by=org.id)
+    session.add(shared_event)
+    await session.flush()
+    shared_group = Group(
+        event_id=shared_event.id, location="City", name="A", target_distance_km=10
+    )
+    session.add(shared_group)
+    await session.flush()
+    await _finish(session, shared_group, r1.id)
+    await _finish(session, shared_group, r2.id)
+
+    # A future event only r1 attends. _bulk_ranking_rows' month bucket has
+    # no upper bound (unlike the streak's own date<=today event sequence),
+    # so any date >= the start of this month still counts toward
+    # finishes_month — even tomorrow — while never entering the streak
+    # calculation itself. The tie stays exactly 1-1 on streak.
+    tomorrow = today + timedelta(days=1)
+    extra_event = Event(title="DX Extra", date=tomorrow, created_by=org.id)
+    session.add(extra_event)
+    await session.flush()
+    extra_group = Group(
+        event_id=extra_event.id, location="City", name="B", target_distance_km=10
+    )
+    session.add(extra_group)
+    await session.flush()
+    await _finish(session, extra_group, r1.id)
+    await session.commit()
+
+    entries = await compute_streak_leaderboard(session)
+    assert [e.runner_id for e in entries] == [r1.id, r2.id]
+    assert entries[0].value == entries[1].value == 1.0
+
+
+@pytest.mark.asyncio
+async def test_streak_tie_cascades_to_finishes_all_via_baseline(session: AsyncSession) -> None:
+    """Tied on streak and every windowed metric -> a baseline's carry-over
+    dx_count still settles it via finishes_all, even though baseline never
+    contributes to the streak value itself."""
+    org = await make_user(session, "org-streak-tie2@example.com", UserRole.organizer)
+    r1 = await make_user(session, "r1-streak-tie2@example.com")
+    r2 = await make_user(session, "r2-streak-tie2@example.com")
+    today = datetime.now(UTC).date()
+
+    shared_event = Event(title="DX Shared", date=today, created_by=org.id)
+    session.add(shared_event)
+    await session.flush()
+    shared_group = Group(
+        event_id=shared_event.id, location="City", name="A", target_distance_km=10
+    )
+    session.add(shared_group)
+    await session.flush()
+    await _finish(session, shared_group, r1.id)
+    await _finish(session, shared_group, r2.id)
+    await make_baseline(session, r1, dx_count=50)
+    await session.commit()
+
+    entries = await compute_streak_leaderboard(session)
+    assert [e.runner_id for e in entries] == [r1.id, r2.id]
+    assert entries[0].value == entries[1].value == 1.0
+
+
+@pytest.mark.asyncio
 async def test_baseline_adds_to_all_time_dx_and_km_but_not_month(session: AsyncSession) -> None:
     org = await make_user(session, "org-lb-base@example.com", UserRole.organizer)
     runner = await make_user(session, "runner-lb-base@example.com")

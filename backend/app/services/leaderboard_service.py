@@ -203,7 +203,13 @@ async def compute_streak_leaderboard(session: AsyncSession) -> list[LeaderboardE
     An event only enters the sequence once it actually has attendance data —
     a same-day event whose CSV hasn't been imported yet would otherwise look
     like "everyone missed it" the moment its date arrives, zeroing out every
-    streak hours before the roster is even uploaded."""
+    streak hours before the roster is even uploaded.
+
+    Ties on streak length are broken by cascading through the exact same
+    finishes/km hierarchy as the dx/km leaderboards (see _sort_key) —
+    reuses _bulk_ranking_rows rather than recomputing it, so a baseline's
+    carry-over totals can still settle a tie even though they never
+    contribute to the streak itself (no dated events behind them)."""
     today = datetime.now(UTC).date()
     imported_event_ids = (
         select(Group.event_id)
@@ -244,6 +250,8 @@ async def compute_streak_leaderboard(session: AsyncSession) -> list[LeaderboardE
     if not streak_map:
         return []
 
+    ranking_rows = await _bulk_ranking_rows(session)
+
     users = await session.scalars(select(User).where(User.id.in_(streak_map.keys())))
     entries = [
         LeaderboardEntry(
@@ -255,5 +263,18 @@ async def compute_streak_leaderboard(session: AsyncSession) -> list[LeaderboardE
         )
         for u in users
     ]
-    entries.sort(key=lambda e: (-e.value, e.last_name, e.first_name))
+
+    def sort_key(e: LeaderboardEntry) -> tuple[float, ...]:
+        row = ranking_rows.get(e.runner_id, _RankingRow())
+        return (
+            -e.value,
+            -row.finishes_month,
+            -row.km_month,
+            -row.finishes_year,
+            -row.km_year,
+            -row.finishes_all,
+            -row.km_all,
+        )
+
+    entries.sort(key=lambda e: (*sort_key(e), e.last_name, e.first_name))
     return entries
