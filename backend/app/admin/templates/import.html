@@ -3,8 +3,8 @@
 {% block content %}
   <h1>Импорт списка пробежавших</h1>
   <div class="card">
-    <form class="inline" method="post" action="/admin-tools/import" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px;">
-      <div>
+    <form class="inline" method="post" action="/admin-tools/import" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px; min-width: 0;">
+      <div style="min-width: 0;">
         <label for="event_id"><strong>Событие</strong></label><br />
         <select id="event_id" name="event_id" required style="width: 100%; max-width: 480px;">
           <option value="" disabled {{ 'selected' if not selected_event_id }}>Выберите событие…</option>
@@ -20,7 +20,7 @@
           (см. ниже), а не выбором группы здесь.
         </p>
       </div>
-      <div>
+      <div style="min-width: 0;">
         <label for="file"><strong>CSV-файл</strong></label><br />
         <input id="file" type="file" name="file" accept=".csv,text/csv" required />
         <p class="hint">
@@ -53,7 +53,7 @@
         </p>
       </div>
 
-      <div>
+      <div style="min-width: 0;">
         <strong>Пример файла</strong>
         <table style="margin-top:6px; max-width:640px;">
           <thead>

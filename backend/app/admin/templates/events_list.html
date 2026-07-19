@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}События — DH Admin Tools{% endblock %}
 {% block content %}
-  <div style="display:flex; align-items:center; justify-content:space-between; gap: 12px;">
+  <div class="row-between">
     <h1>{{ 'Все события' if tools_user.role.value == 'admin' else 'Мои события' }}</h1>
     <a class="btn" href="/admin-tools/events/new">+ Новое событие</a>
   </div>

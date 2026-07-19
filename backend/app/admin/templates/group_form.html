@@ -2,7 +2,7 @@
 {% block title %}{{ 'Группа' if group else 'Новая группа' }} — DH Admin Tools{% endblock %}
 {% block content %}
   <p><a href="/admin-tools/events/{{ event.id }}/edit">← {{ event.title }}</a></p>
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+  <div class="row-between">
     <h1 style="margin:0;">{{ group.name if group else 'Новая группа' }}</h1>
     {% if group %}
     <form method="post" action="/admin-tools/groups/{{ group.id }}/duplicate">
@@ -23,9 +23,9 @@
       </div>
       <div class="field">
         <label for="start_lat">Координаты старта (необязательно)</label>
-        <div style="display:flex; gap:8px;">
-          <input id="start_lat" type="number" step="any" min="-90" max="90" name="start_lat" placeholder="широта, напр. 56.130352" value="{{ group.start_lat if group and group.start_lat is not none else '' }}" style="flex:1;" />
-          <input id="start_lng" type="number" step="any" min="-180" max="180" name="start_lng" placeholder="долгота, напр. 47.226109" value="{{ group.start_lng if group and group.start_lng is not none else '' }}" style="flex:1;" />
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input id="start_lat" type="number" step="any" min="-90" max="90" name="start_lat" placeholder="широта, напр. 56.130352" value="{{ group.start_lat if group and group.start_lat is not none else '' }}" style="flex:1; min-width:160px;" />
+          <input id="start_lng" type="number" step="any" min="-180" max="180" name="start_lng" placeholder="долгота, напр. 47.226109" value="{{ group.start_lng if group and group.start_lng is not none else '' }}" style="flex:1; min-width:160px;" />
         </div>
         <p class="hint">
           Показывается на карте и ссылкой на карточке группы. Найти координаты:
