@@ -3,8 +3,8 @@
 {% block content %}
   <h1>Импорт стартовых данных</h1>
   <div class="card">
-    <form class="inline" method="post" action="/admin-tools/import-baselines" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px;">
-      <div>
+    <form class="inline" method="post" action="/admin-tools/import-baselines" enctype="multipart/form-data" style="flex-direction: column; align-items: stretch; gap: 14px; min-width: 0;">
+      <div style="min-width: 0;">
         <label for="file"><strong>CSV-файл</strong></label><br />
         <input id="file" type="file" name="file" accept=".csv,text/csv" required />
         <p class="hint">
@@ -42,7 +42,7 @@
         </p>
       </div>
 
-      <div>
+      <div style="min-width: 0;">
         <strong>Пример файла</strong>
         <div style="margin-top:6px; overflow-x:auto;">
         <table style="white-space:nowrap;">
