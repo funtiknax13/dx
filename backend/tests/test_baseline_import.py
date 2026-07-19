@@ -155,3 +155,73 @@ async def test_import_invalid_first_run_date_is_skipped(session: AsyncSession) -
 
     assert result.created == 0
     assert result.skipped_invalid_number == 1
+
+
+@pytest.mark.asyncio
+async def test_import_this_year_columns_are_parsed(session: AsyncSession) -> None:
+    csv = (
+        "first_name;last_name;dx_count;dx_count_this_year;km_this_year;baseline_year\n"
+        "Ivan;Petrov;100;26;260,5;2026\n"
+    )
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 1
+    baseline = await session.scalar(select(RunnerBaseline))
+    assert baseline is not None
+    assert baseline.dx_count == 100
+    assert baseline.dx_count_this_year == 26
+    assert baseline.km_this_year == 260.5
+    assert baseline.baseline_year == 2026
+
+
+@pytest.mark.asyncio
+async def test_import_blank_this_year_columns_default_sensibly(session: AsyncSession) -> None:
+    """dx_count_this_year/km_this_year blank -> 0 (same as the other numeric
+    columns), but baseline_year blank -> None (no sensible zero for a year)."""
+    csv = (
+        "first_name;last_name;dx_count_this_year;km_this_year;baseline_year\n"
+        "Bare;Runner;;;\n"
+    )
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 1
+    baseline = await session.scalar(select(RunnerBaseline))
+    assert baseline is not None
+    assert baseline.dx_count_this_year == 0
+    assert baseline.km_this_year == 0.0
+    assert baseline.baseline_year is None
+
+
+@pytest.mark.asyncio
+async def test_import_invalid_baseline_year_is_skipped(session: AsyncSession) -> None:
+    csv = "first_name;last_name;baseline_year\nDave;Runner;not-a-year\n"
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 0
+    assert result.skipped_invalid_number == 1
+
+
+@pytest.mark.asyncio
+async def test_import_re_run_overwrites_this_year_columns(session: AsyncSession) -> None:
+    csv1 = (
+        "first_name;last_name;dx_count_this_year;km_this_year;baseline_year\n"
+        "Bob;Runner;10;100;2025\n"
+    )
+    csv2 = (
+        "first_name;last_name;dx_count_this_year;km_this_year;baseline_year\n"
+        "Bob;Runner;26;260;2026\n"
+    )
+
+    await import_baseline_csv(session, csv1)
+    await session.commit()
+    await import_baseline_csv(session, csv2)
+    await session.commit()
+
+    baseline = await session.scalar(select(RunnerBaseline))
+    assert baseline is not None
+    assert baseline.dx_count_this_year == 26
+    assert baseline.km_this_year == 260.0
+    assert baseline.baseline_year == 2026

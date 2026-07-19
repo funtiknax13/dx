@@ -247,17 +247,26 @@ class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
         RunnerBaseline.total_runs,
         RunnerBaseline.total_km,
         RunnerBaseline.first_run_date,
+        RunnerBaseline.dx_count_this_year,
+        RunnerBaseline.km_this_year,
+        RunnerBaseline.baseline_year,
     ]
     # Carry-over totals from before this platform existed (e.g. a runner's
     # community history that predates CSV imports) — admin-only, never
     # editable by the runner themselves. Folded into lifetime totals and the
     # all-time rating/leaderboard only (see app.services.baseline_service).
+    # dx_count_this_year/km_this_year are a *subset* of dx_count/total_km
+    # (not additive) and only feed the rating/leaderboard "this year" bucket
+    # while baseline_year equals the current calendar year.
     form_columns = [
         RunnerBaseline.runner,
         RunnerBaseline.dx_count,
         RunnerBaseline.total_runs,
         RunnerBaseline.total_km,
         RunnerBaseline.first_run_date,
+        RunnerBaseline.dx_count_this_year,
+        RunnerBaseline.km_this_year,
+        RunnerBaseline.baseline_year,
     ]
 
 

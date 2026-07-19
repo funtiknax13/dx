@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from sqlalchemy import case, func, select
@@ -12,6 +12,7 @@ from app.models.event import Event
 from app.models.group import Group
 from app.models.user import User
 from app.services.baseline_service import get_all_baselines
+from app.services.date_windows import calendar_window, current_year
 
 Metric = Literal["dx", "km"]
 
@@ -23,20 +24,6 @@ class LeaderboardEntry:
     last_name: str
     avatar: str | None
     value: float
-
-
-def _calendar_window(period: str) -> tuple[date, date] | None:
-    """(start, today) for "year"/"month" — a *calendar* window (Jan 1 / the
-    1st of this month, through today), unlike rating_service's rolling
-    30/365-day windows. These are plain informational leaderboards, not the
-    community rating (still being redesigned separately), so "this month"
-    means the actual current calendar month, not a trailing 30 days."""
-    today = datetime.now(UTC).date()
-    if period == "year":
-        return date(today.year, 1, 1), today
-    if period == "month":
-        return date(today.year, today.month, 1), today
-    return None
 
 
 @dataclass
@@ -59,9 +46,10 @@ def _sort_key(row: _RankingRow, metric: Metric, period: str) -> tuple[float, ...
     repeat. Which metric is primary depends on which leaderboard this is —
     "dx" ranks by finishes first, "km" ranks by km first — but both fall
     back to the other metric, then broader windows, the same way. Baseline
-    carry-over (see RunnerBaseline) only ever contributes to the *_all
-    figures — it has no dated events, so it can't participate in a
-    month/year window."""
+    carry-over (see RunnerBaseline) always contributes to the *_all figures;
+    it can also contribute to *_year if the admin tagged it with the current
+    calendar year — it never reaches *_month, since a once-a-year-entered
+    number can't be attributed to a specific month."""
     if metric == "dx":
         if period == "month":
             return (
@@ -88,8 +76,8 @@ def _sort_key(row: _RankingRow, metric: Metric, period: str) -> tuple[float, ...
 
 
 async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
-    month_window = _calendar_window("month")
-    year_window = _calendar_window("year")
+    month_window = calendar_window("month")
+    year_window = calendar_window("year")
     assert month_window is not None  # "month" always returns a window
     assert year_window is not None  # "year" always returns a window
     month_bound = month_window[0]
@@ -134,15 +122,25 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
         for r in rows
     }
 
-    # Carry-over counts (see RunnerBaseline) apply to the unwindowed total
-    # only — a runner with a baseline but no tracked attendance yet should
-    # still show up.
+    # Carry-over counts (see RunnerBaseline) — dx_count/total_km apply to the
+    # unwindowed total unconditionally; dx_count_this_year/km_this_year only
+    # when baseline_year is the current calendar year. Either way, a runner
+    # with only baseline data and no tracked attendance should still show up.
+    this_year = current_year()
     for runner_id, baseline in (await get_all_baselines(session)).items():
-        if not (baseline.dx_count or baseline.total_km):
+        applies_this_year = baseline.baseline_year == this_year
+        if not (
+            baseline.dx_count
+            or baseline.total_km
+            or (applies_this_year and (baseline.dx_count_this_year or baseline.km_this_year))
+        ):
             continue
         row = result.setdefault(runner_id, _RankingRow())
         row.finishes_all += baseline.dx_count
         row.km_all += baseline.total_km
+        if applies_this_year:
+            row.finishes_year += baseline.dx_count_this_year
+            row.km_year += baseline.km_this_year
 
     return result
 
@@ -152,11 +150,11 @@ async def compute_leaderboard(
 ) -> list[LeaderboardEntry]:
     """Top runners by "dx" (count of finished attendances in groups that count
     toward the rating — i.e. "full DX") or "km" (sum of those groups'
-    target_distance_km). Same counts_toward_rating filter as the community
-    rating (excludes e.g. the short "P" group), just aggregated differently
-    and windowed by calendar period instead of a rolling one. Ties are broken
-    by cascading through the other metric and broader windows — see
-    _sort_key."""
+    target_distance_km). Same counts_toward_rating filter and calendar-period
+    windowing as the community rating (rating_service) — excludes e.g. the
+    short "P" group, "this month"/"this year" mean the actual calendar
+    month/year, not a trailing N days. Ties are broken by cascading through
+    the other metric and broader windows — see _sort_key."""
     rows = await _bulk_ranking_rows(session)
 
     # A runner with no activity in the requested window shouldn't be ranked

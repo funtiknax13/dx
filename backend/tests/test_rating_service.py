@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,14 +111,15 @@ async def test_rating_ignores_unmatched_records(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_month_period_excludes_events_far_in_the_future(session: AsyncSession) -> None:
     """A group scheduled e.g. 3 months from now must NOT count towards "this
-    month" just because its date is >= today - 30 days — the window needs an
-    upper bound (today) too, not just a lower one."""
+    month" just because its date is >= the 1st of this month — the window
+    needs an upper bound (today) too, not just a lower one."""
     org = await make_user(session, "org5@example.com", UserRole.organizer)
     runner = await make_user(session, "runner5@example.com")
     now = datetime.now(UTC)
+    today = now.date()
 
-    soon_event = Event(title="Soon", date=(now - timedelta(days=3)).date(), created_by=org.id)
-    far_event = Event(title="Far", date=(now + timedelta(days=90)).date(), created_by=org.id)
+    soon_event = Event(title="Soon", date=today, created_by=org.id)
+    far_event = Event(title="Far", date=today + timedelta(days=90), created_by=org.id)
     session.add_all([soon_event, far_event])
     await session.flush()
 
@@ -136,7 +137,7 @@ async def test_month_period_excludes_events_far_in_the_future(session: AsyncSess
     await session.commit()
 
     assert await runner_finished_count(session, runner.id, "all") == 2
-    # Only the near-term event falls inside the rolling 30-day "month" window.
+    # Only the current-month event falls inside "this month".
     assert await runner_finished_count(session, runner.id, "month") == 1
 
 
@@ -285,13 +286,21 @@ async def test_month_tie_cascades_to_finishes_this_year(session: AsyncSession) -
     r1 = await make_user(session, "r1-tie2@example.com")
     r2 = await make_user(session, "r2-tie2@example.com")
     today = datetime.now(UTC).date()
-    two_months_ago = today - timedelta(days=60)
+    # A date in a *different* calendar month but the *same* calendar year as
+    # today — pick the previous month normally, but if today is in January
+    # there's no earlier month this year, so use February instead (a plain
+    # date field, not restricted to the past).
+    other_month_this_year = (
+        date(today.year, today.month - 1, 1)
+        if today.month > 1
+        else date(today.year, 2, 1)
+    )
 
     # Both tied at month level (1 finish, 10km) -> r1 has an extra finish
-    # earlier this year (outside the rolling month window) to win on the
+    # earlier this year (outside the current calendar month) to win on the
     # next cascade level (finishes_year).
     await _event_group(session, org, today, 10, r1)
-    await _event_group(session, org, two_months_ago, 10, r1)
+    await _event_group(session, org, other_month_this_year, 10, r1)
     await _event_group(session, org, today, 10, r2)
     await session.commit()
 
@@ -313,7 +322,7 @@ async def test_month_tie_cascades_all_the_way_to_finishes_all_time(
     two_years_ago = today - timedelta(days=730)
 
     # Tied on month (1/10km) and year (1/10km) -> r1 has an extra finish
-    # outside the rolling year window to win on finishes_all.
+    # from a previous calendar year to win on finishes_all.
     await _event_group(session, org, today, 10, r1)
     await _event_group(session, org, two_years_ago, 5, r1)
     await _event_group(session, org, today, 10, r2)
@@ -338,6 +347,89 @@ async def test_year_tie_breaks_on_km_this_year_then_finishes_all(
 
     rating = await compute_rating(session, "year")
     assert [e.runner_id for e in rating] == [r1.id, r2.id]
+
+
+@pytest.mark.asyncio
+async def test_baseline_this_year_adds_to_year_rating_when_year_matches(
+    session: AsyncSession,
+) -> None:
+    """dx_count_this_year/km_this_year are a *subset* of dx_count/total_km,
+    not additive on top — and they only feed the "year" bucket while
+    baseline_year is the current calendar year."""
+    runner = await make_user(session, "runner-baseline-year1@example.com")
+    this_year = datetime.now(UTC).year
+    await make_baseline(
+        session,
+        runner,
+        dx_count=100,
+        total_km=1000,
+        dx_count_this_year=26,
+        km_this_year=260,
+        baseline_year=this_year,
+    )
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 100
+
+    rating_all = await compute_rating(session, "all")
+    assert rating_all[0].finished_count == 100
+    rating_year = await compute_rating(session, "year")
+    assert len(rating_year) == 1
+    assert rating_year[0].runner_id == runner.id
+    assert rating_year[0].finished_count == 26
+
+
+@pytest.mark.asyncio
+async def test_baseline_this_year_ignored_when_year_does_not_match(
+    session: AsyncSession,
+) -> None:
+    """A stale baseline_year (last year's, never updated by the admin) must
+    stop contributing to "this year" once the calendar year has rolled over —
+    it stays folded into the all-time total only."""
+    runner = await make_user(session, "runner-baseline-year2@example.com")
+    last_year = datetime.now(UTC).year - 1
+    await make_baseline(
+        session,
+        runner,
+        dx_count=100,
+        total_km=1000,
+        dx_count_this_year=26,
+        km_this_year=260,
+        baseline_year=last_year,
+    )
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 100
+    rating_all = await compute_rating(session, "all")
+    assert rating_all[0].finished_count == 100
+    assert await compute_rating(session, "year") == []
+
+
+@pytest.mark.asyncio
+async def test_baseline_this_year_combines_with_tracked_year_attendance(
+    session: AsyncSession,
+) -> None:
+    """A runner with both a current-year baseline figure and real tracked
+    attendance this year should see them summed in the "year" rating."""
+    org = await make_user(session, "org-baseline-year3@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-baseline-year3@example.com")
+    this_year = datetime.now(UTC).year
+    today = datetime.now(UTC).date()
+    event = Event(title="DX Today", date=today, created_by=org.id)
+    session.add(event)
+    await session.flush()
+    group = Group(event_id=event.id, location="City", name="A", target_distance_km=10)
+    session.add(group)
+    await session.flush()
+    await make_baseline(
+        session, runner, dx_count_this_year=26, km_this_year=260, baseline_year=this_year
+    )
+    await _bare_attendance(session, group, runner, finish_status=FinishStatus.finished)
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "year") == 1
+    rating_year = await compute_rating(session, "year")
+    assert rating_year[0].finished_count == 1 + 26
 
 
 @pytest.mark.asyncio

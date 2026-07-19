@@ -226,6 +226,54 @@ async def test_baseline_only_runner_still_appears_in_all_time_leaderboard(
     assert await compute_leaderboard(session, "dx", "month") == []
 
 
+@pytest.mark.asyncio
+async def test_baseline_this_year_adds_to_year_leaderboard_when_year_matches(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-lb-baseyear1@example.com")
+    this_year = datetime.now(UTC).year
+    await make_baseline(
+        session,
+        runner,
+        dx_count=100,
+        total_km=1000,
+        dx_count_this_year=26,
+        km_this_year=260,
+        baseline_year=this_year,
+    )
+    await session.commit()
+
+    dx_year = await compute_leaderboard(session, "dx", "year")
+    assert len(dx_year) == 1
+    assert dx_year[0].value == 26.0
+    km_year = await compute_leaderboard(session, "km", "year")
+    assert km_year[0].value == 260.0
+    dx_all = await compute_leaderboard(session, "dx", "all")
+    assert dx_all[0].value == 100.0
+
+
+@pytest.mark.asyncio
+async def test_baseline_this_year_ignored_when_year_does_not_match_leaderboard(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-lb-baseyear2@example.com")
+    last_year = datetime.now(UTC).year - 1
+    await make_baseline(
+        session,
+        runner,
+        dx_count=100,
+        total_km=1000,
+        dx_count_this_year=26,
+        km_this_year=260,
+        baseline_year=last_year,
+    )
+    await session.commit()
+
+    assert await compute_leaderboard(session, "dx", "year") == []
+    dx_all = await compute_leaderboard(session, "dx", "all")
+    assert dx_all[0].value == 100.0
+
+
 async def _event_group(session: AsyncSession, org, when, target_km: float, runner) -> None:
     event = Event(title=f"DX {when.isoformat()}", date=when, created_by=org.id)
     session.add(event)

@@ -42,6 +42,19 @@ def _parse_float(raw: str | None) -> float | None:
         return None
 
 
+def _parse_nullable_int(raw: str | None) -> tuple[int | None, bool]:
+    """(value, is_valid) — blank is valid and means "unset" (None), unlike
+    _parse_int where blank means 0. Used for baseline_year, which has no
+    sensible zero default."""
+    value = (raw or "").strip()
+    if not value:
+        return None, True
+    try:
+        return int(value), True
+    except ValueError:
+        return None, False
+
+
 def _parse_date(raw: str | None) -> tuple[date | None, bool]:
     """(value, is_valid) — blank is valid (nothing provided); a non-blank
     string that doesn't parse as YYYY-MM-DD is invalid."""
@@ -57,8 +70,13 @@ def _parse_date(raw: str | None) -> tuple[date | None, bool]:
 async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> BaselineImportResult:
     """Parse a `;`-delimited CSV of admin-entered carry-over stats (columns:
     first_name, last_name required; dx_count, total_runs, total_km,
-    first_run_date (YYYY-MM-DD), email optional, missing/blank numbers
-    default to 0) and upsert one RunnerBaseline per row.
+    first_run_date (YYYY-MM-DD), dx_count_this_year, km_this_year,
+    baseline_year, email optional, missing/blank numbers default to 0 except
+    baseline_year which defaults to unset/None) and upsert one RunnerBaseline
+    per row. dx_count_this_year/km_this_year are a *subset* of dx_count/
+    total_km (see RunnerBaseline), not additive — they only feed the "this
+    year" rating/leaderboard bucket while baseline_year is the current
+    calendar year.
 
     Runner resolution reuses the exact same rule as attendance CSV import —
     see app.services.guest_service.resolve_runner_for_csv_row (email match /
@@ -83,6 +101,9 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     total_runs_col = header_map.get("total_runs")
     total_km_col = header_map.get("total_km")
     first_run_date_col = header_map.get("first_run_date")
+    dx_count_this_year_col = header_map.get("dx_count_this_year")
+    km_this_year_col = header_map.get("km_this_year")
+    baseline_year_col = header_map.get("baseline_year")
     email_col = header_map.get("email")
 
     created = 0
@@ -108,11 +129,21 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         first_run_date, first_run_date_valid = _parse_date(
             row.get(first_run_date_col) if first_run_date_col else None
         )
+        dx_count_this_year = _parse_int(
+            row.get(dx_count_this_year_col) if dx_count_this_year_col else None
+        )
+        km_this_year = _parse_float(row.get(km_this_year_col) if km_this_year_col else None)
+        baseline_year, baseline_year_valid = _parse_nullable_int(
+            row.get(baseline_year_col) if baseline_year_col else None
+        )
         if (
             dx_count is None
             or total_runs is None
             or total_km is None
             or not first_run_date_valid
+            or dx_count_this_year is None
+            or km_this_year is None
+            or not baseline_year_valid
         ):
             skipped_invalid_number += 1
             continue
@@ -139,6 +170,9 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
                     total_runs=total_runs,
                     total_km=total_km,
                     first_run_date=first_run_date,
+                    dx_count_this_year=dx_count_this_year,
+                    km_this_year=km_this_year,
+                    baseline_year=baseline_year,
                 )
             )
             created += 1
@@ -147,6 +181,9 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
             baseline.total_runs = total_runs
             baseline.total_km = total_km
             baseline.first_run_date = first_run_date
+            baseline.dx_count_this_year = dx_count_this_year
+            baseline.km_this_year = km_this_year
+            baseline.baseline_year = baseline_year
             updated += 1
 
     await session.flush()

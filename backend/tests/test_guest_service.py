@@ -180,6 +180,86 @@ async def test_merge_guest_into_keeps_the_earlier_first_run_date(
 
 
 @pytest.mark.asyncio
+async def test_merge_guest_into_sums_this_year_baseline_when_years_match(
+    session: AsyncSession,
+) -> None:
+    real_user = await make_user(session, "real-baseyear1@example.com")
+    guest = await create_guest(session, "Fay Runner")
+    await make_baseline(
+        session, real_user, dx_count_this_year=10, km_this_year=100.0, baseline_year=2026
+    )
+    await make_baseline(
+        session, guest, dx_count_this_year=5, km_this_year=50.0, baseline_year=2026
+    )
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    real_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    assert real_baseline is not None
+    assert real_baseline.dx_count_this_year == 15
+    assert real_baseline.km_this_year == 150.0
+    assert real_baseline.baseline_year == 2026
+
+
+@pytest.mark.asyncio
+async def test_merge_guest_into_adopts_this_year_baseline_when_target_has_none(
+    session: AsyncSession,
+) -> None:
+    """The target has a baseline (so it doesn't just get replaced wholesale),
+    but no year-figures set yet -> the source's year-figures should carry
+    over rather than being silently dropped."""
+    real_user = await make_user(session, "real-baseyear2@example.com")
+    guest = await create_guest(session, "Gia Runner")
+    await make_baseline(session, real_user, dx_count=10)
+    await make_baseline(
+        session, guest, dx_count=5, dx_count_this_year=5, km_this_year=50.0, baseline_year=2026
+    )
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    real_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    assert real_baseline is not None
+    assert real_baseline.dx_count_this_year == 5
+    assert real_baseline.km_this_year == 50.0
+    assert real_baseline.baseline_year == 2026
+
+
+@pytest.mark.asyncio
+async def test_merge_guest_into_drops_mismatched_year_baseline(
+    session: AsyncSession,
+) -> None:
+    """The target already has its own year-figures for a *different* year
+    than the source -> the source's figures describe a year that isn't
+    "current" for this merged baseline and can't be safely combined, so they
+    are dropped rather than summed or overwriting the target's."""
+    real_user = await make_user(session, "real-baseyear3@example.com")
+    guest = await create_guest(session, "Hana Runner")
+    await make_baseline(
+        session, real_user, dx_count_this_year=10, km_this_year=100.0, baseline_year=2026
+    )
+    await make_baseline(
+        session, guest, dx_count_this_year=5, km_this_year=50.0, baseline_year=2025
+    )
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    real_baseline = await session.scalar(
+        select(RunnerBaseline).where(RunnerBaseline.runner_id == real_user.id)
+    )
+    assert real_baseline is not None
+    assert real_baseline.dx_count_this_year == 10
+    assert real_baseline.km_this_year == 100.0
+    assert real_baseline.baseline_year == 2026
+
+
+@pytest.mark.asyncio
 async def test_move_baseline_to_guest_is_a_no_op_without_a_baseline(
     session: AsyncSession,
 ) -> None:

@@ -108,6 +108,19 @@ async def _fold_baseline_into(
             existing.first_run_date is None or baseline.first_run_date < existing.first_run_date
         ):
             existing.first_run_date = baseline.first_run_date
+        # dx_count_this_year/km_this_year only mean something alongside a
+        # matching baseline_year (see RunnerBaseline) — sum when both sides
+        # agree on the year, adopt the source's wholesale when the target has
+        # none yet, and otherwise keep the target's own (a year mismatch
+        # means the source's figures describe a different year and can't be
+        # combined without corrupting the total).
+        if existing.baseline_year is None:
+            existing.baseline_year = baseline.baseline_year
+            existing.dx_count_this_year = baseline.dx_count_this_year
+            existing.km_this_year = baseline.km_this_year
+        elif baseline.baseline_year == existing.baseline_year:
+            existing.dx_count_this_year += baseline.dx_count_this_year
+            existing.km_this_year += baseline.km_this_year
         await session.delete(baseline)
 
 

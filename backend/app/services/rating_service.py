@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +9,7 @@ from app.models.event import Event
 from app.models.group import Group
 from app.models.user import User
 from app.services.baseline_service import get_all_baselines, get_baseline
+from app.services.date_windows import calendar_window, current_year
 
 
 @dataclass
@@ -19,18 +19,6 @@ class RatingEntry:
     last_name: str
     avatar: str | None
     finished_count: int
-
-
-def _period_window(period: str) -> tuple[datetime, datetime] | None:
-    """(start, now) for "year"/"month" — a real window, not just a lower bound, so
-    a group scheduled months from now doesn't count towards "this month" just
-    because its date happens to be >= today - 30 days."""
-    now = datetime.now(UTC)
-    if period == "year":
-        return now - timedelta(days=365), now
-    if period == "month":
-        return now - timedelta(days=30), now
-    return None  # "all"
 
 
 def _count_query(period: str, runner_id: int | None = None) -> Select[tuple[int | None, int]]:
@@ -54,11 +42,11 @@ def _count_query(period: str, runner_id: int | None = None) -> Select[tuple[int 
         )
         .group_by(AttendanceRecord.runner_id)
     )
-    window = _period_window(period)
+    window = calendar_window(period)
     if window is not None:
         start, end = window
         stmt = stmt.join(Event, Event.id == Group.event_id)
-        stmt = stmt.where(Event.date >= start.date(), Event.date <= end.date())
+        stmt = stmt.where(Event.date >= start, Event.date <= end)
     if runner_id is not None:
         stmt = stmt.where(AttendanceRecord.runner_id == runner_id)
     return stmt
@@ -66,7 +54,7 @@ def _count_query(period: str, runner_id: int | None = None) -> Select[tuple[int 
 
 @dataclass
 class _RankingRow:
-    """One runner's finishes/km at each of the three rolling windows this
+    """One runner's finishes/km at each of the three calendar windows this
     service cares about — used only to build the tie-break sort key below,
     never returned to callers directly."""
 
@@ -82,8 +70,10 @@ def _sort_key(row: _RankingRow, period: str) -> tuple[float, ...]:
     """Tie-break by narrowing-then-widening: same primary count -> compare km
     at the same window -> broaden to the next window and repeat. "all" has no
     broader window left, so it only gets the km fallback. Baseline carry-over
-    (see RunnerBaseline) only ever contributes to the *_all figures — it has
-    no dated events, so it can't participate in a month/year window."""
+    (see RunnerBaseline) only ever contributes *_all figures unconditionally;
+    it can also contribute to *_year if the admin tagged it with the current
+    calendar year (see baseline_service) — it never reaches *_month, since a
+    once-a-year-entered number can't be attributed to a specific month."""
     if period == "month":
         return (
             -row.finishes_month,
@@ -98,12 +88,12 @@ def _sort_key(row: _RankingRow, period: str) -> tuple[float, ...]:
 
 
 async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
-    month_window = _period_window("month")
-    year_window = _period_window("year")
+    month_window = calendar_window("month")
+    year_window = calendar_window("year")
     assert month_window is not None  # "month" always returns a window
     assert year_window is not None  # "year" always returns a window
-    month_bound = month_window[0].date()
-    year_bound = year_window[0].date()
+    month_bound = month_window[0]
+    year_bound = year_window[0]
 
     rows = await session.execute(
         select(
@@ -144,15 +134,27 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
         for r in rows
     }
 
-    # Carry-over counts (see RunnerBaseline) apply to the unwindowed total
-    # only — a runner with a baseline but no tracked attendance yet should
-    # still show up.
+    # Carry-over counts (see RunnerBaseline) — dx_count/total_km apply to the
+    # unwindowed total unconditionally; dx_count_this_year/km_this_year only
+    # when baseline_year is the current calendar year (otherwise they're
+    # last year's — or some future year's admin never got around to yet —
+    # and shouldn't count here). Either way, a runner with only baseline
+    # data and no tracked attendance should still show up.
+    this_year = current_year()
     for runner_id, baseline in (await get_all_baselines(session)).items():
-        if not (baseline.dx_count or baseline.total_km):
+        applies_this_year = baseline.baseline_year == this_year
+        if not (
+            baseline.dx_count
+            or baseline.total_km
+            or (applies_this_year and (baseline.dx_count_this_year or baseline.km_this_year))
+        ):
             continue
         row = result.setdefault(runner_id, _RankingRow())
         row.finishes_all += baseline.dx_count
         row.km_all += baseline.total_km
+        if applies_this_year:
+            row.finishes_year += baseline.dx_count_this_year
+            row.km_year += baseline.km_this_year
 
     return result
 

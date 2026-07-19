@@ -12,14 +12,24 @@
           <code>first_name</code>, <code>last_name</code> (обязательны),
           <code>dx_count</code>, <code>total_runs</code>, <code>total_km</code>,
           <code>first_run_date</code> (формат <code>ГГГГ-ММ-ДД</code>),
+          <code>dx_count_this_year</code>, <code>km_this_year</code>,
+          <code>baseline_year</code>,
           <code>email</code> (не обязательны — пустая ячейка у чисел считается
-          нулём, у даты — «неизвестно»).
+          нулём, у даты и <code>baseline_year</code> — «неизвестно»).
         </p>
         <p class="hint">
           Это разовый перенос истории с «до этой платформы» — сколько полных DX,
           пробежек и километров у бегуна уже накопилось раньше. Плюсуется только
           к общим (пожизненным) цифрам профиля и к рейтингу «за всё время» — в
           серию (streak) и в рейтинг за год/месяц не попадает.
+        </p>
+        <p class="hint">
+          <code>dx_count_this_year</code>/<code>km_this_year</code> — это
+          <strong>часть</strong> <code>dx_count</code>/<code>total_km</code>, а не
+          добавка сверху (например, всего 255 DX, из них 26 — в этом году).
+          Они попадают в рейтинг/сравнение «за год», но только пока идёт
+          именно <code>baseline_year</code> — на следующий год без обновления
+          строки эти два поля перестают учитываться.
         </p>
         <p class="hint">
           Email/имя сопоставляются с аккаунтом по тому же правилу, что и импорт
@@ -34,7 +44,8 @@
 
       <div>
         <strong>Пример файла</strong>
-        <table style="margin-top:6px; max-width:640px;">
+        <div style="margin-top:6px; overflow-x:auto;">
+        <table style="white-space:nowrap;">
           <thead>
             <tr>
               <th>first_name</th>
@@ -43,6 +54,9 @@
               <th>total_runs</th>
               <th>total_km</th>
               <th>first_run_date</th>
+              <th>dx_count_this_year</th>
+              <th>km_this_year</th>
+              <th>baseline_year</th>
               <th>email</th>
             </tr>
           </thead>
@@ -54,12 +68,16 @@
               <td>50</td>
               <td>623.5</td>
               <td>2023-05-14</td>
+              <td>12</td>
+              <td>150.2</td>
+              <td>2026</td>
               <td>ivan@example.com</td>
             </tr>
           </tbody>
         </table>
-        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;email
-Иван;Петров;47;50;623.5;2023-05-14;ivan@example.com</pre>
+        </div>
+        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email
+Иван;Петров;47;50;623.5;2023-05-14;12;150.2;2026;ivan@example.com</pre>
       </div>
       <div>
         <button type="submit">Импортировать</button>

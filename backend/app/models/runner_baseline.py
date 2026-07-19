@@ -11,9 +11,19 @@ class RunnerBaseline(Base, TimestampMixin):
     organizer doesn't want to backfill years of historical CSVs, but a
     long-time runner's totals should still reflect their real history.
 
-    Folded in as a flat addition to lifetime totals only (profile stats and
-    the all-time rating/leaderboard) — never into streaks or year/month
-    windowed numbers, since those need real dated events, not just a count.
+    dx_count/total_runs/total_km are folded in as a flat addition to
+    lifetime totals only (profile stats and the all-time rating/leaderboard)
+    — never into streaks or year/month windowed numbers, since those need
+    real dated events, not just a count.
+
+    dx_count_this_year/km_this_year are a *subset* of dx_count/total_km, not
+    an addition on top — e.g. dx_count=255 overall, of which
+    dx_count_this_year=26 happened within `baseline_year`. They exist solely
+    to feed the "this year" rating/leaderboard bucket (never "this month" —
+    a once-entered number can't be attributed to a specific month), and only
+    apply while the current calendar year equals `baseline_year`; once the
+    year rolls over they're simply inert until an admin updates them (and
+    baseline_year) for the new year.
 
     Admin-only: never exposed through any self-service endpoint, editable
     only via SQLAdmin.
@@ -34,6 +44,12 @@ class RunnerBaseline(Base, TimestampMixin):
     # tracked by this platform — lets the profile's "первая пробежка" stat
     # show the real date instead of the first tracked (CSV-imported) one.
     first_run_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # See the class docstring — a subset of dx_count/total_km specific to
+    # `baseline_year`, used only for the rating/leaderboard "this year" tie.
+    dx_count_this_year: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    km_this_year: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    baseline_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     runner = relationship("User", back_populates="baseline")
 
