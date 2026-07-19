@@ -32,6 +32,16 @@
     text-wrap: balance;
   }
 
+  /* Unbounded read as "heavy" even unweighted; Montserrat doesn't — default
+     every .font-display use to ExtraBold so the poster-style look survives
+     the font swap without having to touch 50+ call sites. An explicit
+     font-* weight utility on the same element still wins (Tailwind emits
+     utilities after this base rule). Drop this block when rolling back to
+     Unbounded, since it won't need the assist. */
+  .font-display {
+    font-weight: 800;
+  }
+
   /* Focus ring — visible, on-brand */
   :focus-visible {
     outline: 2px solid theme('colors.signal.DEFAULT');

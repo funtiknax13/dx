@@ -36,8 +36,12 @@ export default {
         clay: '#87857F',
       },
       fontFamily: {
-        display: ['Unbounded', 'system-ui', 'sans-serif'],
-        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        // Trying Montserrat (the community's own house font) in place of
+        // Unbounded/Manrope — to roll back: display: ['Unbounded', 'system-ui', 'sans-serif'],
+        // sans: ['Manrope', 'system-ui', 'sans-serif'], and restore the
+        // Google Fonts <link> in index.html to match.
+        display: ['Montserrat', 'system-ui', 'sans-serif'],
+        sans: ['Montserrat', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       letterSpacing: {
