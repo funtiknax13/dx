@@ -198,10 +198,24 @@ async def compute_streak_leaderboard(session: AsyncSession) -> list[LeaderboardE
     any group counts, including "P" (see app.services.stats_service for the
     per-profile version of this same algorithm). Period-agnostic: a streak is
     inherently "as of right now", there's no "this year"/"this month" streak.
-    Only runners with a live streak (> 0) are included."""
+    Only runners with a live streak (> 0) are included.
+
+    An event only enters the sequence once it actually has attendance data —
+    a same-day event whose CSV hasn't been imported yet would otherwise look
+    like "everyone missed it" the moment its date arrives, zeroing out every
+    streak hours before the roster is even uploaded."""
     today = datetime.now(UTC).date()
+    imported_event_ids = (
+        select(Group.event_id)
+        .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+        .distinct()
+    )
     event_ids = list(
-        await session.scalars(select(Event.id).where(Event.date <= today).order_by(Event.date))
+        await session.scalars(
+            select(Event.id)
+            .where(Event.date <= today, Event.id.in_(imported_event_ids))
+            .order_by(Event.date)
+        )
     )
     if not event_ids:
         return []

@@ -106,10 +106,25 @@ async def _compute_streak(session: AsyncSession, runner_id: int) -> tuple[int, i
     group, including "P" — showing up at all keeps the streak alive, "full
     DX" is a separate, stricter stat). Consecutive is relative to events
     actually held, not calendar weeks, so a week with no event scheduled
-    doesn't break anyone's streak."""
+    doesn't break anyone's streak.
+
+    An event only enters the sequence once it actually has attendance data —
+    otherwise a same-day event whose CSV hasn't been imported yet would look
+    like a miss the moment its date arrives, zeroing the streak before the
+    roster is even uploaded (see leaderboard_service.compute_streak_leaderboard,
+    which mirrors this same fix)."""
     today = datetime.now(UTC).date()
+    imported_event_ids = (
+        select(Group.event_id)
+        .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+        .distinct()
+    )
     event_ids = (
-        await session.scalars(select(Event.id).where(Event.date <= today).order_by(Event.date))
+        await session.scalars(
+            select(Event.id)
+            .where(Event.date <= today, Event.id.in_(imported_event_ids))
+            .order_by(Event.date)
+        )
     ).all()
     if not event_ids:
         return 0, 0

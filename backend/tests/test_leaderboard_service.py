@@ -178,11 +178,48 @@ async def test_streak_leaderboard_excludes_runners_with_zero_streak(
     session.add_all([g1, g2])
     await session.flush()
 
+    # Someone else attends e2 so it counts as "imported" — otherwise a
+    # zero-attendance event is treated as not-yet-run rather than missed.
+    other = await make_user(session, "other-streak0@example.com")
+    await _finish(session, g2, other.id)
+
     await _finish(session, g1, runner.id)  # only the older event -> streak 0 now
     await session.commit()
 
     entries = await compute_streak_leaderboard(session)
-    assert entries == []
+    assert [e.runner_id for e in entries] == [other.id]
+
+
+@pytest.mark.asyncio
+async def test_streak_ignores_a_not_yet_imported_event(session: AsyncSession) -> None:
+    """A same-day event that hasn't had its CSV imported yet (zero
+    AttendanceRecords for anyone) must not look like "everyone missed it" —
+    it should simply not enter the sequence yet, leaving existing streaks
+    intact until the roster is actually uploaded."""
+    org = await make_user(session, "org-streak-noimport@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-streak-noimport@example.com")
+    today = datetime.now(UTC).date()
+    past_event = Event(title="DX Past", date=today - timedelta(days=7), created_by=org.id)
+    today_event = Event(title="DX Today", date=today, created_by=org.id)
+    session.add_all([past_event, today_event])
+    await session.flush()
+    past_group = Group(
+        event_id=past_event.id, location="City", name="A", target_distance_km=10
+    )
+    today_group = Group(
+        event_id=today_event.id, location="City", name="B", target_distance_km=10
+    )
+    session.add_all([past_group, today_group])
+    await session.flush()
+
+    await _finish(session, past_group, runner.id)
+    # today_group deliberately has zero AttendanceRecords at all — nobody's
+    # CSV has been imported for it yet.
+    await session.commit()
+
+    entries = await compute_streak_leaderboard(session)
+    assert [e.runner_id for e in entries] == [runner.id]
+    assert entries[0].value == 1.0
 
 
 @pytest.mark.asyncio
