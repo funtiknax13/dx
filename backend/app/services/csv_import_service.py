@@ -19,6 +19,20 @@ _CYRILLIC_TO_LATIN = str.maketrans("АВЕКМНОРСТУХ", "ABEKMHOPCTYX")
 
 
 @dataclass
+class EmailMismatch:
+    """A row resolved to an existing account by name alone (see
+    guest_service.resolve_runner_for_csv_row), but its email doesn't match any
+    email already known for that account — could be two different people who
+    happen to share a name, silently merged into one profile. Surfaced for
+    admin review, not blocked automatically (the resolution already happened;
+    this is a heads-up, not a rejection)."""
+
+    raw_name: str
+    row_email: str
+    known_email: str
+
+
+@dataclass
 class CsvImportResult:
     created: list[AttendanceRecord]
     skipped_duplicates: int
@@ -35,6 +49,7 @@ class CsvImportResult:
     # True when no group in the event had a distance_code at all, so every
     # non-empty row was routed to the event's first group regardless of tag.
     fallback_used: bool
+    email_mismatches: list[EmailMismatch]
 
     @property
     def created_count(self) -> int:
@@ -86,6 +101,12 @@ async def import_attendance_csv(
 
     Duplicate names (first+last, case/space-insensitive) within the same
     destination group are skipped so re-running an import is safe.
+
+    A row that resolves to an existing account by name alone (guest_reused or
+    merge_redirect) whose email doesn't match anything already on file for
+    that account is *not* rejected or redirected elsewhere — the row still
+    imports as usual — but is collected into `email_mismatches` for the admin
+    to review, since it may mean two different people share a name.
     """
     text = content.decode("utf-8-sig") if isinstance(content, bytes) else content
     reader = csv.DictReader(io.StringIO(text), delimiter=";")
@@ -126,6 +147,21 @@ async def import_attendance_csv(
     for group_id, name in existing_rows:
         seen_by_group[group_id].add(_normalize(name))
 
+    # Every email ever seen for each account, from past AttendanceRecords —
+    # used below to flag a name-only match (guest_reused/merge_redirect) whose
+    # email doesn't match anything already on file for that account. That
+    # combination is the signature of two different real people who happen to
+    # share a name, which resolve_runner_for_csv_row can't tell apart on its
+    # own (it matches guests by name alone — see CLAUDE.md).
+    known_emails: dict[int, set[str]] = defaultdict(set)
+    existing_emails = await session.execute(
+        select(AttendanceRecord.runner_id, AttendanceRecord.raw_email).where(
+            AttendanceRecord.runner_id.is_not(None), AttendanceRecord.raw_email.is_not(None)
+        )
+    )
+    for runner_id, email in existing_emails:
+        known_emails[runner_id].add(email.strip().lower())
+
     created: list[AttendanceRecord] = []
     skipped_duplicates = 0
     skipped_empty = 0
@@ -135,6 +171,7 @@ async def import_attendance_csv(
     guests_created = 0
     guests_reused = 0
     merged_redirects = 0
+    email_mismatches: list[EmailMismatch] = []
 
     for row in reader:
         first_name = (row.get(first_name_col) or "").strip()
@@ -173,6 +210,20 @@ async def import_attendance_csv(
         else:
             guests_created += 1
 
+        if raw_email and resolution in ("guest_reused", "merge_redirect"):
+            normalized_email = raw_email.strip().lower()
+            prior_emails = known_emails[runner.id]
+            if prior_emails and normalized_email not in prior_emails:
+                email_mismatches.append(
+                    EmailMismatch(
+                        raw_name=raw_name,
+                        row_email=raw_email,
+                        known_email=next(iter(prior_emails)),
+                    )
+                )
+        if raw_email:
+            known_emails[runner.id].add(raw_email.strip().lower())
+
         record = AttendanceRecord(
             group_id=group.id,
             raw_name=raw_name,
@@ -196,4 +247,5 @@ async def import_attendance_csv(
         guests_reused=guests_reused,
         merged_redirects=merged_redirects,
         fallback_used=fallback_used,
+        email_mismatches=email_mismatches,
     )

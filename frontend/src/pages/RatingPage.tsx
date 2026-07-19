@@ -4,7 +4,7 @@ import { ratingApi } from '../api/rating'
 import { leaderboardApi } from '../api/leaderboard'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { fullName, plural } from '../lib/format'
+import { fullName } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
@@ -199,11 +199,6 @@ export function RatingPage() {
                 </ul>
               </div>
             )}
-
-            <p className="mt-6 text-center font-mono text-xs text-clay">
-              {entries.length} {plural(entries.length, 'участник', 'участника', 'участников')} в
-              списке
-            </p>
           </>
         )}
       </section>

@@ -239,6 +239,127 @@ async def test_csv_import_email_auto_matches_registered_account(session: AsyncSe
 
 
 @pytest.mark.asyncio
+async def test_csv_import_flags_email_mismatch_within_same_import(
+    session: AsyncSession,
+) -> None:
+    """Two different rows with the same name but different emails, going to
+    different groups in the same event — likely two different people, not a
+    duplicate of one. The second row still imports (attached to the guest the
+    first one created, since name-matching can't tell them apart), but is
+    flagged for admin review."""
+    org = await make_user(session, "org-mismatch1@example.com", UserRole.organizer)
+    event_id, x_group, d_group = await _tagged_event(session, org)
+
+    result = await import_attendance_csv(
+        session,
+        event_id,
+        "first_name;last_name;email;result\n"
+        "Ivan;Petrov;ivan1@example.com;X\n"
+        "Ivan;Petrov;ivan2@example.com;D\n",
+    )
+    await session.commit()
+
+    assert result.created_count == 2
+    assert result.guests_created == 1
+    assert result.guests_reused == 1
+    assert len(result.email_mismatches) == 1
+    mismatch = result.email_mismatches[0]
+    assert mismatch.raw_name == "Ivan Petrov"
+    assert mismatch.row_email == "ivan2@example.com"
+    assert mismatch.known_email == "ivan1@example.com"
+
+    # Both rows still land on the same (single) guest account — the point is
+    # to flag the collision, not to silently split it into two accounts.
+    records = list(await session.scalars(select(AttendanceRecord)))
+    assert len({r.runner_id for r in records}) == 1
+
+
+@pytest.mark.asyncio
+async def test_csv_import_flags_email_mismatch_across_separate_imports(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-mismatch2@example.com", UserRole.organizer)
+    event_id, x_group, _ = await _tagged_event(session, org)
+
+    first = await import_attendance_csv(
+        session, event_id, "first_name;last_name;email;result\nAnna;Orlova;anna1@example.com;X\n"
+    )
+    await session.commit()
+    assert first.email_mismatches == []
+
+    second_event_id, _, _ = await _tagged_event(session, org)
+    second = await import_attendance_csv(
+        session,
+        second_event_id,
+        "first_name;last_name;email;result\nAnna;Orlova;anna2@example.com;X\n",
+    )
+    await session.commit()
+
+    assert len(second.email_mismatches) == 1
+    assert second.email_mismatches[0].known_email == "anna1@example.com"
+    assert second.email_mismatches[0].row_email == "anna2@example.com"
+
+
+@pytest.mark.asyncio
+async def test_csv_import_no_mismatch_when_email_matches_known(session: AsyncSession) -> None:
+    org = await make_user(session, "org-mismatch3@example.com", UserRole.organizer)
+    event_id, x_group, _ = await _tagged_event(session, org)
+
+    await import_attendance_csv(
+        session, event_id, "first_name;last_name;email;result\nDan;Orlov;dan@example.com;X\n"
+    )
+    await session.commit()
+
+    second_event_id, _, _ = await _tagged_event(session, org)
+    result = await import_attendance_csv(
+        session,
+        second_event_id,
+        "first_name;last_name;email;result\nDan;Orlov;dan@example.com;X\n",
+    )
+    await session.commit()
+
+    assert result.email_mismatches == []
+    assert result.guests_reused == 1
+
+
+@pytest.mark.asyncio
+async def test_csv_import_flags_email_mismatch_on_merge_redirect(session: AsyncSession) -> None:
+    from app.services.guest_service import create_guest, merge_guest_into
+
+    org = await make_user(session, "org-mismatch4@example.com", UserRole.organizer)
+    real_user = await make_user(session, "real-mismatch4@example.com")
+    guest = await create_guest(session, "Olga Titova")
+    event_id, x_group, _ = await _tagged_event(session, org)
+    # Give the guest a tracked attendance with a known email before merging,
+    # so there's something on file for the real account to be compared
+    # against once the merge reassigns it.
+    session.add(
+        AttendanceRecord(
+            group_id=x_group.id,
+            raw_name="Olga Titova",
+            raw_email="olga1@example.com",
+            runner_id=guest.id,
+            finish_status=FinishStatus.finished,
+        )
+    )
+    await session.flush()
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    second_event_id, x_group2, _ = await _tagged_event(session, org)
+    result = await import_attendance_csv(
+        session,
+        second_event_id,
+        "first_name;last_name;email;result\nOlga;Titova;olga2@example.com;X\n",
+    )
+    await session.commit()
+
+    assert len(result.email_mismatches) == 1
+    assert result.email_mismatches[0].known_email == "olga1@example.com"
+    assert result.email_mismatches[0].row_email == "olga2@example.com"
+
+
+@pytest.mark.asyncio
 async def test_csv_missing_result_column_raises(session: AsyncSession) -> None:
     org = await make_user(session, "org-missing@example.com", UserRole.organizer)
     event, _ = await make_event_group(session, org)

@@ -123,6 +123,32 @@
     <p>Пропущено — тег не найден ни у одной группы: {{ result.skipped_unmatched_tag }}</p>
     <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
   </div>
+
+  {% if result.email_mismatches %}
+  <div class="card" style="border:1px solid #fde68a;">
+    <h2 style="margin-top:0;">⚠ Возможно, разные люди с одним именем ({{ result.email_mismatches|length }})</h2>
+    <p class="hint">
+      Эти строки сопоставились с уже существующим аккаунтом только по имени/фамилии
+      (email не совпал ни с одним из уже известных для этого аккаунта) — вероятно,
+      это два разных человека с одинаковым ФИО, чьи результаты сейчас смешались в
+      одном профиле. Строка всё равно импортирована. Проверьте профиль в
+      <a href="/admin-tools/guests">Гостевых профилях</a> и при необходимости разведите
+      записи вручную через SQLAdmin.
+    </p>
+    <table style="margin-top:8px;">
+      <thead><tr><th>Имя</th><th>Email в этой строке</th><th>Уже известный email</th></tr></thead>
+      <tbody>
+        {% for m in result.email_mismatches %}
+        <tr>
+          <td>{{ m.raw_name }}</td>
+          <td>{{ m.row_email }}</td>
+          <td>{{ m.known_email }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
   {% endif %}
 
   {% if events %}
