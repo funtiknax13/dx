@@ -169,6 +169,8 @@ function AvatarUploader() {
     }
   }
 
+  const missing = !user?.avatar_url
+
   return (
     <div className="relative">
       <button
@@ -177,7 +179,13 @@ function AvatarUploader() {
         className="group relative rounded-full"
         aria-label="Сменить аватар"
       >
-        <Avatar first={user?.first_name} last={user?.last_name} src={user?.avatar_url} size="xl" />
+        <Avatar
+          first={user?.first_name}
+          last={user?.last_name}
+          src={user?.avatar_url}
+          size="xl"
+          className={missing ? 'ring-2 ring-signal ring-offset-2' : ''}
+        />
         <span className="absolute inset-0 grid place-items-center rounded-full bg-ink/50 text-xs font-semibold text-paper opacity-0 transition-opacity group-hover:opacity-100">
           {busy ? <Spinner className="h-5 w-5" /> : 'Сменить'}
         </span>
@@ -193,6 +201,11 @@ function AvatarUploader() {
           e.target.value = ''
         }}
       />
+      {missing && (
+        <p className="mt-1.5 max-w-[6rem] text-center text-[0.65rem] text-signal-600">
+          Нужно для рейтинга
+        </p>
+      )}
     </div>
   )
 }
@@ -262,6 +275,20 @@ function ProfileForm({
     (form.prior_experience === 'once' || form.prior_experience === 'multiple') &&
     !hasApprovedClaim
 
+  // Mirrors the backend's gate (profile_completeness_service) — highlighted
+  // live off the current form state, so the field clears the moment it's
+  // filled in, before the user even hits "Сохранить".
+  const REQUIRED_HINT = 'Нужно для открытия рейтинга и статистики'
+  const missing = {
+    city: !form.city.trim(),
+    gender: !form.gender,
+    birthday: !form.birthday,
+    phone: !form.phone.trim(),
+    runningClub: !noClub && !club.trim(),
+    priorExperience: !form.prior_experience,
+    avatar: !user?.avatar_url,
+  }
+
   return (
     <div className="space-y-6">
       <form onSubmit={submit} className="card max-w-2xl space-y-5 p-6 sm:p-8">
@@ -283,8 +310,15 @@ function ProfileForm({
             placeholder="Не указан"
             value={form.city}
             onChange={set('city')}
+            error={missing.city ? REQUIRED_HINT : undefined}
           />
-          <SelectField label="Пол" name="gender" value={form.gender} onChange={set('gender')}>
+          <SelectField
+            label="Пол"
+            name="gender"
+            value={form.gender}
+            onChange={set('gender')}
+            error={missing.gender ? REQUIRED_HINT : undefined}
+          >
             <option value="">Не указан</option>
             <option value="male">Мужской</option>
             <option value="female">Женский</option>
@@ -298,6 +332,7 @@ function ProfileForm({
             type="date"
             value={form.birthday ?? ''}
             onChange={set('birthday')}
+            error={missing.birthday ? REQUIRED_HINT : undefined}
           />
           <Field
             label="Телефон"
@@ -306,10 +341,13 @@ function ProfileForm({
             placeholder="+7 900 000-00-00"
             value={form.phone}
             onChange={set('phone')}
+            error={missing.phone ? REQUIRED_HINT : undefined}
           />
         </div>
         <div>
-          <label className="field-label">Беговой клуб</label>
+          <label className={`field-label ${missing.runningClub ? 'text-signal-600' : ''}`}>
+            Беговой клуб
+          </label>
           <input
             type="text"
             placeholder="Например, «Бегущие сердца»"
@@ -319,7 +357,9 @@ function ProfileForm({
               setClub(e.target.value)
               setSaved(false)
             }}
-            className="field disabled:bg-ink/5 disabled:text-clay"
+            className={`field disabled:bg-ink/5 disabled:text-clay ${
+              missing.runningClub ? 'border-signal ring-2 ring-signal/20' : ''
+            }`}
           />
           <label className="mt-2 flex items-center gap-2 text-sm text-ink-600">
             <input
@@ -332,6 +372,7 @@ function ProfileForm({
             />
             Не состою в беговом клубе
           </label>
+          {missing.runningClub && <p className="mt-1.5 text-xs text-signal-600">{REQUIRED_HINT}</p>}
         </div>
         {!hasApprovedClaim && (
           <SelectField
@@ -339,6 +380,7 @@ function ProfileForm({
             name="prior_experience"
             value={form.prior_experience}
             onChange={set('prior_experience')}
+            error={missing.priorExperience ? REQUIRED_HINT : undefined}
           >
             <option value="">Не указано</option>
             <option value="never">Нет, ни разу</option>

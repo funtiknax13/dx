@@ -73,19 +73,28 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
 interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string
   hint?: string
+  error?: string
 }
 
-export function SelectField({ label, hint, id, children, ...rest }: SelectFieldProps) {
+export function SelectField({ label, hint, error, id, children, ...rest }: SelectFieldProps) {
   const fieldId = id ?? rest.name
   return (
     <div>
       <label htmlFor={fieldId} className="field-label">
         {label}
       </label>
-      <select id={fieldId} className="field appearance-none" {...rest}>
+      <select
+        id={fieldId}
+        className={`field appearance-none ${error ? 'border-signal ring-2 ring-signal/20' : ''}`}
+        {...rest}
+      >
         {children}
       </select>
-      {hint && <p className="mt-1.5 text-xs text-clay">{hint}</p>}
+      {error ? (
+        <p className="mt-1.5 text-xs text-signal-600">{error}</p>
+      ) : hint ? (
+        <p className="mt-1.5 text-xs text-clay">{hint}</p>
+      ) : null}
     </div>
   )
 }
