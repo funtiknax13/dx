@@ -23,7 +23,7 @@ function Brand({ onClick, light = false }: { onClick?: () => void; light?: boole
       <img
         src={logoMarkSquare}
         alt=""
-        className="h-8 w-8 shrink-0 rounded-lg transition-transform group-hover:-rotate-6"
+        className="h-9 w-9 shrink-0 rounded-lg transition-transform group-hover:-rotate-6"
       />
       <img
         src={light ? logoFullLight : logoFullDark}
