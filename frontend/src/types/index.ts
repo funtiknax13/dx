@@ -10,9 +10,12 @@ export type ModerationStatus = 'pending' | 'approved'
  * Only asked of accounts registered after this field shipped — every
  * pre-existing account defaults to 'multiple'. */
 export type PriorExperience = 'never' | 'once' | 'multiple'
-/** None = unlocked. 'anonymous' (not logged in) or 'profile_incomplete'
- * (logged in, profile not 100% filled) — see the community stats gate. */
-export type StatsLockReason = 'anonymous' | 'profile_incomplete' | null
+/** None = unlocked. 'anonymous' (not logged in), 'profile_incomplete'
+ * (logged in, profile not 100% filled), or 'survey_required' (profile done,
+ * but the newbie feedback survey still needs answering — only applies to
+ * runners who self-reported never having run with us before) — see the
+ * community stats gate. */
+export type StatsLockReason = 'anonymous' | 'profile_incomplete' | 'survey_required' | null
 
 export interface Tokens {
   access_token: string
@@ -321,4 +324,19 @@ export interface GuestClaim {
   created_at: string
   decided_at?: string | null
   guest: GuestProfile
+}
+
+export interface SurveyQuestion {
+  id: number
+  position: number
+  prompt: string
+  question_type: string
+  required: boolean
+}
+
+export interface Survey {
+  id: number
+  title: string
+  description?: string | null
+  questions: SurveyQuestion[]
 }

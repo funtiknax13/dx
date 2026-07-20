@@ -231,7 +231,9 @@ async def public_profile(user_id: int, session: SessionDep, viewer: OptionalUser
     # Looking at your own profile is never locked — the gate is about seeing
     # *other* runners' stats (see profile_completeness_service).
     is_own_profile = viewer is not None and viewer.id == user_id
-    lock_reason, missing_fields = (None, []) if is_own_profile else stats_access_lock(viewer)
+    lock_reason, missing_fields = (
+        (None, []) if is_own_profile else await stats_access_lock(session, viewer)
+    )
     if lock_reason is not None:
         return PublicProfile(
             id=user.id,

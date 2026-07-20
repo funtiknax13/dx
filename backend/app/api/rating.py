@@ -16,7 +16,7 @@ TOP_N = 20
 async def rating(
     session: SessionDep, user: OptionalUser, period: Literal["all", "year", "month"] = "all"
 ) -> RatingResponse:
-    lock_reason, missing_fields = stats_access_lock(user)
+    lock_reason, missing_fields = await stats_access_lock(session, user)
     if lock_reason is not None:
         return RatingResponse(
             period=period, entries=[], lock_reason=lock_reason, missing_fields=missing_fields

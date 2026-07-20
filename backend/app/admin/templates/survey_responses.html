@@ -1,0 +1,28 @@
+{% extends "_base.html" %}
+{% block title %}Ответы — {{ survey.title }} — DH Admin Tools{% endblock %}
+{% block content %}
+  <p><a href="/admin-tools/surveys">← Все анкеты</a></p>
+  <div class="row-between">
+    <h1>Ответы: {{ survey.title }} ({{ rows|length }})</h1>
+    <a class="btn secondary" href="/admin-tools/surveys/{{ survey.id }}/responses/export">Скачать CSV</a>
+  </div>
+
+  {% if rows %}
+  {% for row in rows %}
+  <div class="card">
+    <h2>
+      {{ row.runner.first_name if row.runner else '—' }} {{ row.runner.last_name if row.runner else '' }}
+      <span class="hint">{{ row.response.submitted_at.strftime('%d.%m.%Y %H:%M') }}</span>
+    </h2>
+    <dl style="margin:0;">
+      {% for question, answer in row.answers %}
+      <dt style="font-weight:600; margin-top:10px;">{{ question.prompt }}</dt>
+      <dd style="margin:4px 0 0; color:#374151;">{{ answer or '—' }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">Пока нет ни одного ответа.</div>
+  {% endif %}
+{% endblock %}

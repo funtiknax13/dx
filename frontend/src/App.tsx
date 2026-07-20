@@ -12,6 +12,7 @@ import { VerifyEmailPage } from './pages/VerifyEmailPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { SurveyPage } from './pages/SurveyPage'
 import { PublicProfilePage } from './pages/PublicProfilePage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -48,6 +49,7 @@ export default function App() {
           {/* Protected */}
           <Route element={<ProtectedRoute />}>
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/survey" element={<SurveyPage />} />
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />

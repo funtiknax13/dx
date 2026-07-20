@@ -49,8 +49,9 @@ async def test_check_flags_unverified_email(session: AsyncSession) -> None:
     assert "email_verified" in result.missing_fields
 
 
-def test_stats_access_lock_anonymous() -> None:
-    reason, missing = stats_access_lock(None)
+@pytest.mark.asyncio
+async def test_stats_access_lock_anonymous(session: AsyncSession) -> None:
+    reason, missing = await stats_access_lock(session, None)
     assert reason == "anonymous"
     assert missing == []
 
@@ -58,7 +59,7 @@ def test_stats_access_lock_anonymous() -> None:
 @pytest.mark.asyncio
 async def test_stats_access_lock_incomplete_profile(session: AsyncSession) -> None:
     user = await make_user(session, "lock-incomplete@example.com", complete_profile=False)
-    reason, missing = stats_access_lock(user)
+    reason, missing = await stats_access_lock(session, user)
     assert reason == "profile_incomplete"
     assert "birthday" in missing
 
@@ -66,6 +67,6 @@ async def test_stats_access_lock_incomplete_profile(session: AsyncSession) -> No
 @pytest.mark.asyncio
 async def test_stats_access_lock_unlocked_for_complete_profile(session: AsyncSession) -> None:
     user = await make_user(session, "lock-complete@example.com")
-    reason, missing = stats_access_lock(user)
+    reason, missing = await stats_access_lock(session, user)
     assert reason is None
     assert missing == []

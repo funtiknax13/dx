@@ -1,0 +1,37 @@
+{% extends "_base.html" %}
+{% block title %}Анкеты — DH Admin Tools{% endblock %}
+{% block content %}
+  <div class="row-between">
+    <h1>Анкеты</h1>
+    <a class="btn" href="/admin-tools/surveys/new">+ Новая анкета</a>
+  </div>
+  <p class="hint">
+    Обязательной для доступа к рейтингу/статистике (см. «Стартовые данные» → 100% профиль) может
+    быть только одна анкета одновременно — включение галочки «Обязательна» у одной автоматически
+    выключает её у остальных.
+  </p>
+
+  {% if surveys %}
+  <table style="margin-top: 16px;">
+    <thead>
+      <tr><th>Название</th><th>Статус</th><th>Обязательна</th><th>Ответов</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in surveys %}
+      <tr>
+        <td>{{ s.title }}</td>
+        <td>{{ 'активна' if s.is_active else 'выключена' }}</td>
+        <td>{{ 'да' if s.is_required_for_access else '—' }}</td>
+        <td>{{ counts.get(s.id, 0) }}</td>
+        <td style="white-space:nowrap;">
+          <a class="btn secondary" href="/admin-tools/surveys/{{ s.id }}/edit">Редактировать</a>
+          <a class="btn secondary" href="/admin-tools/surveys/{{ s.id }}/responses">Ответы</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Пока нет ни одной анкеты.</div>
+  {% endif %}
+{% endblock %}

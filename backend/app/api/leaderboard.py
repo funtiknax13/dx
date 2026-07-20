@@ -19,7 +19,7 @@ async def leaderboard(
     metric: Literal["dx", "km", "streak"] = "dx",
     period: Literal["all", "year", "month"] = "all",
 ) -> LeaderboardResponse:
-    lock_reason, missing_fields = stats_access_lock(user)
+    lock_reason, missing_fields = await stats_access_lock(session, user)
     if lock_reason is not None:
         return LeaderboardResponse(
             metric=metric,

@@ -304,7 +304,7 @@ function LockedProfileStats({
   lockReason,
   missingFields,
 }: {
-  lockReason: 'anonymous' | 'profile_incomplete'
+  lockReason: 'anonymous' | 'profile_incomplete' | 'survey_required'
   missingFields: string[]
 }) {
   return (
@@ -323,6 +323,15 @@ function LockedProfileStats({
               Войти
             </Link>
           </div>
+        </>
+      ) : lockReason === 'survey_required' ? (
+        <>
+          <p className="text-sm text-ink-600">
+            Заполните короткую анкету новичка, чтобы видеть статистику других участников.
+          </p>
+          <Link to="/survey" className="btn-primary btn-sm mt-4 inline-flex">
+            Заполнить анкету
+          </Link>
         </>
       ) : (
         <>

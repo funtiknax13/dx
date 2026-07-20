@@ -1,0 +1,91 @@
+{% extends "_base.html" %}
+{% block title %}{{ 'Анкета' if survey else 'Новая анкета' }} — DH Admin Tools{% endblock %}
+{% block content %}
+  <p><a href="/admin-tools/surveys">← Все анкеты</a></p>
+  <h1>{{ survey.title if survey else 'Новая анкета' }}</h1>
+
+  <div class="card">
+    <form method="post" action="{{ '/admin-tools/surveys/%d/edit' % survey.id if survey else '/admin-tools/surveys/new' }}">
+      <div class="field">
+        <label for="title">Название</label>
+        <input id="title" type="text" name="title" value="{{ survey.title if survey else '' }}" required />
+      </div>
+      <div class="field">
+        <label for="description">Описание (видно бегуну перед началом)</label>
+        <textarea id="description" name="description" rows="3" style="max-width:480px; width:100%;">{{ survey.description or '' if survey else '' }}</textarea>
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" name="is_required_for_access" {% if survey and survey.is_required_for_access %}checked{% endif %} style="width:auto;" />
+          Обязательна для доступа к рейтингу/статистике
+        </label>
+        <p class="hint">
+          Только для бегунов, впервые зарегистрировавшихся после запуска этой функции и ответивших
+          «нет» на вопрос «бегали ли вы раньше» — показывается один раз, после первой загруженной
+          тренировки. Уже известным бегунам (и тем, кто ответил «да») анкета не показывается.
+        </p>
+      </div>
+      {% if survey %}
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" name="is_active" {% if survey.is_active %}checked{% endif %} style="width:auto;" />
+          Активна
+        </label>
+      </div>
+      {% endif %}
+      <button type="submit">{{ 'Сохранить' if survey else 'Создать' }}</button>
+    </form>
+  </div>
+
+  {% if survey %}
+  <div class="card">
+    <h2>Вопросы ({{ survey.questions|length }})</h2>
+    {% if survey.questions %}
+    <table style="margin-top: 12px;">
+      <thead><tr><th>#</th><th>Вопрос</th><th>Обязателен</th><th></th></tr></thead>
+      <tbody>
+        {% for q in survey.questions %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ q.prompt }}</td>
+          <td>{{ 'да' if q.required else 'нет' }}</td>
+          <td style="white-space:nowrap;">
+            <form class="inline" method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/{{ q.id }}/move">
+              <input type="hidden" name="direction" value="up" />
+              <button type="submit" class="secondary" {% if loop.first %}disabled{% endif %}>↑</button>
+            </form>
+            <form class="inline" method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/{{ q.id }}/move">
+              <input type="hidden" name="direction" value="down" />
+              <button type="submit" class="secondary" {% if loop.last %}disabled{% endif %}>↓</button>
+            </form>
+            <form class="inline" method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/{{ q.id }}/delete"
+                  onsubmit="return confirm('Удалить вопрос? Уже сохранённые ответы на него не пропадут.');">
+              <button type="submit" class="danger">Удалить</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="hint">Вопросов пока нет.</p>
+    {% endif %}
+
+    <form method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/new" style="margin-top:16px; max-width:480px;">
+      <div class="field">
+        <label for="prompt">Новый вопрос</label>
+        <textarea id="prompt" name="prompt" rows="2" style="width:100%;" required></textarea>
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" name="required" checked style="width:auto;" />
+          Обязателен для отправки анкеты
+        </label>
+      </div>
+      <button type="submit">Добавить вопрос</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="hint">Вопросы можно будет добавить после создания анкеты.</p>
+  {% endif %}
+{% endblock %}
