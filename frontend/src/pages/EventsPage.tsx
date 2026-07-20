@@ -150,7 +150,7 @@ function Hero({
             Длительные пробежки
             <br />
             <span className="inline-block leading-[1.35]">
-              каждое <span className="bg-paper px-2 text-ink">воскресенье</span>.
+              каждое <span className="bg-paper px-2 text-ink">воскресенье</span>
             </span>
           </h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-paper/70">
