@@ -1,11 +1,13 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
 from app.api.deps import OrganizerUser, SessionDep
+from app.core.timezone import EVENT_TZ
 from app.models.enums import UserRole
 from app.models.event import Event, EventPhoto
+from app.models.group import Group
 from app.models.user import User
 from app.schemas.common import Page
 from app.schemas.event import (
@@ -48,12 +50,44 @@ async def list_events(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Page[EventOut]:
     stmt = select(Event)
-    if upcoming is True:
-        today = datetime.now(UTC).date()
-        stmt = stmt.where(Event.date >= today).order_by(Event.date.asc())
-    elif upcoming is False:
-        today = datetime.now(UTC).date()
-        stmt = stmt.where(Event.date < today).order_by(Event.date.desc())
+    if upcoming is not None:
+        now = datetime.now(EVENT_TZ)
+        today = now.date()
+
+        # A today-dated event moves to "past" once every one of its groups
+        # has a start_time and the latest of them has already passed — not
+        # just once the calendar date rolls over. An event missing a
+        # start_time on any group can't be judged this way, so it stays
+        # "upcoming" until midnight, same as before.
+        group_stats = (
+            select(
+                Group.event_id.label("event_id"),
+                func.count(Group.id).label("group_count"),
+                func.count(Group.start_time).label("timed_count"),
+                func.max(Group.start_time).label("latest_start"),
+            )
+            .group_by(Group.event_id)
+            .subquery()
+        )
+        started_today_ids = select(group_stats.c.event_id).where(
+            group_stats.c.group_count == group_stats.c.timed_count,
+            group_stats.c.latest_start <= now,
+        )
+
+        if upcoming is True:
+            stmt = stmt.where(
+                or_(
+                    Event.date > today,
+                    and_(Event.date == today, Event.id.not_in(started_today_ids)),
+                )
+            ).order_by(Event.date.asc())
+        else:
+            stmt = stmt.where(
+                or_(
+                    Event.date < today,
+                    and_(Event.date == today, Event.id.in_(started_today_ids)),
+                )
+            ).order_by(Event.date.desc())
     else:
         stmt = stmt.order_by(Event.date.desc())
 
