@@ -380,9 +380,17 @@ function LockedStats({
             <>
               <h3 className="mt-3 font-display text-lg text-ink">Заполните профиль на 100%</h3>
               <p className="mt-2 text-sm text-ink-600">
-                {missingFields.length > 0
-                  ? `Осталось: ${missingFields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}.`
-                  : 'Загляните в профиль, чтобы завершить заполнение.'}
+                {missingFields.length > 0 ? (
+                  <>
+                    Осталось:{' '}
+                    <span className="font-semibold text-signal-600">
+                      {missingFields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}
+                    </span>
+                    .
+                  </>
+                ) : (
+                  'Загляните в профиль, чтобы завершить заполнение.'
+                )}
               </p>
               <Link to="/profile" className="btn-primary btn-sm mt-4 inline-flex">
                 Заполнить профиль

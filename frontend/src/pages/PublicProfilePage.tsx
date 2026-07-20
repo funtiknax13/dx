@@ -327,11 +327,17 @@ function LockedProfileStats({
       ) : (
         <>
           <p className="text-sm text-ink-600">
-            {missingFields.length > 0
-              ? `Заполните профиль на 100%, чтобы видеть статистику других участников. Осталось: ${missingFields
-                  .map((f) => FIELD_LABELS[f] ?? f)
-                  .join(', ')}.`
-              : 'Заполните профиль на 100%, чтобы видеть статистику других участников.'}
+            Заполните профиль на 100%, чтобы видеть статистику других участников.
+            {missingFields.length > 0 && (
+              <>
+                {' '}
+                Осталось:{' '}
+                <span className="font-semibold text-signal-600">
+                  {missingFields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}
+                </span>
+                .
+              </>
+            )}
           </p>
           <Link to="/profile" className="btn-primary btn-sm mt-4 inline-flex">
             Заполнить профиль
