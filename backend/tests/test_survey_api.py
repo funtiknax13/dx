@@ -49,6 +49,34 @@ async def test_rating_locked_with_survey_required_reason(
 
 
 @pytest.mark.asyncio
+async def test_rating_locked_with_survey_required_even_before_first_attendance(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Regression test: a brand-new "never ran before" registrant must not
+    see the rating just because their profile is complete — they're locked
+    from registration until they've both run and filled the survey, not
+    only from their first tracked attendance onward."""
+    admin = await make_user(session, "admin-surveyapi1b@example.com", UserRole.admin)
+    runner = await make_user(session, "runner-surveyapi1b@example.com")
+    runner.prior_experience = PriorExperience.never
+    await _make_required_survey(session, admin)
+    await session.commit()
+
+    token = create_access_token(runner.id)
+    resp = await client.get("/api/v1/rating", headers={"Authorization": f"Bearer {token}"})
+    body = resp.json()
+    assert body["lock_reason"] == "survey_required"
+    assert body["entries"] == []
+
+    # And GET /surveys/active has nothing for them yet either — there's
+    # nothing sensible to survey them about before they've actually run.
+    active = await client.get(
+        "/api/v1/surveys/active", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert active.json() is None
+
+
+@pytest.mark.asyncio
 async def test_active_survey_endpoint_returns_survey_when_required(
     session: AsyncSession, client: AsyncClient
 ) -> None:

@@ -44,14 +44,31 @@ async def _has_completed(session: AsyncSession, survey_id: int, runner_id: int) 
     )
 
 
+async def stats_locked_pending_survey(session: AsyncSession, runner: User) -> bool:
+    """Whether `runner` should stay locked out of community stats pending the
+    newbie survey — True from the moment they report never having run with
+    us before (see User.prior_experience) until they've completed the
+    active required survey, with no exception for "haven't run yet": seeing
+    the rating before your first DX and survey would skip the whole point of
+    the gate. Contrast with survey_required_for, which additionally requires
+    a tracked attendance — that one answers "can they fill it out right
+    now", this one answers "should they still be locked"."""
+    if runner.prior_experience != PriorExperience.never:
+        return False
+    survey = await get_active_required_survey(session)
+    if survey is None:
+        return False
+    return not await _has_completed(session, survey.id, runner.id)
+
+
 async def survey_required_for(session: AsyncSession, runner: User) -> Survey | None:
-    """The survey this runner still needs to complete before they can see
-    community stats, or None if nothing's blocking them. Only ever applies
-    to runners who self-reported never having run with the community before
-    (see User.prior_experience — only asked at signup for new accounts) *and*
-    who've since logged their first tracked attendance ("first DX") — before
-    that there's nothing to survey them about yet, so the profile-completion
-    gate alone applies."""
+    """The survey this runner can fill out right now, or None. Only ever
+    applies to runners who self-reported never having run with the
+    community before (see User.prior_experience — only asked at signup for
+    new accounts) *and* who've since logged their first tracked attendance
+    ("first DX") — before that there's nothing to survey them about yet
+    (they haven't run), so GET /surveys/active has nothing to hand back even
+    though stats_locked_pending_survey is already True."""
     if runner.prior_experience != PriorExperience.never:
         return None
     survey = await get_active_required_survey(session)

@@ -39,11 +39,18 @@ export function SurveyPage() {
   if (loading) return <PageLoader />
 
   if (error || !survey) {
+    // This page is only ever reached while locked for a survey reason (see
+    // the rating/profile lock screens) — if there's nothing to fill out yet,
+    // it's because the runner hasn't logged a first tracked run yet, not
+    // because the survey doesn't apply to them.
     return (
       <div className="container-page py-16">
         <StatePanel
-          title="Анкета не найдена"
-          description={error ?? 'Анкета уже заполнена или больше не требуется.'}
+          title="Анкета появится после первой тренировки"
+          description={
+            error ??
+            'Приходите на ближайший ДХ и дождитесь загрузки протокола — после этого здесь появится анкета, а после неё откроется рейтинг.'
+          }
           icon={<IconSpark />}
           action={
             <Link to={returnTo} className="btn-ink">

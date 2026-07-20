@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.services.survey_service import survey_required_for
+from app.services.survey_service import stats_locked_pending_survey
 
 # Fields that gate access to community stats/rating (see CLAUDE.md discussion
 # on the "100% profile" motivation mechanic) — first/last name and email are
@@ -46,16 +46,18 @@ async def stats_access_lock(
     logged-out visitor (told to register *and* complete their profile);
     "profile_incomplete" for a logged-in runner who hasn't finished theirs
     (told just to finish it); "survey_required" for a runner who reported
-    never having run with us before and has since logged their first
-    tracked attendance — see survey_service.survey_required_for. missing_fields
-    is only ever populated for "profile_incomplete"; the frontend fetches the
-    actual survey separately (GET /surveys/active) when it sees
-    "survey_required"."""
+    never having run with us before, from registration until they've both
+    run their first DX *and* completed the newbie survey — see
+    survey_service.stats_locked_pending_survey (they stay locked even before
+    their first tracked attendance; there's simply nothing to show them on
+    the survey page yet — see survey_service.survey_required_for, used by
+    GET /surveys/active). missing_fields is only ever populated for
+    "profile_incomplete"."""
     if viewer is None:
         return "anonymous", []
     completeness = check(viewer)
     if not completeness.is_complete:
         return "profile_incomplete", completeness.missing_fields
-    if await survey_required_for(session, viewer) is not None:
+    if await stats_locked_pending_survey(session, viewer):
         return "survey_required", []
     return None, []

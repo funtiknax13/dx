@@ -327,10 +327,11 @@ function LockedProfileStats({
       ) : lockReason === 'survey_required' ? (
         <>
           <p className="text-sm text-ink-600">
-            Заполните короткую анкету новичка, чтобы видеть статистику других участников.
+            Пробегите первый ДХ и заполните короткую анкету новичка, чтобы видеть статистику
+            других участников.
           </p>
           <Link to="/survey" className="btn-primary btn-sm mt-4 inline-flex">
-            Заполнить анкету
+            К анкете
           </Link>
         </>
       ) : (

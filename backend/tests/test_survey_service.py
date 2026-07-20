@@ -6,6 +6,7 @@ from app.models.enums import FinishStatus, ModerationStatus, PriorExperience, Us
 from app.models.survey import Survey, SurveyAnswer, SurveyQuestion
 from app.services.survey_service import (
     export_responses_csv,
+    stats_locked_pending_survey,
     submit_response,
     survey_required_for,
 )
@@ -82,6 +83,70 @@ async def test_survey_not_required_before_first_attendance(session: AsyncSession
     await session.commit()
 
     assert await survey_required_for(session, runner) is None
+
+
+@pytest.mark.asyncio
+async def test_stats_locked_pending_survey_true_before_any_attendance(
+    session: AsyncSession,
+) -> None:
+    """The actual bug report this test guards against: a "never ran before"
+    registrant must stay locked out of stats immediately, not just once
+    they've logged a first tracked run — survey_required_for (gating
+    whether the survey is *fillable* right now) is a stricter, later check
+    than this one (gating whether stats stay *locked*)."""
+    admin = await make_user(session, "admin-survey-lock1@example.com", UserRole.admin)
+    runner = await make_user(session, "runner-survey-lock1@example.com")
+    runner.prior_experience = PriorExperience.never
+    await _make_survey(session, admin)
+    await session.commit()
+
+    assert await survey_required_for(session, runner) is None  # nothing to fill out yet
+    assert await stats_locked_pending_survey(session, runner) is True  # but still locked
+
+
+@pytest.mark.asyncio
+async def test_stats_locked_pending_survey_false_when_not_never(session: AsyncSession) -> None:
+    admin = await make_user(session, "admin-survey-lock2@example.com", UserRole.admin)
+    runner = await make_user(session, "runner-survey-lock2@example.com")
+    runner.prior_experience = PriorExperience.once
+    await _make_survey(session, admin)
+    await session.commit()
+
+    assert await stats_locked_pending_survey(session, runner) is False
+
+
+@pytest.mark.asyncio
+async def test_stats_locked_pending_survey_false_without_active_required_survey(
+    session: AsyncSession,
+) -> None:
+    runner = await make_user(session, "runner-survey-lock3@example.com")
+    runner.prior_experience = PriorExperience.never
+    await session.commit()
+
+    assert await stats_locked_pending_survey(session, runner) is False
+
+
+@pytest.mark.asyncio
+async def test_stats_locked_pending_survey_false_once_completed(session: AsyncSession) -> None:
+    admin = await make_user(session, "admin-survey-lock4@example.com", UserRole.admin)
+    runner = await make_user(session, "runner-survey-lock4@example.com")
+    runner.prior_experience = PriorExperience.never
+    org = await make_user(session, "org-survey-lock4@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    survey = await _make_survey(session, admin)
+    await session.commit()
+
+    assert await stats_locked_pending_survey(session, runner) is True
+    await submit_response(session, survey, runner, {survey.questions[0].id: "Answer"})
+    await session.commit()
+    assert await stats_locked_pending_survey(session, runner) is False
 
 
 @pytest.mark.asyncio

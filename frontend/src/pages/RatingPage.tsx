@@ -380,10 +380,11 @@ function LockedStats({
             <>
               <h3 className="mt-3 font-display text-lg text-ink">Ещё один шаг</h3>
               <p className="mt-2 text-sm text-ink-600">
-                Заполните короткую анкету новичка, чтобы открыть рейтинг и статистику сообщества.
+                Пробегите первый ДХ и заполните короткую анкету новичка, чтобы открыть рейтинг и
+                статистику сообщества.
               </p>
               <Link to="/survey?from=/rating" className="btn-primary btn-sm mt-4 inline-flex">
-                Заполнить анкету
+                К анкете
               </Link>
             </>
           ) : (
