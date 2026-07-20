@@ -4,8 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { adminToolsUrl } from '../api/client'
 import { Avatar } from './ui/Avatar'
 import { IconMenu, IconX } from './ui/icons'
-import logoMarkDark from '../assets/brand/logo-mark-dark.png'
-import logoMarkLight from '../assets/brand/logo-mark-light.png'
+import logoMarkSquare from '../assets/brand/logo-mark-square.png'
 import logoFullDark from '../assets/brand/logo-full-dark.png'
 import logoFullLight from '../assets/brand/logo-full-light.png'
 
@@ -22,9 +21,9 @@ function Brand({ onClick, light = false }: { onClick?: () => void; light?: boole
   return (
     <Link to="/events" onClick={onClick} className="group flex items-center gap-3">
       <img
-        src={light ? logoMarkLight : logoMarkDark}
+        src={logoMarkSquare}
         alt=""
-        className="h-8 w-auto shrink-0 transition-transform group-hover:-rotate-6"
+        className="h-9 w-9 shrink-0 transition-transform group-hover:-rotate-6"
       />
       <img
         src={light ? logoFullLight : logoFullDark}
