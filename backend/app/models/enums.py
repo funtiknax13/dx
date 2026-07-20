@@ -32,3 +32,15 @@ class ClaimStatus(enum.StrEnum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+
+
+class PriorExperience(enum.StrEnum):
+    """Self-reported at profile completion (new registrations only — see
+    User.prior_experience): has this runner ever run a DX with the community
+    before signing up? Drives two things: whether the newbie feedback survey
+    is required, and whether to prompt them to search for/claim a matching
+    guest profile right there in the form."""
+
+    never = "never"
+    once = "once"
+    multiple = "multiple"

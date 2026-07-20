@@ -43,16 +43,21 @@ async def test_rating_top_n_and_me_row(
     await _finish_n(session, group, r3.id, 1)
     await session.commit()
 
-    # Anonymous: only top 2 (TOP_N), no "me".
+    # Anonymous: rating is gated (see profile_completeness_service) —
+    # locked, not just an empty ranking.
     resp = await client.get("/api/v1/rating")
     body = resp.json()
-    assert [e["runner_id"] for e in body["entries"]] == [r1.id, r2.id]
+    assert body["lock_reason"] == "anonymous"
+    assert body["entries"] == []
     assert body["me"] is None
 
-    # r3 is rank 3, outside top 2 -> gets a "me" row.
+    # r3 is rank 3, outside top 2, and has a complete profile -> unlocked,
+    # gets a "me" row.
     token3 = create_access_token(r3.id)
     resp3 = await client.get("/api/v1/rating", headers={"Authorization": f"Bearer {token3}"})
     body3 = resp3.json()
+    assert body3["lock_reason"] is None
+    assert [e["runner_id"] for e in body3["entries"]] == [r1.id, r2.id]
     assert body3["me"]["runner_id"] == r3.id
     assert body3["me"]["rank"] == 3
 
@@ -69,3 +74,26 @@ async def test_rating_invalid_token_is_treated_as_anonymous(
     resp = await client.get("/api/v1/rating", headers={"Authorization": "Bearer garbage"})
     assert resp.status_code == 200
     assert resp.json()["me"] is None
+
+
+@pytest.mark.asyncio
+async def test_rating_locked_for_incomplete_profile(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner = await make_user(session, "incomplete@example.com", complete_profile=False)
+    await session.commit()
+
+    token = create_access_token(runner.id)
+    resp = await client.get("/api/v1/rating", headers={"Authorization": f"Bearer {token}"})
+    body = resp.json()
+    assert body["lock_reason"] == "profile_incomplete"
+    assert body["entries"] == []
+    assert set(body["missing_fields"]) == {
+        "birthday",
+        "avatar",
+        "city",
+        "gender",
+        "phone",
+        "running_club",
+        "prior_experience",
+    }

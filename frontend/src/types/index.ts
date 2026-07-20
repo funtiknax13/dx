@@ -5,6 +5,14 @@ export type Role = 'runner' | 'organizer' | 'admin'
 export type Gender = 'male' | 'female' | 'other'
 export type FinishStatus = 'finished' | 'dnf'
 export type ModerationStatus = 'pending' | 'approved'
+/** Self-reported at profile completion — "have you run a DX before signing
+ * up?" Drives whether an inline guest-profile claim search is offered.
+ * Only asked of accounts registered after this field shipped — every
+ * pre-existing account defaults to 'multiple'. */
+export type PriorExperience = 'never' | 'once' | 'multiple'
+/** None = unlocked. 'anonymous' (not logged in) or 'profile_incomplete'
+ * (logged in, profile not 100% filled) — see the community stats gate. */
+export type StatsLockReason = 'anonymous' | 'profile_incomplete' | null
 
 export interface Tokens {
   access_token: string
@@ -23,6 +31,9 @@ export interface User {
   birthday?: string | null // ISO date
   phone?: string | null
   avatar_url?: string | null
+  /** "" = explicitly "not in a club" (still counts as answered), null/undefined = never answered. */
+  running_club?: string | null
+  prior_experience?: PriorExperience | null
   rating?: number | null
   created_at?: string
 }
@@ -37,19 +48,24 @@ export interface PublicProfile {
   /** Null for guest profiles — a guest was never registered, so it has no
    * meaningful "joined on" date. */
   registered_at?: string | null
+  /** All stats fields are null together when `lock_reason` is set — the
+   * viewer hasn't registered/completed their own profile yet, so they can't
+   * see anyone else's stats (never applies to your own profile). */
+  lock_reason: StatsLockReason
+  missing_fields: string[]
   /** Count of finished attendances in groups that count toward the rating —
    * i.e. "full DX" (short/non-competitive groups like "P" are excluded). */
-  rating: number
-  finished_count: number
+  rating: number | null
+  finished_count: number | null
   first_run_date?: string | null
   /** All attendances (finished + DNF), including groups that don't count
    * toward rating — a DNF is still a run, just not a completed one. */
-  total_runs_count: number
-  full_dx_km: number
-  km_this_month: number
-  current_streak: number
-  longest_streak: number
-  achievements: Achievement[]
+  total_runs_count: number | null
+  full_dx_km: number | null
+  km_this_month: number | null
+  current_streak: number | null
+  longest_streak: number | null
+  achievements: Achievement[] | null
   // Not embedded here — paginated separately via usersApi.historyPage, since
   // an active runner's full history can run into the hundreds.
 }
@@ -270,6 +286,8 @@ export interface UpdateProfilePayload {
   gender?: Gender | null
   birthday?: string | null
   phone?: string | null
+  running_club?: string | null
+  prior_experience?: PriorExperience | null
 }
 
 export interface ChangePasswordPayload {

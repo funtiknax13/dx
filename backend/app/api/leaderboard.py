@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.deps import OptionalUser, SessionDep
 from app.schemas.leaderboard import LeaderboardItem, LeaderboardResponse
 from app.services.leaderboard_service import compute_leaderboard, compute_streak_leaderboard
+from app.services.profile_completeness_service import stats_access_lock
 
 router = APIRouter(tags=["leaderboard"])
 
@@ -18,6 +19,16 @@ async def leaderboard(
     metric: Literal["dx", "km", "streak"] = "dx",
     period: Literal["all", "year", "month"] = "all",
 ) -> LeaderboardResponse:
+    lock_reason, missing_fields = stats_access_lock(user)
+    if lock_reason is not None:
+        return LeaderboardResponse(
+            metric=metric,
+            period=period,
+            entries=[],
+            lock_reason=lock_reason,
+            missing_fields=missing_fields,
+        )
+
     if metric == "streak":
         entries = await compute_streak_leaderboard(session)
         period = "all"  # streak is inherently period-agnostic

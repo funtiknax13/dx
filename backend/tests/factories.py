@@ -4,7 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus, ModerationStatus, ResultSource, UserRole
+from app.models.enums import (
+    FinishStatus,
+    Gender,
+    ModerationStatus,
+    PriorExperience,
+    ResultSource,
+    UserRole,
+)
 from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
@@ -13,8 +20,16 @@ from app.models.user import User
 
 
 async def make_user(
-    session: AsyncSession, email: str, role: UserRole = UserRole.runner
+    session: AsyncSession,
+    email: str,
+    role: UserRole = UserRole.runner,
+    *,
+    complete_profile: bool = True,
 ) -> User:
+    """A "normal" test user has a fully complete profile by default (see
+    profile_completeness_service) so existing tests that don't care about
+    that gate aren't affected by it — pass complete_profile=False for tests
+    that specifically exercise the gate/locked-state behavior."""
     user = User(
         first_name="Test",
         last_name=email.split("@")[0],
@@ -23,6 +38,14 @@ async def make_user(
         email_verified=True,
         role=role,
     )
+    if complete_profile:
+        user.birthday = date(1990, 1, 1)
+        user.avatar = "/media/avatars/test.jpg"
+        user.city = "Чебоксары"
+        user.gender = Gender.other
+        user.phone = "+79990000000"
+        user.running_club = ""  # "" = explicitly "not in a club", still counts as answered
+        user.prior_experience = PriorExperience.multiple
     session.add(user)
     await session.flush()
     return user

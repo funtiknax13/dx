@@ -9,7 +9,18 @@ import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconTrophy } from '../components/ui/icons'
-import type { RatingPeriod } from '../types'
+import type { RatingPeriod, StatsLockReason } from '../types'
+
+const FIELD_LABELS: Record<string, string> = {
+  birthday: 'дата рождения',
+  avatar: 'фото на аватар',
+  city: 'город',
+  gender: 'пол',
+  phone: 'телефон',
+  running_club: 'беговой клуб',
+  prior_experience: 'бегали ли вы раньше с ДАЙ ХАРD',
+  email_verified: 'подтверждение почты',
+}
 
 type View = 'rating' | 'streak' | 'km'
 
@@ -54,7 +65,7 @@ export function RatingPage() {
 
   const { data, loading, error, reload } = useAsync(async () => {
     if (view === 'rating') {
-      const { entries, me } = await ratingApi.list(period)
+      const { entries, me, lockReason, missingFields } = await ratingApi.list(period)
       const toDisplay = (e: (typeof entries)[number]): DisplayEntry => ({
         rank: e.rank,
         user_id: e.user_id,
@@ -66,11 +77,19 @@ export function RatingPage() {
         valueLabel: 'балл',
         secondary: { value: e.finished_count, label: 'финишей' },
       })
-      return { entries: entries.map(toDisplay), me: me ? toDisplay(me) : null }
+      return {
+        entries: entries.map(toDisplay),
+        me: me ? toDisplay(me) : null,
+        lockReason,
+        missingFields,
+      }
     }
     // Streak is period-agnostic — always fetched as "all" regardless of the
     // period toggle (which is hidden for this view anyway).
-    const { entries, me } = await leaderboardApi.list(view, view === 'streak' ? 'all' : period)
+    const { entries, me, lockReason, missingFields } = await leaderboardApi.list(
+      view,
+      view === 'streak' ? 'all' : period,
+    )
     const toDisplay = (e: (typeof entries)[number]): DisplayEntry => ({
       rank: e.rank,
       user_id: e.user_id,
@@ -80,7 +99,12 @@ export function RatingPage() {
       value: e.value,
       valueLabel: view === 'streak' ? 'DX подряд' : 'км',
     })
-    return { entries: entries.map(toDisplay), me: me ? toDisplay(me) : null }
+    return {
+      entries: entries.map(toDisplay),
+      me: me ? toDisplay(me) : null,
+      lockReason,
+      missingFields,
+    }
   }, [view, period])
 
   const entries = data?.entries ?? []
@@ -161,6 +185,8 @@ export function RatingPage() {
               </button>
             }
           />
+        ) : data?.lockReason ? (
+          <LockedStats lockReason={data.lockReason} missingFields={data.missingFields} />
         ) : entries.length === 0 ? (
           <StatePanel
             title="Пока пусто"
@@ -306,6 +332,65 @@ function Podium({ entries, myId }: { entries: DisplayEntry[]; myId?: number }) {
           </Link>
         )
       })}
+    </div>
+  )
+}
+
+function LockedStats({
+  lockReason,
+  missingFields,
+}: {
+  lockReason: Exclude<StatsLockReason, null>
+  missingFields: string[]
+}) {
+  return (
+    <div className="relative">
+      <div aria-hidden className="pointer-events-none select-none blur-sm">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-48 rounded-xl2 border border-ink/[0.08] bg-white" />
+          ))}
+        </div>
+        <div className="mt-10 space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-xl2 border border-ink/[0.08] bg-white" />
+          ))}
+        </div>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center p-6">
+        <div className="max-w-sm rounded-xl2 border border-ink/10 bg-white/95 p-6 text-center shadow-lift backdrop-blur">
+          <IconTrophy className="mx-auto text-signal" width={28} height={28} />
+          {lockReason === 'anonymous' ? (
+            <>
+              <h3 className="mt-3 font-display text-lg text-ink">Рейтинг — только для сообщества</h3>
+              <p className="mt-2 text-sm text-ink-600">
+                Зарегистрируйтесь и заполните профиль на 100%, чтобы увидеть рейтинг и статистику
+                участников.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Link to="/register" className="btn-primary btn-sm">
+                  Зарегистрироваться
+                </Link>
+                <Link to="/login" className="btn-ghost btn-sm">
+                  Войти
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="mt-3 font-display text-lg text-ink">Заполните профиль на 100%</h3>
+              <p className="mt-2 text-sm text-ink-600">
+                {missingFields.length > 0
+                  ? `Осталось: ${missingFields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}.`
+                  : 'Загляните в профиль, чтобы завершить заполнение.'}
+              </p>
+              <Link to="/profile" className="btn-primary btn-sm mt-4 inline-flex">
+                Заполнить профиль
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

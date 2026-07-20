@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.enums import Gender, UserRole
+from app.models.enums import Gender, PriorExperience, UserRole
 
 
 class UserMe(BaseModel):
@@ -19,6 +19,10 @@ class UserMe(BaseModel):
     birthday: date | None = None
     phone: str | None = None
     avatar: str | None = None
+    # "" means "not in a club" (explicitly answered); None means untouched —
+    # see profile_completeness_service.
+    running_club: str | None = None
+    prior_experience: PriorExperience | None = None
 
 
 class UserUpdate(BaseModel):
@@ -28,6 +32,8 @@ class UserUpdate(BaseModel):
     gender: Gender | None = None
     birthday: date | None = None
     phone: str | None = Field(default=None, max_length=40)
+    running_club: str | None = Field(default=None, max_length=150)
+    prior_experience: PriorExperience | None = None
 
 
 class PasswordChangeRequest(BaseModel):
@@ -67,14 +73,20 @@ class PublicProfile(BaseModel):
     # "rating" = count of finished attendances in groups that count toward the
     # rating (i.e. "full DX" — see app.services.stats_service) — kept under its
     # original name since RatingPage already depends on this exact number.
-    rating: int
+    # All None together when `lock_reason` is set — a viewer who hasn't
+    # registered/finished their own profile can't see anyone else's stats
+    # (see profile_completeness_service.stats_access_lock); looking at your
+    # own profile is never locked.
+    rating: int | None = None
     first_run_date: date | None = None
-    total_runs_count: int
-    full_dx_km: float
-    km_this_month: float
-    current_streak: int
-    longest_streak: int
-    achievements: list[AchievementItem]
+    total_runs_count: int | None = None
+    full_dx_km: float | None = None
+    km_this_month: float | None = None
+    current_streak: int | None = None
+    longest_streak: int | None = None
+    achievements: list[AchievementItem] | None = None
+    lock_reason: str | None = None
+    missing_fields: list[str] = []
     # Not embedded here — paginated separately via GET /users/{id}/history,
     # since an active runner's full history can run into the hundreds.
 

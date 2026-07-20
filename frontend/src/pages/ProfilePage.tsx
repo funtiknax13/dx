@@ -12,9 +12,9 @@ import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
-import type { Gender, GuestClaim, GuestProfile, MySignupEntry, User } from '../types'
+import type { Gender, GuestClaim, GuestProfile, MySignupEntry, PriorExperience, User } from '../types'
 
-type Tab = 'profile' | 'security' | 'guest'
+type Tab = 'profile' | 'security'
 
 export function ProfilePage() {
   const { user, setUser, logout } = useAuth()
@@ -83,7 +83,6 @@ export function ProfilePage() {
           [
             ['profile', 'Мои данные'],
             ['security', 'Безопасность'],
-            ...(hasApprovedClaim ? [] : [['guest', 'Это мои результаты?']]),
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -99,7 +98,7 @@ export function ProfilePage() {
       </div>
 
       <div className="mt-6">
-        {tab === 'profile' && <ProfileForm onSaved={setUser} />}
+        {tab === 'profile' && <ProfileForm onSaved={setUser} hasApprovedClaim={hasApprovedClaim} />}
         {tab === 'security' && (
           <div className="grid gap-6 lg:grid-cols-2">
             <PasswordForm />
@@ -116,7 +115,6 @@ export function ProfilePage() {
             <DeleteAccountCard />
           </div>
         )}
-        {tab === 'guest' && !hasApprovedClaim && <GuestClaimSection />}
       </div>
     </div>
   )
@@ -199,7 +197,13 @@ function AvatarUploader() {
   )
 }
 
-function ProfileForm({ onSaved }: { onSaved: (u: User) => void }) {
+function ProfileForm({
+  onSaved,
+  hasApprovedClaim,
+}: {
+  onSaved: (u: User) => void
+  hasApprovedClaim: boolean
+}) {
   const { user } = useAuth()
   const [form, setForm] = useState({
     first_name: user?.first_name ?? '',
@@ -208,7 +212,13 @@ function ProfileForm({ onSaved }: { onSaved: (u: User) => void }) {
     gender: (user?.gender ?? '') as Gender | '',
     birthday: user?.birthday ?? '',
     phone: user?.phone ?? '',
+    prior_experience: (user?.prior_experience ?? '') as PriorExperience | '',
   })
+  // Running club gets its own tri-state: text vs "not in a club" checkbox vs
+  // untouched — see profile_completeness_service on the backend for why "" and
+  // null mean different things here.
+  const [noClub, setNoClub] = useState(user?.running_club === '')
+  const [club, setClub] = useState(user?.running_club || '')
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -236,6 +246,8 @@ function ProfileForm({ onSaved }: { onSaved: (u: User) => void }) {
         gender: form.gender || null,
         birthday: form.birthday || null,
         phone: form.phone.trim() || null,
+        running_club: noClub ? '' : club.trim() || null,
+        prior_experience: form.prior_experience || null,
       })
       onSaved(updated)
       setSaved(true)
@@ -246,59 +258,116 @@ function ProfileForm({ onSaved }: { onSaved: (u: User) => void }) {
     }
   }
 
-  return (
-    <form onSubmit={submit} className="card max-w-2xl space-y-5 p-6 sm:p-8">
-      <div className="flex items-center gap-2 text-ink-600">
-        <IconUser width={18} height={18} className="text-signal" />
-        <h3 className="font-display text-lg text-ink">Личные данные</h3>
-      </div>
-      <FormError message={error} />
-      <FormSuccess message={saved ? 'Изменения сохранены' : null} />
+  const showClaimSearch =
+    (form.prior_experience === 'once' || form.prior_experience === 'multiple') &&
+    !hasApprovedClaim
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Имя *" name="first_name" value={form.first_name} onChange={set('first_name')} required />
-        <Field label="Фамилия *" name="last_name" value={form.last_name} onChange={set('last_name')} required />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Город"
-          name="city"
-          placeholder="Не указан"
-          value={form.city}
-          onChange={set('city')}
-        />
-        <SelectField label="Пол" name="gender" value={form.gender} onChange={set('gender')}>
-          <option value="">Не указан</option>
-          <option value="male">Мужской</option>
-          <option value="female">Женский</option>
-          <option value="other">Другой</option>
-        </SelectField>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Дата рождения"
-          name="birthday"
-          type="date"
-          value={form.birthday ?? ''}
-          onChange={set('birthday')}
-        />
-        <Field
-          label="Телефон"
-          name="phone"
-          type="tel"
-          placeholder="+7 900 000-00-00"
-          value={form.phone}
-          onChange={set('phone')}
-        />
-      </div>
-      <p className="text-xs text-clay">
-        Город, пол, дата рождения и телефон видны только вам. В публичном профиле показываются
-        имя, аватар, рейтинг и история участий.
-      </p>
-      <button type="submit" disabled={loading} className="btn-primary">
-        {loading ? <Spinner className="h-5 w-5" /> : 'Сохранить'}
-      </button>
-    </form>
+  return (
+    <div className="space-y-6">
+      <form onSubmit={submit} className="card max-w-2xl space-y-5 p-6 sm:p-8">
+        <div className="flex items-center gap-2 text-ink-600">
+          <IconUser width={18} height={18} className="text-signal" />
+          <h3 className="font-display text-lg text-ink">Личные данные</h3>
+        </div>
+        <FormError message={error} />
+        <FormSuccess message={saved ? 'Изменения сохранены' : null} />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Имя *" name="first_name" value={form.first_name} onChange={set('first_name')} required />
+          <Field label="Фамилия *" name="last_name" value={form.last_name} onChange={set('last_name')} required />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Город"
+            name="city"
+            placeholder="Не указан"
+            value={form.city}
+            onChange={set('city')}
+          />
+          <SelectField label="Пол" name="gender" value={form.gender} onChange={set('gender')}>
+            <option value="">Не указан</option>
+            <option value="male">Мужской</option>
+            <option value="female">Женский</option>
+            <option value="other">Другой</option>
+          </SelectField>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Дата рождения"
+            name="birthday"
+            type="date"
+            value={form.birthday ?? ''}
+            onChange={set('birthday')}
+          />
+          <Field
+            label="Телефон"
+            name="phone"
+            type="tel"
+            placeholder="+7 900 000-00-00"
+            value={form.phone}
+            onChange={set('phone')}
+          />
+        </div>
+        <div>
+          <label className="field-label">Беговой клуб</label>
+          <input
+            type="text"
+            placeholder="Например, «Бегущие сердца»"
+            value={club}
+            disabled={noClub}
+            onChange={(e) => {
+              setClub(e.target.value)
+              setSaved(false)
+            }}
+            className="field disabled:bg-ink/5 disabled:text-clay"
+          />
+          <label className="mt-2 flex items-center gap-2 text-sm text-ink-600">
+            <input
+              type="checkbox"
+              checked={noClub}
+              onChange={(e) => {
+                setNoClub(e.target.checked)
+                setSaved(false)
+              }}
+            />
+            Не состою в беговом клубе
+          </label>
+        </div>
+        {!hasApprovedClaim && (
+          <SelectField
+            label="Бегали ли вы раньше с ДАЙ ХАРD?"
+            name="prior_experience"
+            value={form.prior_experience}
+            onChange={set('prior_experience')}
+          >
+            <option value="">Не указано</option>
+            <option value="never">Нет, ни разу</option>
+            <option value="once">Да, один раз</option>
+            <option value="multiple">Да, несколько раз</option>
+          </SelectField>
+        )}
+        <p className="text-xs text-clay">
+          Город, пол, дата рождения, телефон и беговой клуб видны только вам. В публичном профиле
+          показываются имя, аватар, рейтинг и история участий. Рейтинг и статистика других
+          участников открываются только после заполнения профиля на 100%.
+        </p>
+        <button type="submit" disabled={loading} className="btn-primary">
+          {loading ? <Spinner className="h-5 w-5" /> : 'Сохранить'}
+        </button>
+      </form>
+
+      {showClaimSearch && (
+        <div>
+          <h3 className="font-display text-lg text-ink">Похоже, вы уже бегали с нами</h3>
+          <p className="mt-1 text-sm text-ink-600">
+            Найдите себя в списке ниже — так мы перенесём ваши прошлые результаты на этот аккаунт.
+          </p>
+          <div className="mt-4">
+            <GuestClaimSection />
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -553,8 +622,7 @@ function GuestClaimSection() {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="card p-6 sm:p-8">
-        <h3 className="font-display text-lg text-ink">Это мои результаты?</h3>
-        <p className="mt-2 text-sm text-ink-600">
+        <p className="text-sm text-ink-600">
           Если организаторы загрузили список пробежавших до того, как вы зарегистрировались,
           ваш результат мог попасть в систему как гостевой профиль. Найдите себя по имени и
           заявите — администратор подтвердит и перенесёт результаты на ваш аккаунт.

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.security import hash_password, verify_password
 from app.models.attendance import AttendanceRecord
 from app.models.event import Event
@@ -31,6 +31,7 @@ from app.services.media_service import (
     delete_media,
     save_image,
 )
+from app.services.profile_completeness_service import stats_access_lock
 from app.services.rating_service import runner_finished_count
 from app.services.stats_service import compute_profile_stats
 
@@ -222,10 +223,26 @@ async def user_history(
 
 
 @router.get("/{user_id}", response_model=PublicProfile)
-async def public_profile(user_id: int, session: SessionDep) -> PublicProfile:
+async def public_profile(user_id: int, session: SessionDep, viewer: OptionalUser) -> PublicProfile:
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    # Looking at your own profile is never locked — the gate is about seeing
+    # *other* runners' stats (see profile_completeness_service).
+    is_own_profile = viewer is not None and viewer.id == user_id
+    lock_reason, missing_fields = (None, []) if is_own_profile else stats_access_lock(viewer)
+    if lock_reason is not None:
+        return PublicProfile(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            avatar=user.avatar,
+            is_guest=user.is_guest,
+            registered_at=None if user.is_guest else user.created_at,
+            lock_reason=lock_reason,
+            missing_fields=missing_fields,
+        )
 
     rating = await runner_finished_count(session, user_id, period="all")
     stats = await compute_profile_stats(session, user_id)

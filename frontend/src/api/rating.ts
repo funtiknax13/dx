@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { RatingEntry, RatingPeriod } from '../types'
+import type { RatingEntry, RatingPeriod, StatsLockReason } from '../types'
 
 interface RawRatingItem {
   rank: number
@@ -14,6 +14,8 @@ interface RawRatingResponse {
   period: string
   entries: RawRatingItem[]
   me: RawRatingItem | null
+  lock_reason: StatsLockReason
+  missing_fields: string[]
 }
 
 function mapItem(e: RawRatingItem): RatingEntry {
@@ -30,11 +32,23 @@ function mapItem(e: RawRatingItem): RatingEntry {
 }
 
 export const ratingApi = {
-  list: async (period: RatingPeriod = 'all'): Promise<{ entries: RatingEntry[]; me: RatingEntry | null }> => {
+  list: async (
+    period: RatingPeriod = 'all',
+  ): Promise<{
+    entries: RatingEntry[]
+    me: RatingEntry | null
+    lockReason: StatsLockReason
+    missingFields: string[]
+  }> => {
     // No `auth: false` here — the request client already attaches the token
     // when a session exists, and the endpoint stays public either way; being
     // logged in just adds a personalized `me` row when outside the top N.
     const res = await api.get<RawRatingResponse>('/rating', { query: { period } })
-    return { entries: res.entries.map(mapItem), me: res.me ? mapItem(res.me) : null }
+    return {
+      entries: res.entries.map(mapItem),
+      me: res.me ? mapItem(res.me) : null,
+      lockReason: res.lock_reason,
+      missingFields: res.missing_fields,
+    }
   },
 }

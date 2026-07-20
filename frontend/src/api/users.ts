@@ -5,7 +5,9 @@ import type {
   ChangePasswordPayload,
   Paginated,
   ParticipationEntry,
+  PriorExperience,
   PublicProfile,
+  StatsLockReason,
   UpdateProfilePayload,
   User,
 } from '../types'
@@ -23,6 +25,8 @@ interface RawUser {
   birthday?: string | null
   phone?: string | null
   avatar?: string | null
+  running_club?: string | null
+  prior_experience?: PriorExperience | null
 }
 
 interface RawHistoryItem {
@@ -51,14 +55,16 @@ interface RawPublicProfile {
   avatar?: string | null
   is_guest: boolean
   registered_at?: string | null
-  rating: number
+  lock_reason: StatsLockReason
+  missing_fields: string[]
+  rating: number | null
   first_run_date?: string | null
-  total_runs_count: number
-  full_dx_km: number
-  km_this_month: number
-  current_streak: number
-  longest_streak: number
-  achievements: RawAchievement[]
+  total_runs_count: number | null
+  full_dx_km: number | null
+  km_this_month: number | null
+  current_streak: number | null
+  longest_streak: number | null
+  achievements: RawAchievement[] | null
 }
 
 /** Full self-service data export (152-FZ art. 14 "right to access") — passed
@@ -130,6 +136,8 @@ function mapPublicProfile(raw: RawPublicProfile): PublicProfile {
     avatar_url: raw.avatar ?? null,
     is_guest: raw.is_guest,
     registered_at: raw.registered_at ?? null,
+    lock_reason: raw.lock_reason,
+    missing_fields: raw.missing_fields,
     rating: raw.rating,
     finished_count: raw.rating,
     first_run_date: raw.first_run_date ?? null,
@@ -138,7 +146,7 @@ function mapPublicProfile(raw: RawPublicProfile): PublicProfile {
     km_this_month: raw.km_this_month,
     current_streak: raw.current_streak,
     longest_streak: raw.longest_streak,
-    achievements: raw.achievements.map(mapAchievement),
+    achievements: raw.achievements ? raw.achievements.map(mapAchievement) : null,
   }
 }
 

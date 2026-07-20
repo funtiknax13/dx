@@ -4,6 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_access_token
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, UserRole
 from app.models.event import Event
@@ -107,3 +108,71 @@ async def test_public_profile_no_longer_embeds_history(
     resp = await client.get(f"/api/v1/users/{runner.id}")
     assert resp.status_code == 200, resp.text
     assert "history" not in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_public_profile_locked_for_anonymous_viewer(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner = await make_user(session, "runner-anon-view@example.com")
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/users/{runner.id}")
+    body = resp.json()
+    assert body["lock_reason"] == "anonymous"
+    assert body["rating"] is None
+    assert body["achievements"] is None
+    # Basic identity still shows — only the stats are gated.
+    assert body["first_name"] == "Test"
+
+
+@pytest.mark.asyncio
+async def test_public_profile_locked_when_viewer_profile_incomplete(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner = await make_user(session, "runner-target@example.com")
+    viewer = await make_user(session, "viewer-incomplete@example.com", complete_profile=False)
+    await session.commit()
+
+    token = create_access_token(viewer.id)
+    resp = await client.get(
+        f"/api/v1/users/{runner.id}", headers={"Authorization": f"Bearer {token}"}
+    )
+    body = resp.json()
+    assert body["lock_reason"] == "profile_incomplete"
+    assert body["rating"] is None
+
+
+@pytest.mark.asyncio
+async def test_public_profile_never_locked_for_own_profile(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Viewing your own profile is never gated, even with an incomplete
+    profile — the gate is only about seeing *other* runners' stats."""
+    runner = await make_user(session, "runner-self@example.com", complete_profile=False)
+    await session.commit()
+
+    token = create_access_token(runner.id)
+    resp = await client.get(
+        f"/api/v1/users/{runner.id}", headers={"Authorization": f"Bearer {token}"}
+    )
+    body = resp.json()
+    assert body["lock_reason"] is None
+    assert body["rating"] == 0
+
+
+@pytest.mark.asyncio
+async def test_public_profile_unlocked_for_complete_viewer(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner = await make_user(session, "runner-target2@example.com")
+    viewer = await make_user(session, "viewer-complete@example.com")
+    await session.commit()
+
+    token = create_access_token(viewer.id)
+    resp = await client.get(
+        f"/api/v1/users/{runner.id}", headers={"Authorization": f"Bearer {token}"}
+    )
+    body = resp.json()
+    assert body["lock_reason"] is None
+    assert body["rating"] == 0

@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.deps import OptionalUser, SessionDep
 from app.schemas.rating import RatingItem, RatingResponse
+from app.services.profile_completeness_service import stats_access_lock
 from app.services.rating_service import compute_rating
 
 router = APIRouter(tags=["rating"])
@@ -15,6 +16,12 @@ TOP_N = 20
 async def rating(
     session: SessionDep, user: OptionalUser, period: Literal["all", "year", "month"] = "all"
 ) -> RatingResponse:
+    lock_reason, missing_fields = stats_access_lock(user)
+    if lock_reason is not None:
+        return RatingResponse(
+            period=period, entries=[], lock_reason=lock_reason, missing_fields=missing_fields
+        )
+
     entries = await compute_rating(session, period)
     items = [
         RatingItem(

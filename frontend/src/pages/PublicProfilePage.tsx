@@ -22,6 +22,17 @@ import type { Achievement, PublicProfile } from '../types'
 
 type Tab = 'history' | 'achievements'
 
+const FIELD_LABELS: Record<string, string> = {
+  birthday: 'дата рождения',
+  avatar: 'фото на аватар',
+  city: 'город',
+  gender: 'пол',
+  phone: 'телефон',
+  running_club: 'беговой клуб',
+  prior_experience: 'бегали ли вы раньше с ДАЙ ХАРD',
+  email_verified: 'подтверждение почты',
+}
+
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
@@ -52,6 +63,7 @@ export function PublicProfilePage() {
     )
   }
 
+  const locked = data.lock_reason !== null
   const finishedCount = data.finished_count
   const historyTotalPages = Math.max(1, Math.ceil((history.data?.total ?? 0) / 20))
 
@@ -96,13 +108,13 @@ export function PublicProfilePage() {
 
           <div className="flex gap-4">
             <div className="rounded-xl2 border border-paper/10 bg-paper/[0.05] px-6 py-4 text-center">
-              <div className="font-display text-4xl tabular text-volt">{data.rating}</div>
+              <div className="font-display text-4xl tabular text-volt">{locked ? '—' : data.rating}</div>
               <div className="mt-1 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-paper/55">
                 рейтинг
               </div>
             </div>
             <div className="rounded-xl2 border border-paper/10 bg-paper/[0.05] px-6 py-4 text-center">
-              <div className="font-display text-4xl tabular text-paper">{finishedCount}</div>
+              <div className="font-display text-4xl tabular text-paper">{locked ? '—' : finishedCount}</div>
               <div className="mt-1 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-paper/55">
                 финишей
               </div>
@@ -111,14 +123,20 @@ export function PublicProfilePage() {
         </div>
       </div>
 
-      <StatsGrid data={data} />
+      {locked ? (
+        <LockedProfileStats lockReason={data.lock_reason!} missingFields={data.missing_fields} />
+      ) : (
+        <StatsGrid data={data} />
+      )}
 
-      {/* Tabs */}
+      {/* Tabs — achievements are derived stats, gated same as the rest;
+          history is the same kind of record a public race protocol already
+          shows, so it stays visible either way. */}
       <div className="mt-10 flex gap-2 overflow-x-auto pb-1">
         {(
           [
             ['history', 'История участий'],
-            ['achievements', 'Достижения'],
+            ...(locked ? [] : [['achievements', 'Достижения']]),
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -161,7 +179,7 @@ export function PublicProfilePage() {
         </section>
       )}
 
-      {tab === 'achievements' && (
+      {tab === 'achievements' && !locked && data.achievements && (
         <section className="mt-6">
           <div className="flex flex-wrap gap-4">
             {data.achievements.map((a) => (
@@ -238,27 +256,27 @@ function StatsGrid({ data }: { data: PublicProfile }) {
     {
       icon: <IconRoute width={18} height={18} />,
       label: 'Пробежек всего',
-      value: String(data.total_runs_count),
+      value: String(data.total_runs_count ?? 0),
     },
     {
       icon: <IconFlag width={18} height={18} />,
       label: 'Км по полным DX',
-      value: formatDistance(data.full_dx_km),
+      value: formatDistance(data.full_dx_km ?? 0),
     },
     {
       icon: <IconFlag width={18} height={18} />,
       label: 'Км за последний месяц',
-      value: formatDistance(data.km_this_month),
+      value: formatDistance(data.km_this_month ?? 0),
     },
     {
       icon: <IconSpark width={18} height={18} />,
       label: 'Текущая серия',
-      value: `${data.current_streak} DX подряд`,
+      value: `${data.current_streak ?? 0} DX подряд`,
     },
     {
       icon: <IconSpark width={18} height={18} />,
       label: 'Лучшая серия',
-      value: `${data.longest_streak} DX подряд`,
+      value: `${data.longest_streak ?? 0} DX подряд`,
     },
   ]
 
@@ -278,6 +296,48 @@ function StatsGrid({ data }: { data: PublicProfile }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function LockedProfileStats({
+  lockReason,
+  missingFields,
+}: {
+  lockReason: 'anonymous' | 'profile_incomplete'
+  missingFields: string[]
+}) {
+  return (
+    <div className="mt-6 rounded-xl2 border border-ink/[0.08] bg-white p-6 text-center shadow-card sm:p-8">
+      {lockReason === 'anonymous' ? (
+        <>
+          <p className="text-sm text-ink-600">
+            Зарегистрируйтесь и заполните профиль на 100%, чтобы видеть статистику участников
+            сообщества.
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Link to="/register" className="btn-primary btn-sm">
+              Зарегистрироваться
+            </Link>
+            <Link to="/login" className="btn-ghost btn-sm">
+              Войти
+            </Link>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-ink-600">
+            {missingFields.length > 0
+              ? `Заполните профиль на 100%, чтобы видеть статистику других участников. Осталось: ${missingFields
+                  .map((f) => FIELD_LABELS[f] ?? f)
+                  .join(', ')}.`
+              : 'Заполните профиль на 100%, чтобы видеть статистику других участников.'}
+          </p>
+          <Link to="/profile" className="btn-primary btn-sm mt-4 inline-flex">
+            Заполнить профиль
+          </Link>
+        </>
+      )}
     </div>
   )
 }

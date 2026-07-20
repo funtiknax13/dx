@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import Gender, UserRole
+from app.models.enums import Gender, PriorExperience, UserRole
 
 
 class User(Base, TimestampMixin):
@@ -31,6 +31,21 @@ class User(Base, TimestampMixin):
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Nullable = never answered. Empty string ("") is a distinct, deliberate
+    # answer — "I checked the 'not in a club' box" — vs None ("never touched
+    # this field") — both are needed to tell "answered" apart from "skipped"
+    # for the profile-completeness gate (see profile_completeness_service).
+    running_club: Mapped[str | None] = mapped_column(String(150), nullable=True)
+
+    # Self-reported at profile completion — see PriorExperience. Only shown
+    # to accounts registered after this feature shipped; every pre-existing
+    # account was backfilled to `multiple` in the introducing migration, so
+    # this column reads as "unanswered" (None) only for a brand new
+    # registration that hasn't finished their profile yet.
+    prior_experience: Mapped[PriorExperience | None] = mapped_column(
+        Enum(PriorExperience, native_enum=False, length=20), nullable=True
+    )
 
     # When the user accepted the privacy policy (checkbox at registration).
     # Null for accounts predating this field and for guests (never registered
