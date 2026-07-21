@@ -3,9 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0E0E0D" />
+    <!-- "Add to Home Screen" on iOS Safari doesn't read the web manifest for
+         these — needs its own meta tags. Android/Chrome get the same info
+         from the manifest (see vite.config.ts) instead. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DАЙ ХАРD" />
     <meta
       name="description"
       content="DАЙ ХАРD — беговое сообщество Чебоксар. 🏃 Воскресные длительные тренировки. #diehardcheb"
