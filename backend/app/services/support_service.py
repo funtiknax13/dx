@@ -4,7 +4,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.email import send_email
+from app.core.email import render_email_html, send_email
 from app.models.enums import TicketStatus
 from app.models.support import SupportMessage, SupportTicket
 from app.models.user import User
@@ -69,10 +69,16 @@ async def add_message(
             link = f"{settings.frontend_origin}/support/tickets/{ticket.id}"
             await send_email(
                 recipient.email,
-                "Вам ответили в поддержке DH",
+                "Ответ в поддержке — DАЙ ХАРD",
                 f"Здравствуйте, {recipient.first_name}!\n\n"
-                f"На ваше обращение в поддержку DH пришёл ответ:\n\n{body}\n\n"
+                f"На ваше обращение в поддержку DАЙ ХАРD пришёл ответ:\n\n{body}\n\n"
                 f"Посмотреть и ответить: {link}",
+                render_email_html(
+                    "support_reply.html",
+                    first_name=recipient.first_name,
+                    reply_body=body,
+                    link=link,
+                ),
             )
     return message
 

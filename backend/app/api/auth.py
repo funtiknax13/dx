@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import SessionDep
-from app.core.email import build_frontend_link, send_email
+from app.core.email import build_frontend_link, render_email_html, send_email
 from app.core.security import (
     REFRESH,
     RESET,
@@ -51,8 +51,11 @@ async def register(payload: RegisterRequest, session: SessionDep) -> MessageResp
     link = build_frontend_link("/verify-email", token)
     await send_email(
         user.email,
-        "Verify your DH account",
-        f"Welcome to DH Running Community!\n\nConfirm your email: {link}",
+        "Подтвердите почту — DАЙ ХАРD",
+        f"Добро пожаловать в DАЙ ХАРD, {user.first_name}!\n\n"
+        f"Подтвердите почту, чтобы начать бегать с сообществом: {link}\n\n"
+        "Если вы не регистрировались — просто проигнорируйте это письмо.",
+        render_email_html("verify_email.html", first_name=user.first_name, link=link),
     )
     return MessageResponse(detail="Registration successful. Check your email to verify.")
 
@@ -110,8 +113,10 @@ async def forgot_password(payload: ForgotPasswordRequest, session: SessionDep) -
         link = build_frontend_link("/reset-password", token)
         await send_email(
             user.email,
-            "Reset your DH password",
-            f"Reset your password using this link:\n\n{link}",
+            "Восстановление пароля — DАЙ ХАРD",
+            f"Ссылка для сброса пароля (действует 2 часа): {link}\n\n"
+            "Если вы не запрашивали сброс — просто проигнорируйте это письмо.",
+            render_email_html("reset_password.html", link=link),
         )
     return MessageResponse(detail="If that email exists, a reset link has been sent.")
 

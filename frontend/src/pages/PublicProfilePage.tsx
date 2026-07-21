@@ -29,7 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
   gender: 'пол',
   phone: 'телефон',
   running_club: 'беговой клуб',
-  prior_experience: 'бегали ли вы раньше с ДАЙ ХАРD',
+  prior_experience: 'бегали ли вы раньше с DАЙ ХАРD',
   email_verified: 'подтверждение почты',
 }
 

@@ -144,7 +144,7 @@ async def test_staff_reply_emails_registered_reporter_but_not_guest_account(
 ) -> None:
     sent: list[tuple[str, str]] = []
 
-    async def fake_send_email(to: str, subject: str, body: str) -> None:
+    async def fake_send_email(to: str, subject: str, text_body: str, html_body: str) -> None:
         sent.append((to, subject))
 
     monkeypatch.setattr("app.services.support_service.send_email", fake_send_email)

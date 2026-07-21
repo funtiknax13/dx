@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light">
+<title>{% block title %}DАЙ ХАРD{% endblock %}</title>
+<!--[if mso]>
+<style>
+  * { font-family: Arial, sans-serif !important; }
+</style>
+<![endif]-->
+<style>
+  @media only screen and (max-width: 600px) {
+    .container { width: 100% !important; }
+    .px { padding-left: 20px !important; padding-right: 20px !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#EBEBE9;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
+    {% block preheader %}{% endblock %}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#EBEBE9;">
+    <tr>
+      <td align="center" style="padding: 32px 16px;">
+        <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background-color:#F6F6F5; border-radius:20px; overflow:hidden;">
+
+          <!-- Header band -->
+          <tr>
+            <td class="px" style="background-color:#0E0E0D; padding: 24px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="width:36px;">
+                    <img src="{{ logo_mark_uri }}" width="36" height="36" alt="" style="display:block; width:36px; height:36px; border-radius:9px;">
+                  </td>
+                  <td style="padding-left:12px; vertical-align:middle;">
+                    <img src="{{ logo_full_uri }}" width="114" height="20" alt="DАЙ ХАРD" style="display:block; width:114px; height:20px;">
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Accent stripe -->
+          <tr>
+            <td style="height:4px; line-height:4px; font-size:0; background-color:#2E2E2B;">&nbsp;</td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td class="px" style="padding: 40px 32px 8px;">
+              {% block content %}{% endblock %}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="px" style="padding: 28px 32px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #DCDCD9;">
+                <tr><td style="padding-top:20px;">
+                  <p style="margin:0 0 6px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#87857F;">
+                    Чебоксары &middot; #diehardcheb
+                  </p>
+                  <p style="margin:0; font-family:'Montserrat','Helvetica Neue',Arial,sans-serif; font-size:12px; line-height:1.5; color:#87857F;">
+                    Беговое сообщество Чебоксар &mdash; воскресные длительные тренировки.
+                  </p>
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

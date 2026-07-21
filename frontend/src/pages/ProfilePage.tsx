@@ -382,7 +382,7 @@ function ProfileForm({
         {!hasApprovedClaim && (
           <div>
             <SelectField
-              label="Бегали ли вы раньше с ДАЙ ХАРD?"
+              label="Бегали ли вы раньше с DАЙ ХАРD?"
               name="prior_experience"
               value={form.prior_experience}
               onChange={set('prior_experience')}
