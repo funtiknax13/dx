@@ -113,4 +113,12 @@ export const attendanceApi = {
     if (payload.start_time) form.append('start_time', payload.start_time)
     return mapResult(await api.post<RawResult>(`/attendance/${attendanceId}/result`, form))
   },
+
+  // Alternative to uploading a file: a GPX/FIT export link from the watch's
+  // own app (Suunto/Garmin/Coros etc). Fetched and validated server-side —
+  // see backend/app/services/safe_fetch.py.
+  importResultUrl: async (attendanceId: number | string, url: string) =>
+    mapResult(
+      await api.post<RawResult>(`/attendance/${attendanceId}/result/import-url`, { url }),
+    ),
 }

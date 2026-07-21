@@ -10,6 +10,13 @@ class ManualResultRequest(BaseModel):
     start_time: datetime | None = None
 
 
+class ImportUrlRequest(BaseModel):
+    # Left as a plain string, not pydantic's Url type — safe_fetch does its own
+    # scheme/host validation (https-only, private-IP checks) and gives a
+    # clearer error message than a generic URL-format failure would.
+    url: str = Field(min_length=1, max_length=2000)
+
+
 class ResultOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

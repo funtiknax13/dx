@@ -61,11 +61,12 @@ function RunnerCell({ row }: { row: ProtocolRow }) {
 
 function ProtocolRowLine({ row }: { row: ProtocolRow }) {
   const isDnf = row.finish_status === 'dnf'
-  const hasTime = row.duration_seconds != null
-  // On the list (CSV import / auto-match) but no result uploaded yet — no
-  // time/pace/distance to show, so skip the dashes and just center the
-  // status word instead of right-aligning it like a real time would be.
-  const isPending = !isDnf && !hasTime
+  // Not yet an official result: either nothing uploaded yet, or something was
+  // but it's still awaiting admin confirmation — the latter can already have
+  // numbers (see the group-target fallback for a mismatched file/URL import),
+  // but they aren't official yet, so still shown as "пробежал" rather than a
+  // real time/pace/distance an outsider could mistake for a confirmed result.
+  const isPending = !isDnf && row.moderation_status !== 'approved'
   return (
     <tr className="border-b border-ink/[0.06] transition-colors hover:bg-signal-wash/30">
       <td className="py-3 pl-4 pr-2">
@@ -87,10 +88,10 @@ function ProtocolRowLine({ row }: { row: ProtocolRow }) {
       >
         {isDnf ? (
           <span className="text-xs uppercase tracking-wide text-clay">DNF</span>
-        ) : hasTime ? (
-          formatDuration(row.duration_seconds)
-        ) : (
+        ) : isPending ? (
           <span className="text-xs uppercase tracking-wide text-clay">пробежал</span>
+        ) : (
+          formatDuration(row.duration_seconds)
         )}
       </td>
       <td className="hidden py-3 pr-3 text-right font-mono text-sm tabular text-ink-600 sm:table-cell">
@@ -125,7 +126,7 @@ export function ProtocolTable({ protocol }: { protocol: Protocol }) {
       <div className="flex items-center justify-between bg-ink px-4 py-3 text-paper">
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-volt">Протокол</span>
         <span className="font-mono text-xs tabular text-paper/60">
-          {finishers.length + pending.length} финишировали
+          {finishers.length} финишировали
         </span>
       </div>
 

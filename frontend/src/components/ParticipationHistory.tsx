@@ -52,7 +52,10 @@ function HistoryRow({
 }) {
   const [open, setOpen] = useState(false)
   const finished = h.finish_status === 'finished'
-  const needsResult = editable && h.has_result === false
+  // While a submitted result is pending moderation, resubmitting is blocked
+  // (see backend/app/api/results.py) — the form only reappears once it's
+  // either approved (to allow a correction) or there's no result at all yet.
+  const needsResult = editable && (h.has_result === false || h.moderation_status === 'approved')
 
   return (
     <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
@@ -113,10 +116,11 @@ function HistoryRow({
 }
 
 function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: () => void }) {
-  const [mode, setMode] = useState<'file' | 'manual'>('file')
+  const [mode, setMode] = useState<'file' | 'url' | 'manual'>('file')
   const [distance, setDistance] = useState('')
   const [duration, setDuration] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -131,6 +135,12 @@ function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: ()
           return
         }
         await attendanceApi.submitResultFile(attendanceId, file)
+      } else if (mode === 'url') {
+        if (!url.trim()) {
+          setError('Вставьте ссылку на экспорт тренировки')
+          return
+        }
+        await attendanceApi.importResultUrl(attendanceId, url.trim())
       } else {
         const distanceKm = Number(distance.replace(',', '.'))
         const durationSeconds = parseDuration(duration)
@@ -163,6 +173,13 @@ function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: ()
         </button>
         <button
           type="button"
+          onClick={() => setMode('url')}
+          className={`rounded-full px-3 py-1.5 transition ${mode === 'url' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
+        >
+          Вставить ссылку
+        </button>
+        <button
+          type="button"
           onClick={() => setMode('manual')}
           className={`rounded-full px-3 py-1.5 transition ${mode === 'manual' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
         >
@@ -177,6 +194,19 @@ function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: ()
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-full file:border file:border-ink/15 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-600 hover:file:border-ink/30"
         />
+      ) : mode === 'url' ? (
+        <div>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://..."
+            className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
+          />
+          <p className="mt-1.5 text-xs text-clay">
+            Ссылка на экспорт тренировки из приложения часов (Suunto, Garmin, Coros и т.п.).
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -87,6 +87,18 @@ async def save_track_file(upload: UploadFile, subdir: str) -> tuple[str, bytes, 
     return path, content, ext
 
 
+def save_track_bytes(content: bytes, ext: str, subdir: str) -> str:
+    """Same validation/storage as save_track_file, for content that didn't
+    arrive as an UploadFile (e.g. downloaded from a URL) — see safe_fetch."""
+    if ext not in settings.allowed_track_extensions:
+        raise InvalidFileTypeError("Track file must be .gpx or .fit")
+    if len(content) > settings.max_track_file_size_bytes:
+        raise FileTooLargeError(
+            f"File exceeds maximum size of {settings.max_track_file_size_bytes} bytes"
+        )
+    return _save_bytes(content, subdir, ext)
+
+
 def media_path_to_fs(media_path: str) -> Path:
     rel = media_path.removeprefix(settings.media_url).lstrip("/")
     return Path(settings.media_root) / rel

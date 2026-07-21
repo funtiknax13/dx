@@ -139,13 +139,9 @@ export function GroupDetailPage() {
             <h2 className="font-display text-2xl sm:text-3xl">Протокол забега</h2>
             {protocol && (
               <span className="font-mono text-xs text-clay">
-                {protocol.finishers.length + protocol.pending.length}{' '}
-                {plural(
-                  protocol.finishers.length + protocol.pending.length,
-                  'финишёр',
-                  'финишёра',
-                  'финишёров',
-                )}
+                {protocol.finishers.length}{' '}
+                {plural(protocol.finishers.length, 'финишёр', 'финишёра', 'финишёров')}
+                {protocol.pending.length > 0 && ` · ${protocol.pending.length} в пути`}
                 {protocol.dnf.length > 0 && ` · ${protocol.dnf.length} DNF`}
               </span>
             )}

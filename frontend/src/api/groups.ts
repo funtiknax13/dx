@@ -93,6 +93,7 @@ function mapProtocolEntry(raw: RawProtocolEntry): ProtocolRow {
     distance_km: raw.distance_km,
     duration_seconds: raw.duration_seconds,
     pace_seconds_per_km: raw.pace_seconds_per_km,
+    moderation_status: raw.moderation_status as ProtocolRow['moderation_status'],
   }
 }
 

@@ -122,6 +122,7 @@ async function mapHistoryItem(raw: RawHistoryItem): Promise<ParticipationEntry> 
       distance_km: result.distance_km,
       duration_seconds: result.duration_seconds,
       pace_seconds_per_km: result.pace_seconds_per_km,
+      moderation_status: result.moderation_status,
     }
   } catch {
     return base

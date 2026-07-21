@@ -322,6 +322,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "fitparse" },
     { name = "gpxpy" },
+    { name = "httpcore" },
+    { name = "httpx" },
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "passlib", extra = ["argon2"] },
@@ -337,7 +339,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -354,6 +355,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fitparse", specifier = ">=1.2" },
     { name = "gpxpy", specifier = ">=1.6" },
+    { name = "httpcore", specifier = ">=1.0" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "itsdangerous", specifier = ">=2.2" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "passlib", extras = ["argon2"], specifier = ">=1.7" },
@@ -369,7 +372,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.27" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },

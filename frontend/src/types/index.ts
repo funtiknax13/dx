@@ -99,6 +99,10 @@ export interface ParticipationEntry {
   place?: number | null
   /** False when the runner hasn't submitted a result for this attendance yet. */
   has_result?: boolean
+  /** Only set when has_result is true. 'pending' means it's already visible in
+   * the group protocol's "в пути" bucket but can't be resubmitted until an
+   * admin resolves it — see backend/app/api/results.py. */
+  moderation_status?: ModerationStatus
 }
 
 export interface EventPhoto {
@@ -208,6 +212,11 @@ export interface ProtocolRow {
   distance_km?: number | null
   duration_seconds?: number | null
   pace_seconds_per_km?: number | null
+  /** Null when there's no Result yet at all. 'pending' means a result was
+   * submitted but isn't admin-confirmed — time/distance may already be set
+   * (see the group-target fallback in backend/app/services/result_validation_service.py)
+   * but shouldn't be shown as an official number yet. */
+  moderation_status?: ModerationStatus | null
 }
 
 export interface Protocol {
