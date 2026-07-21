@@ -355,7 +355,7 @@ function ProfileForm({
           </label>
           <input
             type="text"
-            placeholder="Например, «Бегущие сердца»"
+            placeholder="Например, «DАЙ ХАРD Чебоксары»"
             value={club}
             disabled={noClub}
             onChange={(e) => {
