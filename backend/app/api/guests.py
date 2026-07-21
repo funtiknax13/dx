@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
@@ -7,6 +7,7 @@ from app.models.enums import ClaimStatus
 from app.models.guest_claim import GuestClaim
 from app.models.user import User
 from app.schemas.guest import ClaimOut, GuestOut, MyClaimOut
+from app.services.name_search import flexible_name_filter
 
 router = APIRouter(prefix="/guests", tags=["guests"])
 
@@ -18,13 +19,12 @@ async def search_guests(q: str, session: SessionDep) -> list[User]:
     q = q.strip()
     if len(q) < 2:
         return []
-    like = f"%{q}%"
     guests = await session.scalars(
         select(User)
         .where(
             User.is_guest.is_(True),
             User.merged_into_id.is_(None),
-            or_(User.first_name.ilike(like), User.last_name.ilike(like)),
+            flexible_name_filter(q, include_email=False),
         )
         .order_by(User.id)
         .limit(20)

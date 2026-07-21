@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import or_, select
+from sqlalchemy import select
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.db import SessionLocal
@@ -10,6 +10,7 @@ from app.models.enums import ClaimStatus, UserRole
 from app.models.guest_claim import GuestClaim
 from app.models.user import User
 from app.services.guest_service import merge_guest_into
+from app.services.name_search import flexible_name_filter
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
 
@@ -115,18 +116,10 @@ async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
         )
         search_results: list[User] = []
         if search_for is not None and q:
-            like = f"%{q}%"
             search_results = list(
                 await session.scalars(
                     select(User)
-                    .where(
-                        User.is_guest.is_(False),
-                        or_(
-                            User.first_name.ilike(like),
-                            User.last_name.ilike(like),
-                            User.email.ilike(like),
-                        ),
-                    )
+                    .where(User.is_guest.is_(False), flexible_name_filter(q))
                     .order_by(User.id)
                     .limit(10)
                 )

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
@@ -10,6 +10,7 @@ from app.models.enums import UserRole
 from app.models.event import Event
 from app.models.user import User
 from app.services.csv_import_service import import_attendance_csv
+from app.services.name_search import flexible_name_filter
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-moderation"], include_in_schema=False)
 
@@ -122,17 +123,10 @@ async def moderation_page(request: Request) -> HTMLResponse | RedirectResponse:
 
         search_results: list[User] = []
         if search_for is not None and q:
-            like = f"%{q}%"
             search_results = list(
                 await session.scalars(
                     select(User)
-                    .where(
-                        or_(
-                            User.first_name.ilike(like),
-                            User.last_name.ilike(like),
-                            User.email.ilike(like),
-                        )
-                    )
+                    .where(flexible_name_filter(q))
                     .order_by(User.id)
                     .limit(10)
                 )
@@ -185,18 +179,7 @@ async def runners_lookup(request: Request) -> HTMLResponse | RedirectResponse:
     async with SessionLocal() as session:
         stmt = select(User).order_by(User.id).limit(100)
         if q:
-            like = f"%{q}%"
-            stmt = (
-                select(User)
-                .where(
-                    or_(
-                        User.first_name.ilike(like),
-                        User.last_name.ilike(like),
-                        User.email.ilike(like),
-                    )
-                )
-                .limit(100)
-            )
+            stmt = select(User).where(flexible_name_filter(q)).limit(100)
         users = list(await session.scalars(stmt))
     return templates.TemplateResponse(
         request, "runners.html", {"active": "runners", "tools_user": user, "users": users, "q": q}
