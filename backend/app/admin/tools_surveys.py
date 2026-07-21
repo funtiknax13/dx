@@ -9,7 +9,11 @@ from app.core.db import SessionLocal
 from app.models.enums import UserRole
 from app.models.survey import Survey, SurveyQuestion, SurveyResponse
 from app.models.user import User
-from app.services.survey_service import export_responses_csv, question_answer_pairs
+from app.services.survey_service import (
+    export_responses_csv,
+    mark_responses_viewed,
+    question_answer_pairs,
+)
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-surveys"], include_in_schema=False)
 
@@ -230,6 +234,8 @@ async def survey_responses(request: Request, survey_id: int) -> HTMLResponse | R
             }
             for r in responses
         ]
+        await mark_responses_viewed(session, survey_id)
+        await session.commit()
     return templates.TemplateResponse(
         request,
         "survey_responses.html",

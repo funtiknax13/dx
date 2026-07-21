@@ -11,6 +11,7 @@ from app.api import (
     rating,
     results,
     signups,
+    support,
     surveys,
     users,
 )
@@ -28,3 +29,4 @@ api_router.include_router(leaderboard.router)
 api_router.include_router(guests.router)
 api_router.include_router(baselines.router)
 api_router.include_router(surveys.router)
+api_router.include_router(support.router)

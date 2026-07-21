@@ -340,3 +340,27 @@ export interface Survey {
   description?: string | null
   questions: SurveyQuestion[]
 }
+
+export type TicketStatus = 'open' | 'closed'
+
+export interface SupportTicketSummary {
+  id: number
+  status: TicketStatus
+  created_at: string
+  preview: string
+  has_unread: boolean
+}
+
+export interface SupportMessage {
+  id: number
+  is_staff: boolean
+  body: string
+  created_at: string
+}
+
+export interface SupportTicketDetail {
+  id: number
+  status: TicketStatus
+  created_at: string
+  messages: SupportMessage[]
+}

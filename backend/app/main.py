@@ -17,6 +17,7 @@ from app.admin.tools_events import router as tools_events_router
 from app.admin.tools_groups import router as tools_groups_router
 from app.admin.tools_guests import router as tools_guests_router
 from app.admin.tools_results import router as tools_results_router
+from app.admin.tools_support import router as tools_support_router
 from app.admin.tools_surveys import router as tools_surveys_router
 from app.admin.views import ALL_VIEWS
 from app.api.router import api_router
@@ -64,6 +65,7 @@ app.include_router(tools_results_router)
 app.include_router(tools_guests_router)
 app.include_router(tools_baselines_router)
 app.include_router(tools_surveys_router)
+app.include_router(tools_support_router)
 app.include_router(moderation_router)
 
 # Serve uploaded media in dev (in prod nginx serves /media directly).

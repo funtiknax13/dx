@@ -55,3 +55,11 @@ class PriorExperience(enum.StrEnum):
     never = "never"
     once = "once"
     multiple = "multiple"
+
+
+class TicketStatus(enum.StrEnum):
+    """A ticket reopens on its own the moment the reporter (not staff) sends
+    a new message on a closed one — see support_service.add_message."""
+
+    open = "open"
+    closed = "closed"

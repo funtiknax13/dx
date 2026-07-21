@@ -51,6 +51,9 @@
     .field input, .field select, .field textarea { width: 100%; max-width: 480px; }
     .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     img { max-width: 100%; }
+    .nav-badge { display: inline-block; min-width: 16px; padding: 1px 5px; border-radius: 9px; font-size: 11px; font-weight: 700; text-align: center; color: #fff; vertical-align: middle; }
+    .nav-badge-red { background: #dc2626; }
+    .nav-badge-blue { background: #2563eb; }
 
     @media (max-width: 760px) {
       .nav-toggle { display: inline-block; }
@@ -80,6 +83,7 @@
       <nav>
         <a href="/admin-tools" class="{{ 'active' if active == 'dashboard' }}">Дашборд</a>
         <a href="/admin-tools/events" class="{{ 'active' if active == 'events' }}">События</a>
+        <a href="/admin-tools/support" class="{{ 'active' if active == 'support' }}">Поддержка <span id="badge-tickets" class="nav-badge nav-badge-red" style="display:none;" title="Непрочитанные тикеты поддержки"></span></a>
         {% if tools_user and tools_user.role.value == 'admin' %}
         <a href="/admin-tools/import" class="{{ 'active' if active == 'import' }}">Импорт CSV</a>
         <a href="/admin-tools/import-baselines" class="{{ 'active' if active == 'import-baselines' }}">Стартовые данные</a>
@@ -87,7 +91,7 @@
         <a href="/admin-tools/guests" class="{{ 'active' if active == 'guests' }}">Гости</a>
         <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты</a>
         <a href="/admin-tools/moderation" class="{{ 'active' if active == 'moderation' }}">Без сопоставления</a>
-        <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты</a>
+        <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты <span id="badge-surveys" class="nav-badge nav-badge-blue" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
         <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
         {% endif %}
       </nav>
@@ -130,6 +134,27 @@
         table.parentNode.insertBefore(wrap, table);
         wrap.appendChild(table);
       });
+
+      // Unread counts for the nav badges — one lightweight JSON call rather
+      // than threading an async DB query through every route's template
+      // context (Jinja2 context processors here run synchronously).
+      var ticketsBadge = document.getElementById('badge-tickets');
+      var surveysBadge = document.getElementById('badge-surveys');
+      if (ticketsBadge || surveysBadge) {
+        fetch('/admin-tools/badge-counts', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (ticketsBadge && data.tickets > 0) {
+              ticketsBadge.textContent = data.tickets;
+              ticketsBadge.style.display = 'inline-block';
+            }
+            if (surveysBadge && data.surveys > 0) {
+              surveysBadge.textContent = data.surveys;
+              surveysBadge.style.display = 'inline-block';
+            }
+          })
+          .catch(function () {});
+      }
     })();
   </script>
 </body>

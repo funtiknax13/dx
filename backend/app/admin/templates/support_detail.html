@@ -1,0 +1,48 @@
+{% extends "_base.html" %}
+{% block title %}Тикет #{{ ticket.id }} — DH Admin Tools{% endblock %}
+{% block content %}
+  <div class="row-between">
+    <h1>Тикет #{{ ticket.id }}</h1>
+    <form method="post" action="/admin-tools/support/{{ ticket.id }}/status">
+      <button type="submit" class="secondary">
+        {{ 'Закрыть тикет' if ticket.status.value == 'open' else 'Открыть заново' }}
+      </button>
+    </form>
+  </div>
+  <p class="hint">
+    {% if ticket.created_by %}
+      {{ ticket.created_by.first_name }} {{ ticket.created_by.last_name }} — {{ ticket.created_by.email }}
+      {% if ticket.created_by.is_guest %}(гостевой профиль){% endif %}
+    {% else %}
+      {{ ticket.guest_name or 'Аноним' }} — без аккаунта{{ ', контакт: ' + ticket.guest_contact if ticket.guest_contact }}
+    {% endif %}
+    · статус: {{ 'открыт' if ticket.status.value == 'open' else 'закрыт' }}
+  </p>
+
+  <div class="card">
+    {% for m in ticket.messages %}
+    <div style="margin-bottom:14px;padding:10px 12px;border-radius:6px;background:{{ '#eff6ff' if m.is_staff else '#f9fafb' }};">
+      <div class="hint">{{ 'Поддержка' if m.is_staff else 'Обратившийся' }} · {{ m.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+      <div style="white-space:pre-wrap;">{{ m.body }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if ticket.created_by_user_id %}
+  <div class="card">
+    <h2>Ответить</h2>
+    <form method="post" action="/admin-tools/support/{{ ticket.id }}/reply">
+      <div class="field">
+        <textarea name="body" rows="4" required></textarea>
+      </div>
+      <button type="submit">Отправить</button>
+    </form>
+    <p class="hint">Бегуну придёт письмо со ссылкой на этот тикет.</p>
+  </div>
+  {% else %}
+  <div class="hint">
+    У этого обращения нет аккаунта — ответить в приложении нельзя. Свяжитесь
+    напрямую по указанному контакту, если он есть.
+  </div>
+  {% endif %}
+{% endblock %}

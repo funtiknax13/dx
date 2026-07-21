@@ -2,7 +2,7 @@ import csv
 import io
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
@@ -157,3 +157,26 @@ async def question_answer_pairs(
         )
     }
     return [(q, answers.get(q.id, "")) for q in questions]
+
+
+async def mark_responses_viewed(session: AsyncSession, survey_id: int) -> None:
+    """Called when staff opens a survey's responses list — a shared "team
+    inbox" read state (any staff member viewing clears it for everyone),
+    same pattern as SupportMessage.read_at. Drives the admin-tools nav badge."""
+    unviewed = await session.scalars(
+        select(SurveyResponse).where(
+            SurveyResponse.survey_id == survey_id, SurveyResponse.viewed_at.is_(None)
+        )
+    )
+    now = datetime.now(UTC)
+    for response in unviewed:
+        response.viewed_at = now
+
+
+async def unread_response_count(session: AsyncSession) -> int:
+    """How many survey responses (across all surveys) no staff member has
+    looked at yet — the blue admin-tools nav badge."""
+    result = await session.scalar(
+        select(func.count(SurveyResponse.id)).where(SurveyResponse.viewed_at.is_(None))
+    )
+    return result or 0

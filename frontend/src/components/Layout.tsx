@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { adminToolsUrl } from '../api/client'
+import { supportApi } from '../api/support'
 import { Avatar } from './ui/Avatar'
 import { IconMenu, IconX } from './ui/icons'
 import logoMarkSquare from '../assets/brand/logo-mark-square.png'
@@ -15,7 +16,39 @@ function isStaff(role?: string) {
 const NAV = [
   { to: '/events', label: 'События' },
   { to: '/rating', label: 'Рейтинг' },
+  { to: '/support', label: 'Поддержка' },
 ]
+
+/** Polls for unread staff replies while logged in — the "user sees if
+ * they've received a support message" requirement. A simple interval
+ * rather than websockets/SSE: support replies aren't latency-sensitive. */
+function useUnreadSupportCount(isAuthenticated: boolean): number {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCount(0)
+      return
+    }
+    let active = true
+    const check = () => {
+      supportApi
+        .unreadCount()
+        .then((res) => {
+          if (active) setCount(res.count)
+        })
+        .catch(() => {})
+    }
+    check()
+    const interval = setInterval(check, 60_000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [isAuthenticated])
+
+  return count
+}
 
 function Brand({ onClick, light = false }: { onClick?: () => void; light?: boolean }) {
   return (
@@ -38,6 +71,7 @@ export function Layout() {
   const { user, isAuthenticated, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const location = useLocation()
+  const unreadSupport = useUnreadSupportCount(isAuthenticated)
 
   useEffect(() => setOpen(false), [location.pathname])
 
@@ -58,7 +92,7 @@ export function Layout() {
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    `relative rounded-full px-4 py-2 text-sm font-semibold transition ${
                       isActive
                         ? 'bg-ink text-paper'
                         : 'text-ink-600 hover:bg-ink/[0.05] hover:text-ink'
@@ -66,6 +100,11 @@ export function Layout() {
                   }
                 >
                   {item.label}
+                  {item.to === '/support' && unreadSupport > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-signal px-1 text-[10px] font-bold text-white">
+                      {unreadSupport}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </nav>
@@ -128,12 +167,17 @@ export function Layout() {
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `rounded-xl px-4 py-3 text-base font-semibold ${
+                    `flex items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold ${
                       isActive ? 'bg-ink text-paper' : 'text-ink hover:bg-ink/[0.05]'
                     }`
                   }
                 >
                   {item.label}
+                  {item.to === '/support' && unreadSupport > 0 && (
+                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-[11px] font-bold text-white">
+                      {unreadSupport}
+                    </span>
+                  )}
                 </NavLink>
               ))}
               <div className="my-2 h-px bg-ink/10" />
@@ -215,6 +259,11 @@ function SiteFooter() {
             <li>
               <Link to="/profile" className="hover:text-paper">
                 Профиль
+              </Link>
+            </li>
+            <li>
+              <Link to="/support" className="hover:text-paper">
+                Поддержка
               </Link>
             </li>
           </ul>

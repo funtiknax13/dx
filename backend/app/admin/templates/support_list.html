@@ -1,0 +1,37 @@
+{% extends "_base.html" %}
+{% block title %}Поддержка — DH Admin Tools{% endblock %}
+{% block content %}
+  <h1>Тикеты поддержки ({{ rows|length }})</h1>
+  <p class="hint">
+    Открытые тикеты — сверху. Непрочитанное сообщение от обратившегося
+    подсвечено — как только вы откроете тикет, оно считается прочитанным
+    (для всех админов и организаторов сразу, не только для вас).
+  </p>
+
+  {% if rows %}
+  <table>
+    <thead><tr><th>Кто</th><th>Статус</th><th>Последнее сообщение</th><th></th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      {% set t = row.ticket %}
+      <tr style="{{ 'font-weight:600;' if row.unread }}">
+        <td>
+          {% if t.created_by %}
+            {{ t.created_by.first_name }} {{ t.created_by.last_name }}
+            {% if t.created_by.is_guest %}<span class="hint">(гость)</span>{% endif %}
+          {% else %}
+            {{ t.guest_name or 'Аноним' }} <span class="hint">(без аккаунта{{ ', ' + t.guest_contact if t.guest_contact }})</span>
+          {% endif %}
+          {% if row.unread %}<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;margin-left:6px;">новое</span>{% endif %}
+        </td>
+        <td>{{ 'открыт' if t.status.value == 'open' else 'закрыт' }}</td>
+        <td>{{ (row.last_message.body[:80] + '…') if row.last_message and row.last_message.body|length > 80 else (row.last_message.body if row.last_message else '') }}</td>
+        <td><a class="btn" href="/admin-tools/support/{{ t.id }}">Открыть →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Пока нет обращений.</div>
+  {% endif %}
+{% endblock %}

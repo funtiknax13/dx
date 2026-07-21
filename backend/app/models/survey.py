@@ -79,6 +79,10 @@ class SurveyResponse(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Set when any staff member opens this survey's responses list — a
+    # shared "team inbox" read state (not per-admin), same pattern as
+    # SupportMessage.read_at. Drives the admin-tools nav badge.
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     survey = relationship("Survey", back_populates="responses")
     runner = relationship("User")

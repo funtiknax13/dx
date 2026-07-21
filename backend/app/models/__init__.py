@@ -8,6 +8,7 @@ from app.models.enums import (
     PriorExperience,
     ResultSource,
     SurveyQuestionType,
+    TicketStatus,
     UserRole,
 )
 from app.models.event import Event, EventPhoto
@@ -16,6 +17,7 @@ from app.models.guest_claim import GuestClaim
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
 from app.models.signup import Signup
+from app.models.support import SupportMessage, SupportTicket
 from app.models.survey import Survey, SurveyAnswer, SurveyQuestion, SurveyResponse
 from app.models.user import User
 
@@ -34,6 +36,8 @@ __all__ = [
     "SurveyQuestion",
     "SurveyResponse",
     "SurveyAnswer",
+    "SupportTicket",
+    "SupportMessage",
     "UserRole",
     "Gender",
     "FinishStatus",
@@ -42,4 +46,5 @@ __all__ = [
     "ClaimStatus",
     "PriorExperience",
     "SurveyQuestionType",
+    "TicketStatus",
 ]

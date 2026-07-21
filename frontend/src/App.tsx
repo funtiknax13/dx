@@ -13,6 +13,8 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { SurveyPage } from './pages/SurveyPage'
+import { SupportPage } from './pages/SupportPage'
+import { SupportTicketPage } from './pages/SupportTicketPage'
 import { PublicProfilePage } from './pages/PublicProfilePage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -37,6 +39,7 @@ export default function App() {
           <Route path="/groups/:id" element={<GroupDetailPage />} />
           <Route path="/rating" element={<RatingPage />} />
           <Route path="/users/:id" element={<PublicProfilePage />} />
+          <Route path="/support" element={<SupportPage />} />
 
           {/* Auth */}
           <Route path="/login" element={<LoginPage />} />
@@ -50,6 +53,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/survey" element={<SurveyPage />} />
+            <Route path="/support/tickets/:id" element={<SupportTicketPage />} />
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />
