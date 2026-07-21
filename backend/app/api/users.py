@@ -45,7 +45,15 @@ async def get_me(user: CurrentUser) -> User:
 
 @router.patch("/me", response_model=UserMe)
 async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep) -> User:
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    # Frozen once answered — otherwise a "never ran before" runner could
+    # just switch their answer to dodge the newbie survey requirement (see
+    # survey_service.stats_locked_pending_survey). Silently ignored rather
+    # than a 400: the field is disabled client-side once set, so a request
+    # trying to change it only happens via a direct API call, not normal use.
+    if "prior_experience" in updates and user.prior_experience is not None:
+        del updates["prior_experience"]
+    for field, value in updates.items():
         setattr(user, field, value)
     await session.commit()
     await session.refresh(user)

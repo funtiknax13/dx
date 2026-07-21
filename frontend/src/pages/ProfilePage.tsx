@@ -275,6 +275,11 @@ function ProfileForm({
     (form.prior_experience === 'once' || form.prior_experience === 'multiple') &&
     !hasApprovedClaim
 
+  // Frozen server-side too (see PATCH /users/me) — disabling it here is
+  // just so the form doesn't lie about being editable; switching the
+  // answer after the fact would let someone dodge the newbie survey.
+  const priorExperienceLocked = user?.prior_experience != null
+
   // Mirrors the backend's gate (profile_completeness_service) — highlighted
   // live off the current form state, so the field clears the moment it's
   // filled in, before the user even hits "Сохранить".
@@ -375,18 +380,26 @@ function ProfileForm({
           {missing.runningClub && <p className="mt-1.5 text-xs text-signal-600">{REQUIRED_HINT}</p>}
         </div>
         {!hasApprovedClaim && (
-          <SelectField
-            label="Бегали ли вы раньше с ДАЙ ХАРD?"
-            name="prior_experience"
-            value={form.prior_experience}
-            onChange={set('prior_experience')}
-            error={missing.priorExperience ? REQUIRED_HINT : undefined}
-          >
-            <option value="">Не указано</option>
-            <option value="never">Нет, ни разу</option>
-            <option value="once">Да, один раз</option>
-            <option value="multiple">Да, несколько раз</option>
-          </SelectField>
+          <div>
+            <SelectField
+              label="Бегали ли вы раньше с ДАЙ ХАРD?"
+              name="prior_experience"
+              value={form.prior_experience}
+              onChange={set('prior_experience')}
+              disabled={priorExperienceLocked}
+              error={missing.priorExperience ? REQUIRED_HINT : undefined}
+            >
+              <option value="">Не указано</option>
+              <option value="never">Нет, ни разу</option>
+              <option value="once">Да, один раз</option>
+              <option value="multiple">Да, несколько раз</option>
+            </SelectField>
+            {priorExperienceLocked && (
+              <p className="mt-1.5 text-xs text-clay">
+                Ответ фиксируется один раз и не может быть изменён.
+              </p>
+            )}
+          </div>
         )}
         <p className="text-xs text-clay">
           Город, пол, дата рождения, телефон и беговой клуб видны только вам. В публичном профиле
