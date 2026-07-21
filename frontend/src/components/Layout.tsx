@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { adminToolsUrl } from '../api/client'
 import { supportApi } from '../api/support'
 import { Avatar } from './ui/Avatar'
-import { IconMenu, IconX } from './ui/icons'
+import { IconMail, IconMenu, IconX } from './ui/icons'
 import logoMarkSquare from '../assets/brand/logo-mark-square.png'
 import logoFullDark from '../assets/brand/logo-full-dark.png'
 import logoFullLight from '../assets/brand/logo-full-light.png'
@@ -16,7 +16,6 @@ function isStaff(role?: string) {
 const NAV = [
   { to: '/events', label: 'События' },
   { to: '/rating', label: 'Рейтинг' },
-  { to: '/support', label: 'Поддержка' },
 ]
 
 /** Polls for unread staff replies while logged in — the "user sees if
@@ -92,7 +91,7 @@ export function Layout() {
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `relative rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    `rounded-full px-4 py-2 text-sm font-semibold transition ${
                       isActive
                         ? 'bg-ink text-paper'
                         : 'text-ink-600 hover:bg-ink/[0.05] hover:text-ink'
@@ -100,17 +99,25 @@ export function Layout() {
                   }
                 >
                   {item.label}
-                  {item.to === '/support' && unreadSupport > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-signal px-1 text-[10px] font-bold text-white">
-                      {unreadSupport}
-                    </span>
-                  )}
                 </NavLink>
               ))}
             </nav>
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
+            <Link
+              to="/support"
+              title="Поддержка"
+              aria-label="Поддержка"
+              className="relative grid h-10 w-10 place-items-center rounded-full text-ink-600 transition hover:bg-ink/[0.05] hover:text-ink"
+            >
+              <IconMail width={18} height={18} />
+              {unreadSupport > 0 && (
+                <span className="absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-signal px-1 text-[10px] font-bold text-white">
+                  {unreadSupport}
+                </span>
+              )}
+            </Link>
             {isAuthenticated && user ? (
               <>
                 {isStaff(user.role) && (
@@ -173,14 +180,21 @@ export function Layout() {
                   }
                 >
                   {item.label}
-                  {item.to === '/support' && unreadSupport > 0 && (
-                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-[11px] font-bold text-white">
-                      {unreadSupport}
-                    </span>
-                  )}
                 </NavLink>
               ))}
               <div className="my-2 h-px bg-ink/10" />
+              <Link
+                to="/support"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-semibold text-ink hover:bg-ink/[0.05]"
+              >
+                <IconMail width={18} height={18} />
+                Поддержка
+                {unreadSupport > 0 && (
+                  <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-[11px] font-bold text-white">
+                    {unreadSupport}
+                  </span>
+                )}
+              </Link>
               {isAuthenticated && user ? (
                 <>
                   {isStaff(user.role) && (
