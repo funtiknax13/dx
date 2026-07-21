@@ -11,6 +11,7 @@ from app.api import (
     rating,
     results,
     signups,
+    staff,
     support,
     surveys,
     users,
@@ -30,3 +31,4 @@ api_router.include_router(guests.router)
 api_router.include_router(baselines.router)
 api_router.include_router(surveys.router)
 api_router.include_router(support.router)
+api_router.include_router(staff.router)

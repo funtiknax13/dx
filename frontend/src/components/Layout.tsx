@@ -3,8 +3,10 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { adminToolsUrl } from '../api/client'
 import { supportApi } from '../api/support'
+import { staffApi } from '../api/staff'
 import { Avatar } from './ui/Avatar'
 import { IconMail, IconMenu, IconX } from './ui/icons'
+import { plural } from '../lib/format'
 import logoMarkSquare from '../assets/brand/logo-mark-square.png'
 import logoFullDark from '../assets/brand/logo-full-dark.png'
 import logoFullLight from '../assets/brand/logo-full-light.png'
@@ -49,6 +51,46 @@ function useUnreadSupportCount(isAuthenticated: boolean): number {
   return count
 }
 
+/** Polls the same "needs a look" counts admin-tools shows as nav badges —
+ * tickets/claims/moderation — so staff notice from the main site without
+ * having to open admin-tools first (they might not visit it every day). */
+function useStaffAttentionCounts(isStaff: boolean): { total: number; tooltip: string } {
+  const [counts, setCounts] = useState({ tickets: 0, claims: 0, moderation: 0 })
+
+  useEffect(() => {
+    if (!isStaff) {
+      setCounts({ tickets: 0, claims: 0, moderation: 0 })
+      return
+    }
+    let active = true
+    const check = () => {
+      staffApi
+        .attentionCounts()
+        .then((res) => {
+          if (active) setCounts(res)
+        })
+        .catch(() => {})
+    }
+    check()
+    const interval = setInterval(check, 60_000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [isStaff])
+
+  const parts = [
+    counts.tickets > 0 && `${counts.tickets} ${plural(counts.tickets, 'новый тикет', 'новых тикета', 'новых тикетов')}`,
+    counts.claims > 0 && `${counts.claims} ${plural(counts.claims, 'заявка на объединение', 'заявки на объединение', 'заявок на объединение')}`,
+    counts.moderation > 0 && `${counts.moderation} ${plural(counts.moderation, 'результат на модерации', 'результата на модерации', 'результатов на модерации')}`,
+  ].filter(Boolean)
+
+  return {
+    total: counts.tickets + counts.claims + counts.moderation,
+    tooltip: parts.length ? parts.join(' · ') : 'Ждёт внимания',
+  }
+}
+
 function Brand({ onClick, light = false }: { onClick?: () => void; light?: boolean }) {
   return (
     <Link to="/events" onClick={onClick} className="group flex items-center gap-3">
@@ -71,6 +113,7 @@ export function Layout() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const unreadSupport = useUnreadSupportCount(isAuthenticated)
+  const attention = useStaffAttentionCounts(isStaff(user?.role))
 
   useEffect(() => setOpen(false), [location.pathname])
 
@@ -125,9 +168,15 @@ export function Layout() {
                     href={adminToolsUrl()}
                     target="_blank"
                     rel="noreferrer"
-                    className="btn-ghost btn-sm"
+                    title={attention.total > 0 ? attention.tooltip : undefined}
+                    className="btn-ghost btn-sm relative"
                   >
                     Admin Tools
+                    {attention.total > 0 && (
+                      <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-signal px-1 text-[10px] font-bold text-white">
+                        {attention.total}
+                      </span>
+                    )}
                   </a>
                 )}
                 <Link
@@ -202,9 +251,14 @@ export function Layout() {
                       href={adminToolsUrl()}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-xl px-4 py-3 text-base font-semibold text-ink hover:bg-ink/[0.05]"
+                      className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-semibold text-ink hover:bg-ink/[0.05]"
                     >
                       Admin Tools
+                      {attention.total > 0 && (
+                        <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-[11px] font-bold text-white">
+                          {attention.total}
+                        </span>
+                      )}
                     </a>
                   )}
                   <Link

@@ -54,6 +54,8 @@
     .nav-badge { display: inline-block; min-width: 16px; padding: 1px 5px; border-radius: 9px; font-size: 11px; font-weight: 700; text-align: center; color: #fff; vertical-align: middle; }
     .nav-badge-red { background: #dc2626; }
     .nav-badge-blue { background: #2563eb; }
+    .nav-badge-amber { background: #d97706; }
+    .nav-badge-purple { background: #7c3aed; }
 
     @media (max-width: 760px) {
       .nav-toggle { display: inline-block; }
@@ -87,9 +89,9 @@
         {% if tools_user and tools_user.role.value == 'admin' %}
         <a href="/admin-tools/import" class="{{ 'active' if active == 'import' }}">Импорт CSV</a>
         <a href="/admin-tools/import-baselines" class="{{ 'active' if active == 'import-baselines' }}">Стартовые данные</a>
-        <a href="/admin-tools/claims" class="{{ 'active' if active == 'claims' }}">Заявки</a>
+        <a href="/admin-tools/claims" class="{{ 'active' if active == 'claims' }}">Заявки <span id="badge-claims" class="nav-badge nav-badge-amber" style="display:none;" title="Заявки на объединение с гостевым профилем"></span></a>
         <a href="/admin-tools/guests" class="{{ 'active' if active == 'guests' }}">Гости</a>
-        <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты</a>
+        <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты <span id="badge-moderation" class="nav-badge nav-badge-purple" style="display:none;" title="Результаты, ожидающие подтверждения"></span></a>
         <a href="/admin-tools/moderation" class="{{ 'active' if active == 'moderation' }}">Без сопоставления</a>
         <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты <span id="badge-surveys" class="nav-badge nav-badge-blue" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
         <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
@@ -140,18 +142,24 @@
       // context (Jinja2 context processors here run synchronously).
       var ticketsBadge = document.getElementById('badge-tickets');
       var surveysBadge = document.getElementById('badge-surveys');
-      if (ticketsBadge || surveysBadge) {
+      var claimsBadge = document.getElementById('badge-claims');
+      var moderationBadge = document.getElementById('badge-moderation');
+      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge) {
         fetch('/admin-tools/badge-counts', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (data) {
-            if (ticketsBadge && data.tickets > 0) {
-              ticketsBadge.textContent = data.tickets;
-              ticketsBadge.style.display = 'inline-block';
-            }
-            if (surveysBadge && data.surveys > 0) {
-              surveysBadge.textContent = data.surveys;
-              surveysBadge.style.display = 'inline-block';
-            }
+            [
+              [ticketsBadge, data.tickets],
+              [surveysBadge, data.surveys],
+              [claimsBadge, data.claims],
+              [moderationBadge, data.moderation],
+            ].forEach(function (pair) {
+              var el = pair[0], count = pair[1];
+              if (el && count > 0) {
+                el.textContent = count;
+                el.style.display = 'inline-block';
+              }
+            });
           })
           .catch(function () {});
       }

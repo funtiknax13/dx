@@ -135,4 +135,4 @@ async def test_opening_ticket_detail_marks_reporter_messages_read(
 async def test_badge_counts_zero_for_anonymous(client: AsyncClient) -> None:
     resp = await client.get("/admin-tools/badge-counts")
     assert resp.status_code == 200
-    assert resp.json() == {"tickets": 0, "surveys": 0}
+    assert resp.json() == {"tickets": 0, "surveys": 0, "claims": 0, "moderation": 0}
