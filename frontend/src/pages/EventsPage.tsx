@@ -158,19 +158,22 @@ function Hero({
             беги в своём темпе и следи за прогрессом. Группы под любой уровень, маршруты, протоколы
             забегов и рейтинг активности.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {nextEvent ? (
-              <Link to={`/events/${nextEvent.id}`} className="btn-volt btn-lg">
+              <Link
+                to={`/events/${nextEvent.id}`}
+                className="btn-volt btn-lg w-full whitespace-normal text-center sm:w-auto sm:whitespace-nowrap"
+              >
                 Записаться на ближайшую тренировку
               </Link>
             ) : (
-              <a href="#events" className="btn-volt btn-lg">
+              <a href="#events" className="btn-volt btn-lg w-full text-center sm:w-auto">
                 Смотреть события
               </a>
             )}
             <a
               href="/rating"
-              className="btn btn-lg border border-paper/25 bg-transparent text-paper hover:border-paper/50 hover:bg-paper/[0.06]"
+              className="btn btn-lg w-full border border-paper/25 bg-transparent text-center text-paper hover:border-paper/50 hover:bg-paper/[0.06] sm:w-auto"
             >
               Рейтинг бегунов
             </a>
