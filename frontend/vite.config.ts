@@ -9,6 +9,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
+      workbox: {
+        // Without this, the service worker's navigation fallback intercepts
+        // *every* full-page navigation — including /admin-tools and /admin,
+        // which are server-rendered (SQLAdmin/Jinja), not part of this SPA —
+        // and serves the cached index.html instead, which React Router then
+        // 404s on since no client route matches. /api and /media are real
+        // backend responses too, excluded for the same reason even though
+        // those are normally fetch()ed rather than navigated to.
+        navigateFallbackDenylist: [/^\/admin/, /^\/api/, /^\/media/],
+      },
       manifest: {
         lang: 'ru',
         name: 'DАЙ ХАРD — беговое сообщество',
