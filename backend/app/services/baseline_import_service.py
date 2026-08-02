@@ -1,7 +1,7 @@
 import csv
 import io
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ class BaselineImportResult:
     updated: int
     skipped_empty: int
     skipped_invalid_number: int
+    skipped_invalid_date: int
     auto_matched: int
     guests_created: int
     guests_reused: int
@@ -56,13 +57,19 @@ def _parse_nullable_int(raw: str | None) -> tuple[int | None, bool]:
 
 
 def _parse_date(raw: str | None) -> tuple[date | None, bool]:
-    """(value, is_valid) — blank is valid (nothing provided); a non-blank
-    string that doesn't parse as YYYY-MM-DD is invalid."""
+    """(value, is_valid) — blank is valid (nothing provided). Accepts ISO
+    (YYYY-MM-DD) and Russian-locale (DD.MM.YYYY) — the latter is what Excel
+    produces by default under a Russian locale, which is how this column is
+    actually filled in practice."""
     value = (raw or "").strip()
     if not value:
         return None, True
     try:
         return date.fromisoformat(value), True
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(value, "%d.%m.%Y").date(), True
     except ValueError:
         return None, False
 
@@ -70,7 +77,7 @@ def _parse_date(raw: str | None) -> tuple[date | None, bool]:
 async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> BaselineImportResult:
     """Parse a `;`-delimited CSV of admin-entered carry-over stats (columns:
     first_name, last_name required; dx_count, total_runs, total_km,
-    first_run_date (YYYY-MM-DD), dx_count_this_year, km_this_year,
+    first_run_date (YYYY-MM-DD or DD.MM.YYYY — see _parse_date), dx_count_this_year, km_this_year,
     baseline_year, email optional, missing/blank numbers default to 0 except
     baseline_year which defaults to unset/None) and upsert one RunnerBaseline
     per row. dx_count_this_year/km_this_year are a *subset* of dx_count/
@@ -110,6 +117,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     updated = 0
     skipped_empty = 0
     skipped_invalid_number = 0
+    skipped_invalid_date = 0
     auto_matched = 0
     guests_created = 0
     guests_reused = 0
@@ -136,11 +144,16 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         baseline_year, baseline_year_valid = _parse_nullable_int(
             row.get(baseline_year_col) if baseline_year_col else None
         )
+        if not first_run_date_valid:
+            # Checked separately from the numeric fields below — a bad date
+            # isn't a bad number, and conflating them in one counter is
+            # exactly what made this failure mode hard to diagnose before.
+            skipped_invalid_date += 1
+            continue
         if (
             dx_count is None
             or total_runs is None
             or total_km is None
-            or not first_run_date_valid
             or dx_count_this_year is None
             or km_this_year is None
             or not baseline_year_valid
@@ -192,6 +205,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         updated=updated,
         skipped_empty=skipped_empty,
         skipped_invalid_number=skipped_invalid_number,
+        skipped_invalid_date=skipped_invalid_date,
         auto_matched=auto_matched,
         guests_created=guests_created,
         guests_reused=guests_reused,

@@ -100,6 +100,7 @@
     <p>Создано новых гостевых профилей: {{ result.guests_created }}</p>
     <p>Пропущено пустых строк: {{ result.skipped_empty }}</p>
     <p>Пропущено — число не распозналось: {{ result.skipped_invalid_number }}</p>
+    <p>Пропущено — дата не распозналась (ожидается ГГГГ-ММ-ДД или ДД.ММ.ГГГГ): {{ result.skipped_invalid_date }}</p>
     <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
   </div>
   {% endif %}

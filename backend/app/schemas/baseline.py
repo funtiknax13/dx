@@ -6,6 +6,7 @@ class BaselineCsvImportResponse(BaseModel):
     updated: int
     skipped_empty: int
     skipped_invalid_number: int
+    skipped_invalid_date: int
     auto_matched: int
     guests_created: int
     guests_reused: int

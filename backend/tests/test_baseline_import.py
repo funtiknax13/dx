@@ -154,7 +154,25 @@ async def test_import_invalid_first_run_date_is_skipped(session: AsyncSession) -
     await session.commit()
 
     assert result.created == 0
-    assert result.skipped_invalid_number == 1
+    assert result.skipped_invalid_date == 1
+    assert result.skipped_invalid_number == 0
+
+
+@pytest.mark.asyncio
+async def test_import_first_run_date_accepts_russian_locale_format(
+    session: AsyncSession,
+) -> None:
+    """Excel under a Russian locale exports dates as DD.MM.YYYY by default —
+    the actual real-world format admins paste in, not just ISO."""
+    csv = "first_name;last_name;first_run_date\nDave;Runner;06.09.2020\n"
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.created == 1
+    assert result.skipped_invalid_date == 0
+    baseline = await session.scalar(select(RunnerBaseline))
+    assert baseline is not None
+    assert baseline.first_run_date == date(2020, 9, 6)
 
 
 @pytest.mark.asyncio

@@ -26,6 +26,7 @@ async def import_csv(
         updated=result.updated,
         skipped_empty=result.skipped_empty,
         skipped_invalid_number=result.skipped_invalid_number,
+        skipped_invalid_date=result.skipped_invalid_date,
         auto_matched=result.auto_matched,
         guests_created=result.guests_created,
         guests_reused=result.guests_reused,
