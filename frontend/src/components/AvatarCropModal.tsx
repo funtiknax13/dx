@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Spinner } from './ui/Spinner'
 
 // Square viewport (CSS px) the user frames the photo inside, and the size of
@@ -120,7 +121,7 @@ export function AvatarCropModal({ file, busy = false, error, onCancel, onConfirm
     return () => window.removeEventListener('keydown', onKey)
   }, [busy, onCancel])
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-ink/60 p-4"
       onPointerDown={(e) => {
@@ -202,6 +203,7 @@ export function AvatarCropModal({ file, busy = false, error, onCancel, onConfirm
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

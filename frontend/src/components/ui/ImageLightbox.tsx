@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Props {
   src: string
@@ -8,7 +9,11 @@ interface Props {
 }
 
 /** Full-screen enlarged view of a single image (e.g. an avatar) — click the
- * backdrop or press Escape to close. */
+ * backdrop or press Escape to close.
+ *
+ * Rendered through a portal to <body>: a `position: fixed` overlay is contained
+ * by any ancestor with a `transform` (e.g. the rating podium's hover
+ * translate), which would confine and flicker it — the portal escapes that. */
 export function ImageLightbox({ src, alt = '', caption, onClose }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -23,7 +28,7 @@ export function ImageLightbox({ src, alt = '', caption, onClose }: Props) {
     }
   }, [onClose])
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] grid place-items-center bg-ink/85 p-6"
       onClick={onClose}
@@ -48,6 +53,7 @@ export function ImageLightbox({ src, alt = '', caption, onClose }: Props) {
           Закрыть
         </button>
       </figure>
-    </div>
+    </div>,
+    document.body,
   )
 }
