@@ -29,7 +29,7 @@ from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
     delete_media,
-    save_image,
+    save_avatar,
 )
 from app.services.profile_completeness_service import stats_access_lock
 from app.services.rating_service import runner_finished_count
@@ -74,7 +74,7 @@ async def change_password(
 @router.post("/me/avatar", response_model=UserMe)
 async def upload_avatar(user: CurrentUser, session: SessionDep, file: UploadFile) -> User:
     try:
-        path = await save_image(file, "avatars")
+        path = await save_avatar(file, "avatars")
     except (FileTooLargeError, InvalidFileTypeError) as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     delete_media(user.avatar)

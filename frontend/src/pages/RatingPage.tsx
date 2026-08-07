@@ -247,7 +247,7 @@ function RatingRow({
     >
       <span className="font-display text-lg tabular text-ink-600">{e.rank}</span>
       <Link to={`/users/${e.user_id}`} className="flex min-w-0 items-center gap-3 hover:text-signal">
-        <Avatar first={e.first_name} last={e.last_name} src={e.avatar_url} size="sm" />
+        <Avatar first={e.first_name} last={e.last_name} src={e.avatar_url} size="sm" zoomable />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5 truncate font-semibold text-ink">
             {fullName(e.first_name, e.last_name)}
@@ -308,6 +308,7 @@ function Podium({ entries, myId }: { entries: DisplayEntry[]; myId?: number }) {
               src={e.avatar_url}
               size="lg"
               className={`ring-2 ${rings[i]}`}
+              zoomable
             />
             <h3 className="mt-3 flex items-center gap-1.5 font-display text-lg leading-tight text-ink group-hover:text-signal">
               {fullName(e.first_name, e.last_name)}

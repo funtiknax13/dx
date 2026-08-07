@@ -8,6 +8,7 @@ import { ApiError } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, formatTime, fullName } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
+import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
@@ -156,14 +157,19 @@ function AvatarUploader() {
   const { user, setUser } = useAuth()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  // The picked file waits here while the user frames the crop in the modal.
+  const [pending, setPending] = useState<File | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const upload = async (file: File) => {
     setBusy(true)
+    setError(null)
     try {
       const updated = await usersApi.uploadAvatar(file)
       setUser(updated)
-    } catch {
-      /* surfaced by disabled state resetting */
+      setPending(null)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось загрузить фото')
     } finally {
       setBusy(false)
     }
@@ -197,7 +203,10 @@ function AvatarUploader() {
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0]
-          if (f) void upload(f)
+          if (f) {
+            setError(null)
+            setPending(f)
+          }
           e.target.value = ''
         }}
       />
@@ -205,6 +214,20 @@ function AvatarUploader() {
         <p className="mt-1.5 max-w-[6rem] text-center text-[0.65rem] text-signal-600">
           Нужно для рейтинга
         </p>
+      )}
+      {pending && (
+        <AvatarCropModal
+          file={pending}
+          busy={busy}
+          error={error}
+          onCancel={() => {
+            if (!busy) {
+              setPending(null)
+              setError(null)
+            }
+          }}
+          onConfirm={(cropped) => void upload(cropped)}
+        />
       )}
     </div>
   )
@@ -706,7 +729,7 @@ function GuestClaimSection() {
                 className="flex items-center justify-between rounded-xl border border-ink/[0.08] bg-white p-3"
               >
                 <span className="flex items-center gap-3">
-                  <Avatar first={g.first_name} last={g.last_name} src={g.avatar_url} size="sm" />
+                  <Avatar first={g.first_name} last={g.last_name} src={g.avatar_url} size="sm" zoomable />
                   <span className="font-semibold text-ink">
                     {g.first_name} {g.last_name}
                   </span>

@@ -10,6 +10,7 @@ from PIL import Image, ImageOps
 from app.core.config import settings
 
 THUMBNAIL_SIZE = (480, 480)
+AVATAR_SIZE = (512, 512)
 _PIL_FORMAT_BY_EXT = {".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG", ".webp": "WEBP"}
 
 
@@ -21,10 +22,17 @@ class InvalidFileTypeError(ValueError):
     pass
 
 
+def _too_large_message(max_bytes: int) -> str:
+    mb = max_bytes / (1024 * 1024)
+    # Whole megabytes render without a trailing ".0" (10 МБ, not 10.0 МБ).
+    mb_text = f"{mb:g}"
+    return f"Файл больше {mb_text} МБ"
+
+
 async def _read_limited(upload: UploadFile, max_bytes: int) -> bytes:
     content = await upload.read()
     if len(content) > max_bytes:
-        raise FileTooLargeError(f"File exceeds maximum size of {max_bytes} bytes")
+        raise FileTooLargeError(_too_large_message(max_bytes))
     return content
 
 
@@ -62,6 +70,31 @@ def _make_thumbnail(content: bytes, ext: str) -> bytes:
     return buf.getvalue()
 
 
+async def save_avatar(upload: UploadFile, subdir: str) -> str:
+    """Save a profile avatar as a centered square.
+
+    Fixes two things the plain `save_image` doesn't: phone photos carry EXIF
+    orientation (so a portrait shot would otherwise show sideways), and a
+    non-square source would be cropped by the CSS circle wherever it lands —
+    here we center-crop to a square once, so the face stays put everywhere the
+    avatar is shown.
+    """
+    ext = _ext(upload.filename)
+    if ext not in settings.allowed_image_extensions:
+        raise InvalidFileTypeError("Image must be jpg, jpeg, png or webp")
+    content = await _read_limited(upload, settings.max_image_size_bytes)
+
+    image = ImageOps.exif_transpose(Image.open(io.BytesIO(content)))
+    fmt = _PIL_FORMAT_BY_EXT[ext]
+    if fmt == "JPEG" and image.mode != "RGB":
+        image = image.convert("RGB")
+    # ImageOps.fit scales + center-crops to exactly AVATAR_SIZE.
+    square = ImageOps.fit(image, AVATAR_SIZE, method=Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    square.save(buf, format=fmt, quality=85)
+    return _save_bytes(buf.getvalue(), subdir, ext)
+
+
 async def save_image_with_thumbnail(upload: UploadFile, subdir: str) -> tuple[str, str]:
     """Save the original image plus a resized copy under `{subdir}/thumbs`.
 
@@ -93,9 +126,7 @@ def save_track_bytes(content: bytes, ext: str, subdir: str) -> str:
     if ext not in settings.allowed_track_extensions:
         raise InvalidFileTypeError("Track file must be .gpx or .fit")
     if len(content) > settings.max_track_file_size_bytes:
-        raise FileTooLargeError(
-            f"File exceeds maximum size of {settings.max_track_file_size_bytes} bytes"
-        )
+        raise FileTooLargeError(_too_large_message(settings.max_track_file_size_bytes))
     return _save_bytes(content, subdir, ext)
 
 

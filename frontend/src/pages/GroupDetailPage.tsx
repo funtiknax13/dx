@@ -250,7 +250,7 @@ function SignupRosterCard({ roster }: { roster: SignupRoster }) {
           const [first, ...rest] = entry.display_name.split(' ')
           return (
             <li key={entry.signup_id} className="flex items-center gap-2">
-              <Avatar first={first} last={rest.join(' ')} src={entry.avatar_url} size="sm" />
+              <Avatar first={first} last={rest.join(' ')} src={entry.avatar_url} size="sm" zoomable />
               <span className="text-sm text-ink-700">{entry.display_name}</span>
             </li>
           )

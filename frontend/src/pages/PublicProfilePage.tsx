@@ -87,6 +87,7 @@ export function PublicProfilePage() {
               src={data.avatar_url}
               size="xl"
               className="ring-2 ring-paper/20"
+              zoomable
             />
             <div>
               <span className="font-mono text-xs uppercase tracking-[0.2em] text-volt">

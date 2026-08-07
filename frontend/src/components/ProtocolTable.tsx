@@ -34,6 +34,7 @@ function RunnerCell({ row }: { row: ProtocolRow }) {
         last={name.split(' ')[1]}
         src={row.avatar_url}
         size="sm"
+        zoomable
       />
       <span className="min-w-0">
         <span className="flex items-center gap-1.5">
