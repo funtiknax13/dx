@@ -31,9 +31,18 @@ def render_email_html(template_name: str, **context: object) -> str:
     return _env.get_template(template_name).render(**context)
 
 
+# TEMPORARY (deliverability testing): send plain-text only and retry once on
+# failure. HTML is a stronger spam signal, so we're checking whether a bare
+# text message gets past Yandex's outbound filter. html_body is kept in the
+# signature so re-enabling the HTML alternative is a one-line change. If this
+# doesn't reliably deliver to external domains, the real fix is a transactional
+# email provider (see the send failures logged here).
+_SEND_ATTEMPTS = 2
+
+
 async def send_email(to: str, subject: str, text_body: str, html_body: str) -> None:
-    """Send a text+HTML email, or log the text part to stdout when
-    EMAIL_BACKEND=console (dev default)."""
+    """Send a plain-text email, or log it to stdout when EMAIL_BACKEND=console
+    (dev default). Retries once on failure — see the module note above."""
     if settings.email_backend == "console":
         logger.info(
             "\n--- EMAIL (console backend) ---\nTo: %s\nSubject: %s\n\n%s\n"
@@ -49,16 +58,24 @@ async def send_email(to: str, subject: str, text_body: str, html_body: str) -> N
     message["To"] = to
     message["Subject"] = subject
     message.set_content(text_body)
-    message.add_alternative(html_body, subtype="html")
 
-    await aiosmtplib.send(
-        message,
-        hostname=settings.smtp_host,
-        port=settings.smtp_port,
-        username=settings.smtp_username or None,
-        password=settings.smtp_password or None,
-        start_tls=True,
-    )
+    for attempt in range(1, _SEND_ATTEMPTS + 1):
+        try:
+            await aiosmtplib.send(
+                message,
+                hostname=settings.smtp_host,
+                port=settings.smtp_port,
+                username=settings.smtp_username or None,
+                password=settings.smtp_password or None,
+                start_tls=True,
+            )
+            return
+        except Exception as exc:
+            logger.warning(
+                "Email send attempt %d/%d to %s failed: %s", attempt, _SEND_ATTEMPTS, to, exc
+            )
+            if attempt == _SEND_ATTEMPTS:
+                raise
 
 
 def build_frontend_link(path: str, token: str) -> str:
