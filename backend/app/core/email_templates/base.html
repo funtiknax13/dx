@@ -28,16 +28,19 @@
       <td align="center" style="padding: 32px 16px;">
         <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background-color:#F6F6F5; border-radius:20px; overflow:hidden;">
 
-          <!-- Header band -->
+          <!-- Header band. Logo is drawn with text, not an embedded image:
+               large inline base64 images trip Yandex/Gmail outbound spam
+               filters (554 5.7.1), which was blocking delivery to external
+               domains entirely. -->
           <tr>
-            <td class="px" style="background-color:#0E0E0D; padding: 24px 32px;">
+            <td class="px" style="background-color:#0E0E0D; padding: 26px 32px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="width:36px;">
-                    <img src="{{ logo_mark_uri }}" width="36" height="36" alt="" style="display:block; width:36px; height:36px; border-radius:9px;">
+                  <td style="width:38px; height:38px; background-color:#F7F7F5; border-radius:9px; text-align:center; vertical-align:middle;">
+                    <span style="font-family:'Montserrat','Helvetica Neue',Arial,sans-serif; font-weight:800; font-size:15px; color:#0E0E0D; letter-spacing:-0.02em;">DX</span>
                   </td>
                   <td style="padding-left:12px; vertical-align:middle;">
-                    <img src="{{ logo_full_uri }}" width="114" height="20" alt="DАЙ ХАРD" style="display:block; width:114px; height:20px;">
+                    <span style="font-family:'Montserrat','Helvetica Neue',Arial,sans-serif; font-weight:800; font-size:17px; letter-spacing:-0.01em; color:#F7F7F5;">DАЙ ХАРD</span>
                   </td>
                 </tr>
               </table>

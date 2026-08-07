@@ -1,4 +1,3 @@
-import base64
 import logging
 from email.message import EmailMessage
 from pathlib import Path
@@ -12,7 +11,6 @@ from app.core.config import settings
 logger = logging.getLogger("app.email")
 
 _TEMPLATES_DIR = Path(__file__).parent / "email_templates"
-_ASSETS_DIR = _TEMPLATES_DIR / "assets"
 _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_DIR)),
     autoescape=select_autoescape(["html"]),
@@ -29,25 +27,8 @@ def _nl2br(value: str) -> Markup:
 _env.filters["nl2br"] = _nl2br
 
 
-def _data_uri(filename: str) -> str:
-    """Base64 data URI for a brand asset — embedded directly in every email
-    rather than linked, since there's no public static-file host set up for
-    the backend yet (only /media, for user-uploaded content)."""
-    content = (_ASSETS_DIR / filename).read_bytes()
-    return f"data:image/png;base64,{base64.b64encode(content).decode('ascii')}"
-
-
-# Computed once at import time, not per-email — the files never change at runtime.
-_LOGO_MARK_URI = _data_uri("logo-mark-square.png")
-_LOGO_FULL_URI = _data_uri("logo-full-light.png")
-
-
 def render_email_html(template_name: str, **context: object) -> str:
-    return _env.get_template(template_name).render(
-        logo_mark_uri=_LOGO_MARK_URI,
-        logo_full_uri=_LOGO_FULL_URI,
-        **context,
-    )
+    return _env.get_template(template_name).render(**context)
 
 
 async def send_email(to: str, subject: str, text_body: str, html_body: str) -> None:
