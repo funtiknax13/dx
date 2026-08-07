@@ -22,6 +22,7 @@ export interface ResultData {
   moderation_status: ModerationStatus
   source: 'file' | 'manual'
   has_track?: boolean
+  screenshot_url?: string | null
 }
 
 // Raw shapes as actually returned by the backend (see backend/app/schemas/attendance.py
@@ -42,6 +43,7 @@ interface RawResult {
   finish_status: string
   status: string
   source: string
+  screenshot: string | null
   track_points: unknown[] | null
 }
 
@@ -67,6 +69,7 @@ function mapResult(raw: RawResult): ResultData {
     moderation_status: raw.status as ModerationStatus,
     source: raw.source as 'file' | 'manual',
     has_track: Boolean(raw.track_points?.length),
+    screenshot_url: raw.screenshot,
   }
 }
 
@@ -105,12 +108,18 @@ export const attendanceApi = {
   // the file upload (not a JSON body) — see backend/app/api/results.py.
   submitResultManual: async (
     attendanceId: number | string,
-    payload: { distance_km: number; duration_seconds: number; start_time?: string },
+    payload: {
+      distance_km: number
+      duration_seconds: number
+      start_time?: string
+      image?: File | null
+    },
   ) => {
     const form = new FormData()
     form.append('distance_km', String(payload.distance_km))
     form.append('duration_seconds', String(Math.round(payload.duration_seconds)))
     if (payload.start_time) form.append('start_time', payload.start_time)
+    if (payload.image) form.append('image', payload.image)
     return mapResult(await api.post<RawResult>(`/attendance/${attendanceId}/result`, form))
   },
 

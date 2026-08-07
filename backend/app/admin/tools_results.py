@@ -5,7 +5,9 @@ from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.db import SessionLocal
+from app.models.attendance import AttendanceRecord
 from app.models.enums import ModerationStatus, UserRole
+from app.models.group import Group
 from app.models.result import Result
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
@@ -25,7 +27,9 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
                 select(Result)
                 .where(Result.status == ModerationStatus.pending)
                 .options(
-                    selectinload(Result.attendance_record),
+                    selectinload(Result.attendance_record)
+                    .selectinload(AttendanceRecord.group)
+                    .selectinload(Group.event),
                 )
                 .order_by(Result.id.desc())
             )

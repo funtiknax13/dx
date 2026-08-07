@@ -16,6 +16,7 @@ from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
     delete_media,
+    save_image,
     save_track_bytes,
     save_track_file,
 )
@@ -70,9 +71,14 @@ async def _save_result(
     parsed: ParsedTrack,
     source: ResultSource,
     source_file_path: str | None,
+    screenshot_path: str | None = None,
+    update_screenshot: bool = False,
 ) -> Result:
     """Shared by file upload, manual entry, and URL import: validate the parsed
-    track, auto-check it against the group's target, and upsert the 1:1 Result."""
+    track, auto-check it against the group's target, and upsert the 1:1 Result.
+
+    `update_screenshot` toggles whether the screenshot is (re)written — a
+    re-submission that doesn't carry a new image keeps the existing one."""
     if parsed.distance_km <= 0 or parsed.duration_seconds <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Result has no distance or duration")
 
@@ -96,6 +102,11 @@ async def _save_result(
     else:
         result = Result(attendance_record_id=record.id)
         session.add(result)
+
+    if update_screenshot:
+        if result.screenshot and result.screenshot != screenshot_path:
+            delete_media(result.screenshot)
+        result.screenshot = screenshot_path
 
     result.distance_km = outcome.distance_km
     result.duration_seconds = outcome.duration_seconds
@@ -130,6 +141,9 @@ async def submit_result(
     # Manual entry is sent as multipart form fields (not a JSON body) so a single
     # endpoint can branch between a file upload and manual data. File takes priority.
     file: UploadFile | None = None,
+    # Optional screenshot (a photo of the watch/app screen) — evidence for a
+    # manual entry that has no GPX/FIT track. Ignored when a track file is sent.
+    image: UploadFile | None = None,
     distance_km: Annotated[float | None, Form()] = None,
     duration_seconds: Annotated[int | None, Form()] = None,
     start_time: Annotated[datetime | None, Form()] = None,
@@ -167,7 +181,27 @@ async def submit_result(
         )
         source = ResultSource.manual
 
-    return await _save_result(session, record, group, parsed, source, source_file_path)
+    # A screenshot only makes sense as evidence for data with no track of its
+    # own (manual entry) — skip it when a GPX/FIT file was uploaded.
+    screenshot_path: str | None = None
+    update_screenshot = False
+    if source is ResultSource.manual and image is not None and image.filename:
+        try:
+            screenshot_path = await save_image(image, "result_screenshots")
+        except (FileTooLargeError, InvalidFileTypeError) as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+        update_screenshot = True
+
+    return await _save_result(
+        session,
+        record,
+        group,
+        parsed,
+        source,
+        source_file_path,
+        screenshot_path=screenshot_path,
+        update_screenshot=update_screenshot,
+    )
 
 
 @router.post(

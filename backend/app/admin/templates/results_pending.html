@@ -4,21 +4,29 @@
   <h1>Результаты на проверке ({{ results|length }})</h1>
   <p class="hint">
     Сюда попадают результаты, которые не прошли автопроверку (файл с отклонением по
-    дистанции/времени старта) и любой ручной ввод. Для точечных правок числовых
-    полей используйте <a href="/admin">SQLAdmin → Result</a>.
+    дистанции/времени старта) и любой ручной ввод. Нажмите «Подробнее» в строке, чтобы
+    развернуть все данные результата (группа, разбор файла и т.п.). Для точечных правок
+    числовых полей используйте <a href="/admin">SQLAdmin → Result</a>.
   </p>
 
   {% if results %}
   <table>
     <thead>
-      <tr><th>Участник</th><th>Источник</th><th>Дистанция</th><th>Время</th><th>Статус</th><th></th></tr>
+      <tr><th>Участник</th><th>Событие / группа</th><th>Источник</th><th>Дистанция</th><th>Время</th><th>Статус</th><th></th></tr>
     </thead>
     <tbody>
       {% for r in results %}
+      {% set rec = r.attendance_record %}
+      {% set grp = rec.group if rec else None %}
+      {% set ev = grp.event if grp else None %}
       <tr>
-        <td>{{ r.attendance_record.raw_name if r.attendance_record else r.attendance_record_id }}</td>
+        <td>{{ rec.raw_name if rec else r.attendance_record_id }}</td>
+        <td>
+          {% if ev %}<strong>{{ ev.title }}</strong><br>{% endif %}
+          {% if grp %}<span class="hint" style="margin:0;">{{ grp.name }} · {{ grp.location }}</span>{% endif %}
+        </td>
         <td>{{ 'файл' if r.source.value == 'file' else 'вручную' }}</td>
-        <td>{{ r.distance_km }} км</td>
+        <td>{{ '%.2f'|format(r.distance_km) }} км</td>
         <td>{{ (r.duration_seconds // 3600) }}:{{ '%02d' % ((r.duration_seconds % 3600) // 60) }}:{{ '%02d' % (r.duration_seconds % 60) }}</td>
         <td>{{ 'пробежал' if r.finish_status.value == 'finished' else 'DNF' }}</td>
         <td style="white-space:nowrap;">
@@ -29,6 +37,57 @@
                 onsubmit="return confirm('Удалить этот результат?');">
             <button type="submit" class="danger">Отклонить</button>
           </form>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="7" style="background:#fafafa;">
+          <details>
+            <summary>Подробнее</summary>
+            <div class="grid" style="margin-top:12px;">
+              <div>
+                <strong>Событие / группа</strong>
+                <table style="box-shadow:none; margin-top:6px;">
+                  <tr><th>Событие</th><td>{{ ev.title if ev else '—' }}{% if ev and ev.date %} ({{ ev.date }}){% endif %}</td></tr>
+                  <tr><th>Группа</th><td>{{ grp.name if grp else '—' }}</td></tr>
+                  <tr><th>Локация</th><td>{{ grp.location if grp else '—' }}</td></tr>
+                  <tr><th>Тег дистанции</th><td>{{ grp.distance_code if grp and grp.distance_code else '—' }}</td></tr>
+                  <tr><th>Эталон, км</th><td>{{ grp.target_distance_km if grp else '—' }}</td></tr>
+                  <tr><th>Темп группы</th><td>{% if grp and grp.pace_min %}{{ grp.pace_min }}–{{ grp.pace_max }}{% else %}—{% endif %}</td></tr>
+                  <tr><th>Старт группы</th><td>{{ grp.start_time if grp and grp.start_time else '—' }}</td></tr>
+                  <tr><th>Идёт в рейтинг</th><td>{{ 'да' if grp and grp.counts_toward_rating else 'нет' }}</td></tr>
+                </table>
+              </div>
+              <div>
+                <strong>Результат</strong>
+                <table style="box-shadow:none; margin-top:6px;">
+                  <tr><th>Источник</th><td>{{ r.source.value }}</td></tr>
+                  <tr><th>Дистанция</th><td>{{ '%.3f'|format(r.distance_km) }} км</td></tr>
+                  <tr><th>Время</th><td>{{ (r.duration_seconds // 3600) }}:{{ '%02d' % ((r.duration_seconds % 3600) // 60) }}:{{ '%02d' % (r.duration_seconds % 60) }} ({{ r.duration_seconds }} с)</td></tr>
+                  <tr><th>Темп</th><td>{{ (r.pace_seconds_per_km // 60)|int }}:{{ '%02d'|format((r.pace_seconds_per_km % 60)|int) }} /км</td></tr>
+                  <tr><th>Время старта (файл)</th><td>{{ r.start_time if r.start_time else '—' }}</td></tr>
+                  <tr><th>Финиш-статус</th><td>{{ r.finish_status.value }}</td></tr>
+                  <tr><th>Модерация</th><td>{{ r.status.value }}</td></tr>
+                  <tr><th>Создан</th><td>{{ r.created_at }}</td></tr>
+                  <tr><th>Обновлён</th><td>{{ r.updated_at }}</td></tr>
+                </table>
+              </div>
+              <div>
+                <strong>Данные из файла</strong>
+                <table style="box-shadow:none; margin-top:6px;">
+                  <tr><th>Файл трека</th><td>{% if r.source_file %}<a href="{{ r.source_file }}">скачать</a>{% else %}—{% endif %}</td></tr>
+                  <tr><th>Точек трека</th><td>{{ r.track_points|length if r.track_points else 0 }}</td></tr>
+                  <tr><th>Точек профиля высоты</th><td>{{ r.elevation_profile|length if r.elevation_profile else 0 }}</td></tr>
+                  <tr><th>Телеметрия</th><td>{% if r.telemetry %}{{ r.telemetry.keys()|list|join(', ') }}{% else %}—{% endif %}</td></tr>
+                </table>
+                {% if r.screenshot %}
+                <div style="margin-top:10px;">
+                  <strong>Скриншот</strong><br>
+                  <a href="{{ r.screenshot }}"><img src="{{ r.screenshot }}" alt="Скриншот результата" style="max-width:220px; margin-top:6px; border-radius:6px;"></a>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </details>
         </td>
       </tr>
       {% endfor %}
