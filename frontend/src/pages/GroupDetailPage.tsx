@@ -133,9 +133,11 @@ export function GroupDetailPage() {
       </header>
 
       <div className="container-page grid gap-10 py-12 lg:grid-cols-[1fr_minmax(320px,380px)]">
-        {/* Protocol — primary */}
-        <section className="order-2 lg:order-1">
-          <div className="mb-5 flex items-center justify-between">
+        {/* Protocol — primary. min-w-0 so the horizontally-scrollable protocol
+            table (min-w-[420px]) scrolls inside its box instead of pushing the
+            shared mobile grid column past the viewport. */}
+        <section className="order-2 min-w-0 lg:order-1">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h2 className="font-display text-2xl sm:text-3xl">Протокол забега</h2>
             {protocol && (
               <span className="font-mono text-xs text-clay">
@@ -163,7 +165,7 @@ export function GroupDetailPage() {
         </section>
 
         {/* Route sidebar */}
-        <aside className="order-1 space-y-5 lg:order-2">
+        <aside className="order-1 min-w-0 space-y-5 lg:order-2">
           {isUpcoming && roster && roster.count > 0 && <SignupRosterCard roster={roster} />}
 
           {group.start_lat != null && group.start_lng != null && (

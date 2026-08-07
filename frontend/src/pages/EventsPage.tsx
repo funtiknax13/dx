@@ -141,7 +141,7 @@ function Hero({
       />
       <div className="stripe absolute inset-x-0 top-0 h-1.5" />
       <div className="container-page relative grid gap-10 py-16 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:items-center">
-        <div className="animate-fade-up">
+        <div className="min-w-0 animate-fade-up">
           <span className="eyebrow text-volt">
             <span className="h-1.5 w-1.5 rounded-full bg-volt" /> DАЙ ХАРD · Чебоксары ·
             #diehardcheb

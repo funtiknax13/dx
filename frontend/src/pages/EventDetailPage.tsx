@@ -123,14 +123,15 @@ export function EventDetailPage() {
       </header>
 
       <div className="container-page grid gap-12 py-12 sm:py-16 lg:grid-cols-[1fr_340px]">
-        {/* Main column */}
-        <div className="order-2 lg:order-1">
+        {/* Main column — min-w-0 so a wide child can't force the shared mobile
+            grid column past the viewport (horizontal overflow). */}
+        <div className="order-2 min-w-0 lg:order-1">
           {event.description && (
             <section className="mb-12">
               <h2 className="eyebrow mb-3">
                 <span className="h-1.5 w-1.5 rounded-full bg-signal" /> Описание
               </h2>
-              <div className="whitespace-pre-line text-base leading-relaxed text-ink-700">
+              <div className="whitespace-pre-line break-words text-base leading-relaxed text-ink-700">
                 {event.description}
               </div>
             </section>
@@ -169,7 +170,7 @@ export function EventDetailPage() {
         </div>
 
         {/* Sidebar */}
-        <aside className="order-1 lg:order-2">
+        <aside className="order-1 min-w-0 lg:order-2">
           <div className="sticky top-24 space-y-4">
             {mySignup?.signed_up && (
               <Link
@@ -187,17 +188,17 @@ export function EventDetailPage() {
             <div className="card-ink p-6">
               <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-volt">Событие</h3>
               <dl className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-4 border-b border-paper/10 pb-3">
-                  <dt className="text-paper/55">Дата</dt>
-                  <dd className="font-mono tabular">{formatDate(event.date)}</dd>
+                <div className="flex items-center justify-between gap-3 border-b border-paper/10 pb-3">
+                  <dt className="shrink-0 text-paper/55">Дата</dt>
+                  <dd className="min-w-0 text-right font-mono tabular">{formatDate(event.date)}</dd>
                 </div>
-                <div className="flex items-center justify-between gap-4 border-b border-paper/10 pb-3">
-                  <dt className="text-paper/55">Групп</dt>
-                  <dd className="font-mono tabular">{groups.length}</dd>
+                <div className="flex items-center justify-between gap-3 border-b border-paper/10 pb-3">
+                  <dt className="shrink-0 text-paper/55">Групп</dt>
+                  <dd className="min-w-0 text-right font-mono tabular">{groups.length}</dd>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-paper/55">Статус</dt>
-                  <dd className="font-mono">{past ? 'завершено' : 'предстоит'}</dd>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="shrink-0 text-paper/55">Статус</dt>
+                  <dd className="min-w-0 text-right font-mono">{past ? 'завершено' : 'предстоит'}</dd>
                 </div>
               </dl>
             </div>
