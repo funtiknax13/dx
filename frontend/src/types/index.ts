@@ -2,7 +2,7 @@
 // Kept in one place so wiring real responses later is a matter of matching shapes.
 
 export type Role = 'runner' | 'organizer' | 'admin'
-export type Gender = 'male' | 'female' | 'other'
+export type Gender = 'male' | 'female'
 export type FinishStatus = 'finished' | 'dnf'
 export type ModerationStatus = 'pending' | 'approved'
 /** Self-reported at profile completion — "have you run a DX before signing

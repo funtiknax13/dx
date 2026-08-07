@@ -327,7 +327,6 @@ function ProfileForm({
             <option value="">Не указан</option>
             <option value="male">Мужской</option>
             <option value="female">Женский</option>
-            <option value="other">Другой</option>
           </SelectField>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">

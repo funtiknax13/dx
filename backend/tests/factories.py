@@ -42,7 +42,7 @@ async def make_user(
         user.birthday = date(1990, 1, 1)
         user.avatar = "/media/avatars/test.jpg"
         user.city = "Чебоксары"
-        user.gender = Gender.other
+        user.gender = Gender.female
         user.phone = "+79990000000"
         user.running_club = ""  # "" = explicitly "not in a club", still counts as answered
         user.prior_experience = PriorExperience.multiple

@@ -10,7 +10,6 @@ class UserRole(enum.StrEnum):
 class Gender(enum.StrEnum):
     male = "male"
     female = "female"
-    other = "other"
 
 
 class FinishStatus(enum.StrEnum):
