@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 import jwt
@@ -29,6 +30,7 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger("app.auth")
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -45,18 +47,32 @@ async def register(payload: RegisterRequest, session: SessionDep) -> MessageResp
         privacy_accepted_at=datetime.now(UTC),
     )
     session.add(user)
-    await session.commit()
+    await session.flush()
 
     token = create_email_token(user.email, VERIFY)
     link = build_frontend_link("/verify-email", token)
-    await send_email(
-        user.email,
-        "Подтвердите почту — DАЙ ХАРD",
-        f"Добро пожаловать в DАЙ ХАРD, {user.first_name}!\n\n"
-        f"Подтвердите почту, чтобы начать бегать с сообществом: {link}\n\n"
-        "Если вы не регистрировались — просто проигнорируйте это письмо.",
-        render_email_html("verify_email.html", first_name=user.first_name, link=link),
-    )
+    # The account is only committed once the verification email is actually
+    # accepted for delivery — if SMTP is down/misconfigured, roll back so no
+    # unverifiable, un-loginnable account is left behind blocking a clean retry
+    # (the account can't be used without verifying anyway).
+    try:
+        await send_email(
+            user.email,
+            "Подтвердите почту — DАЙ ХАРD",
+            f"Добро пожаловать в DАЙ ХАРD, {user.first_name}!\n\n"
+            f"Подтвердите почту, чтобы начать бегать с сообществом: {link}\n\n"
+            "Если вы не регистрировались — просто проигнорируйте это письмо.",
+            render_email_html("verify_email.html", first_name=user.first_name, link=link),
+        )
+    except Exception:
+        await session.rollback()
+        logger.exception("Verification email failed for %s; rolled back", payload.email)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Не удалось отправить письмо для подтверждения почты. Попробуйте позже.",
+        ) from None
+
+    await session.commit()
     return MessageResponse(detail="Registration successful. Check your email to verify.")
 
 
@@ -111,13 +127,18 @@ async def forgot_password(payload: ForgotPasswordRequest, session: SessionDep) -
     if user is not None:
         token = create_email_token(user.email, RESET, hours=2)
         link = build_frontend_link("/reset-password", token)
-        await send_email(
-            user.email,
-            "Восстановление пароля — DАЙ ХАРD",
-            f"Ссылка для сброса пароля (действует 2 часа): {link}\n\n"
-            "Если вы не запрашивали сброс — просто проигнорируйте это письмо.",
-            render_email_html("reset_password.html", link=link),
-        )
+        # Never let an email failure change the response — it would both leak
+        # which addresses are registered (500 vs 200) and crash the request.
+        try:
+            await send_email(
+                user.email,
+                "Восстановление пароля — DАЙ ХАРD",
+                f"Ссылка для сброса пароля (действует 2 часа): {link}\n\n"
+                "Если вы не запрашивали сброс — просто проигнорируйте это письмо.",
+                render_email_html("reset_password.html", link=link),
+            )
+        except Exception:
+            logger.exception("Password-reset email failed for %s", payload.email)
     return MessageResponse(detail="If that email exists, a reset link has been sent.")
 
 

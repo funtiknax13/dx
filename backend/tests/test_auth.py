@@ -63,6 +63,31 @@ async def test_duplicate_registration_conflicts(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_registration_rolls_back_when_email_fails(
+    client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If the verification email can't be sent (e.g. SMTP down), no account is
+    left behind — otherwise it'd be unverifiable *and* block a clean retry
+    with a 409."""
+
+    async def failing_send_email(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr("app.api.auth.send_email", failing_send_email)
+
+    r = await client.post("/api/v1/auth/register", json=REGISTER)
+    assert r.status_code == 503
+
+    user = await session.scalar(select(User).where(User.email == REGISTER["email"]))
+    assert user is None  # rolled back, not orphaned
+
+    # And once email works again, the same address registers cleanly (no 409).
+    monkeypatch.undo()
+    retry = await client.post("/api/v1/auth/register", json=REGISTER)
+    assert retry.status_code == 201, retry.text
+
+
+@pytest.mark.asyncio
 async def test_login_wrong_password(client: AsyncClient) -> None:
     await client.post("/api/v1/auth/register", json=REGISTER)
     token = create_email_token(REGISTER["email"], VERIFY)
