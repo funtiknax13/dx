@@ -31,18 +31,16 @@ def render_email_html(template_name: str, **context: object) -> str:
     return _env.get_template(template_name).render(**context)
 
 
-# TEMPORARY (deliverability testing): send plain-text only and retry once on
-# failure. HTML is a stronger spam signal, so we're checking whether a bare
-# text message gets past Yandex's outbound filter. html_body is kept in the
-# signature so re-enabling the HTML alternative is a one-line change. If this
-# doesn't reliably deliver to external domains, the real fix is a transactional
-# email provider (see the send failures logged here).
-_SEND_ATTEMPTS = 2
-
-
 async def send_email(to: str, subject: str, text_body: str, html_body: str) -> None:
-    """Send a plain-text email, or log it to stdout when EMAIL_BACKEND=console
-    (dev default). Retries once on failure — see the module note above."""
+    """Send an email, or log it to stdout when EMAIL_BACKEND=console (dev
+    default).
+
+    Deliverability test: try the full HTML (multipart) message first; if the
+    server rejects it (Yandex's outbound filter dislikes HTML from a
+    low-reputation sender — 554 spam), fall back to a plain-text-only send,
+    which is a weaker spam signal. If even plain text doesn't reach external
+    domains, the real fix is a transactional email provider (see logs).
+    """
     if settings.email_backend == "console":
         logger.info(
             "\n--- EMAIL (console backend) ---\nTo: %s\nSubject: %s\n\n%s\n"
@@ -53,13 +51,14 @@ async def send_email(to: str, subject: str, text_body: str, html_body: str) -> N
         )
         return
 
-    message = EmailMessage()
-    message["From"] = settings.smtp_from
-    message["To"] = to
-    message["Subject"] = subject
-    message.set_content(text_body)
-
-    for attempt in range(1, _SEND_ATTEMPTS + 1):
+    for with_html in (True, False):
+        message = EmailMessage()
+        message["From"] = settings.smtp_from
+        message["To"] = to
+        message["Subject"] = subject
+        message.set_content(text_body)
+        if with_html:
+            message.add_alternative(html_body, subtype="html")
         try:
             await aiosmtplib.send(
                 message,
@@ -71,10 +70,9 @@ async def send_email(to: str, subject: str, text_body: str, html_body: str) -> N
             )
             return
         except Exception as exc:
-            logger.warning(
-                "Email send attempt %d/%d to %s failed: %s", attempt, _SEND_ATTEMPTS, to, exc
-            )
-            if attempt == _SEND_ATTEMPTS:
+            logger.warning("Email send failed (html=%s) to %s: %s", with_html, to, exc)
+            # with_html is False on the final (plain-text) try — nothing left.
+            if not with_html:
                 raise
 
 
