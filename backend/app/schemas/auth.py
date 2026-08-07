@@ -7,6 +7,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     accept_privacy_policy: bool
+    # Only sent once the adaptive gate has asked for it (after repeated attempts).
+    captcha_token: str | None = None
 
     @field_validator("accept_privacy_policy")
     @classmethod
@@ -19,6 +21,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    captcha_token: str | None = None
 
 
 class TokenPair(BaseModel):

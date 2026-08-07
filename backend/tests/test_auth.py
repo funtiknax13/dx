@@ -3,8 +3,15 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import VERIFY, create_email_token
 from app.models.user import User
+from app.services import rate_guard
+
+
+def _enable_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "smartcaptcha_client_key", "test-client-key")
+    monkeypatch.setattr(settings, "smartcaptcha_server_key", "test-server-key")
 
 REGISTER = {
     "first_name": "Nina",
@@ -56,10 +63,19 @@ async def test_full_auth_flow(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_duplicate_registration_conflicts(client: AsyncClient) -> None:
+async def test_duplicate_registration_does_not_leak_existing_email(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Re-registering an existing address must not reveal it's taken (email
+    enumeration): same generic 201, and no duplicate account is created."""
     await client.post("/api/v1/auth/register", json=REGISTER)
     r = await client.post("/api/v1/auth/register", json=REGISTER)
-    assert r.status_code == 409
+    assert r.status_code == 201, r.text
+
+    users = list(
+        await session.scalars(select(User).where(User.email == REGISTER["email"]))
+    )
+    assert len(users) == 1
 
 
 @pytest.mark.asyncio
@@ -122,3 +138,63 @@ async def test_registration_records_consent_timestamp(
     user = await session.scalar(select(User).where(User.email == REGISTER["email"]))
     assert user is not None
     assert user.privacy_accepted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_captcha_config_reflects_settings(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    r = await client.get("/api/v1/auth/captcha-config")
+    assert r.status_code == 200
+    assert r.json() == {"enabled": False, "client_key": None}
+
+    _enable_captcha(monkeypatch)
+    r = await client.get("/api/v1/auth/captcha-config")
+    assert r.json() == {"enabled": True, "client_key": "test-client-key"}
+
+
+@pytest.mark.asyncio
+async def test_login_gate_requires_captcha_after_repeated_failures(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rate_guard.clear_all()
+    _enable_captcha(monkeypatch)
+    monkeypatch.setattr(settings, "captcha_login_threshold", 3)
+
+    await client.post("/api/v1/auth/register", json=REGISTER)
+    token = create_email_token(REGISTER["email"], VERIFY)
+    await client.get("/api/v1/auth/verify-email", params={"token": token})
+
+    bad = {"email": REGISTER["email"], "password": "wrongpass99"}
+    for _ in range(3):
+        assert (await client.post("/api/v1/auth/login", json=bad)).status_code == 401
+
+    # Threshold reached: a token is now demanded before the attempt is judged.
+    assert (await client.post("/api/v1/auth/login", json=bad)).status_code == 428
+
+    # A valid token clears the gate — back to a normal 401 for the wrong password.
+    async def _ok(*_a: object, **_k: object) -> bool:
+        return True
+
+    monkeypatch.setattr("app.api.auth.verify_captcha", _ok)
+    r = await client.post("/api/v1/auth/login", json={**bad, "captcha_token": "solved"})
+    assert r.status_code == 401
+    rate_guard.clear_all()
+
+
+@pytest.mark.asyncio
+async def test_anonymous_support_requires_captcha_when_enabled(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enable_captcha(monkeypatch)
+    body = {"body": "Нужна помощь", "guest_name": "Гость"}
+
+    # No token from an anonymous reporter → gated.
+    assert (await client.post("/api/v1/support/tickets", json=body)).status_code == 428
+
+    async def _ok(*_a: object, **_k: object) -> bool:
+        return True
+
+    monkeypatch.setattr("app.api.support.verify_captcha", _ok)
+    r = await client.post("/api/v1/support/tickets", json={**body, "captcha_token": "solved"})
+    assert r.status_code == 201, r.text

@@ -29,6 +29,8 @@ class SupportTicketCreate(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
     guest_name: str | None = Field(default=None, max_length=150)
     guest_contact: str | None = Field(default=None, max_length=255)
+    # Required for anonymous submissions when captcha is enabled.
+    captcha_token: str | None = None
 
 
 class SupportMessageCreate(BaseModel):

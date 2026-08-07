@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { supportApi } from '../api/support'
 import { ApiError } from '../api/client'
+import { useCaptchaConfig } from '../api/captcha'
 import { useAsync } from '../lib/useAsync'
 import { PageLoader } from '../components/ui/Spinner'
+import { SmartCaptcha } from '../components/ui/SmartCaptcha'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { formatDate } from '../lib/format'
 import { IconMail, IconSpark } from '../components/ui/icons'
@@ -17,6 +19,16 @@ export function SupportPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const captcha = useCaptchaConfig()
+  // Anonymous submissions always carry a captcha (when configured); logged-in
+  // users are already accountable, so they skip it.
+  const needCaptcha = !isAuthenticated && !!captcha?.enabled && !!captcha.client_key
+
+  const handleToken = useCallback((token: string) => {
+    setCaptchaToken(token)
+    setError(null)
+  }, [])
 
   const {
     data: tickets,
@@ -33,14 +45,20 @@ export function SupportPage() {
         body,
         guest_name: isAuthenticated ? undefined : guestName,
         guest_contact: isAuthenticated ? undefined : guestContact || undefined,
+        captcha_token: captchaToken || undefined,
       })
       setBody('')
       setGuestName('')
       setGuestContact('')
+      setCaptchaToken('')
       setSuccess(true)
       reload()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось отправить обращение')
+      if (err instanceof ApiError && err.status === 428) {
+        setError('Подтвердите, что вы не робот, и повторите отправку.')
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Не удалось отправить обращение')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -109,7 +127,14 @@ export function SupportPage() {
             className="field"
           />
         </div>
-        <button type="submit" disabled={submitting} className="btn-primary">
+        {needCaptcha && captcha?.client_key && (
+          <SmartCaptcha sitekey={captcha.client_key} onToken={handleToken} />
+        )}
+        <button
+          type="submit"
+          disabled={submitting || (needCaptcha && !captchaToken)}
+          className="btn-primary"
+        >
           {submitting ? 'Отправка…' : 'Отправить'}
         </button>
       </form>

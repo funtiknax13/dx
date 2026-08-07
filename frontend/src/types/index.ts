@@ -284,11 +284,13 @@ export interface RegisterPayload {
   email: string
   password: string
   accept_privacy_policy: boolean
+  captcha_token?: string
 }
 
 export interface LoginPayload {
   email: string
   password: string
+  captcha_token?: string
 }
 
 export interface UpdateProfilePayload {

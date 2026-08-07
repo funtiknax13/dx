@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
+from app.core.config import settings
+from app.core.net import client_ip
 from app.models.support import SupportTicket
 from app.models.user import User
 from app.schemas.support import (
@@ -13,6 +15,7 @@ from app.schemas.support import (
     SupportTicketDetailOut,
     SupportTicketOut,
 )
+from app.services.captcha_service import verify_captcha
 from app.services.support_service import (
     add_message,
     create_ticket,
@@ -31,10 +34,19 @@ def _preview(ticket: SupportTicket) -> str:
 
 @router.post("/tickets", response_model=SupportTicketOut, status_code=status.HTTP_201_CREATED)
 async def create_support_ticket(
-    payload: SupportTicketCreate, user: OptionalUser, session: SessionDep
+    payload: SupportTicketCreate, request: Request, user: OptionalUser, session: SessionDep
 ) -> SupportTicketOut:
     if user is None and not (payload.guest_name or "").strip():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Укажите имя")
+    # Anonymous ticket creation is the one unauthenticated write with no other
+    # abuse signal, so it always requires a captcha (when configured). Logged-in
+    # users are already rate-limited by having an account and are skipped.
+    if (
+        user is None
+        and settings.captcha_enabled
+        and not await verify_captcha(payload.captcha_token, client_ip(request))
+    ):
+        raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, "Подтвердите, что вы не робот")
     ticket = await create_ticket(
         session,
         user=user,

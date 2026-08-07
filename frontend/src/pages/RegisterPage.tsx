@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/client'
+import { useCaptchaConfig } from '../api/captcha'
 import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
+import { SmartCaptcha } from '../components/ui/SmartCaptcha'
 import { Spinner } from '../components/ui/Spinner'
 
 export function RegisterPage() {
@@ -19,6 +21,14 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [captchaRequired, setCaptchaRequired] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const captcha = useCaptchaConfig()
+
+  const handleToken = useCallback((token: string) => {
+    setCaptchaToken(token)
+    setError(null)
+  }, [])
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -47,16 +57,18 @@ export function RegisterPage() {
         email: form.email.trim(),
         password: form.password,
         accept_privacy_policy: consent,
+        captcha_token: captchaToken || undefined,
       })
       navigate(`/verify-email?email=${encodeURIComponent(form.email.trim())}`, { replace: true })
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.status === 409
-            ? 'Пользователь с таким email уже существует'
-            : err.message
-          : 'Не удалось зарегистрироваться',
-      )
+      if (err instanceof ApiError && err.status === 428) {
+        setCaptchaRequired(true)
+        setError('Подтвердите, что вы не робот, и повторите отправку.')
+      } else {
+        setError(
+          err instanceof ApiError ? err.message : 'Не удалось зарегистрироваться',
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -157,7 +169,14 @@ export function RegisterPage() {
             <p className="mt-1.5 text-xs text-signal-600">{fieldErrors.consent}</p>
           )}
         </div>
-        <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+        {captchaRequired && captcha?.enabled && captcha.client_key && (
+          <SmartCaptcha sitekey={captcha.client_key} onToken={handleToken} />
+        )}
+        <button
+          type="submit"
+          disabled={loading || (captchaRequired && !captchaToken)}
+          className="btn-primary btn-lg w-full"
+        >
           {loading ? <Spinner className="h-5 w-5" /> : 'Зарегистрироваться'}
         </button>
       </form>

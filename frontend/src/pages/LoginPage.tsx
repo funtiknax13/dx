@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { ApiError } from '../api/client'
+import { useCaptchaConfig } from '../api/captcha'
 import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
+import { SmartCaptcha } from '../components/ui/SmartCaptcha'
 import { Spinner } from '../components/ui/Spinner'
 
 export function LoginPage() {
@@ -16,22 +18,37 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  // The captcha only appears once the server starts asking for it (429/428
+  // after repeated failures) — a normal first login never sees it.
+  const [captchaRequired, setCaptchaRequired] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const captcha = useCaptchaConfig()
+
+  const handleToken = useCallback((token: string) => {
+    setCaptchaToken(token)
+    setError(null)
+  }, [])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      await login({ email, password })
+      await login({ email, password, captcha_token: captchaToken || undefined })
       navigate(from, { replace: true })
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.status === 401 || err.status === 400
-            ? 'Неверный email или пароль'
-            : err.message
-          : 'Не удалось войти',
-      )
+      if (err instanceof ApiError && err.status === 428) {
+        setCaptchaRequired(true)
+        setError('Подтвердите, что вы не робот, и повторите вход.')
+      } else {
+        setError(
+          err instanceof ApiError
+            ? err.status === 401 || err.status === 400
+              ? 'Неверный email или пароль'
+              : err.message
+            : 'Не удалось войти',
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -76,7 +93,14 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+        {captchaRequired && captcha?.enabled && captcha.client_key && (
+          <SmartCaptcha sitekey={captcha.client_key} onToken={handleToken} />
+        )}
+        <button
+          type="submit"
+          disabled={loading || (captchaRequired && !captchaToken)}
+          className="btn-primary btn-lg w-full"
+        >
           {loading ? <Spinner className="h-5 w-5" /> : 'Войти'}
         </button>
       </form>

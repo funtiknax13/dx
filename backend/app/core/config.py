@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     result_distance_tolerance_pct: float = 10.0
     result_start_time_tolerance_minutes: int = 60
 
+    # Yandex SmartCaptcha — leave both keys empty to disable captcha entirely
+    # (dev/tests). client_key is public (rendered in the widget), server_key is
+    # secret (used to validate tokens server-side).
+    smartcaptcha_client_key: str = ""
+    smartcaptcha_server_key: str = ""
+    # Adaptive gate: a captcha is only required once an IP has this many recent
+    # failures/attempts within the window (login/register). Anonymous support
+    # tickets always require one when captcha is enabled.
+    captcha_login_threshold: int = 3
+    captcha_register_threshold: int = 3
+    captcha_attempt_window_minutes: int = 15
+
     # Email — Yandex SMTP (see .env.example for how to obtain an app password)
     email_backend: Literal["console", "smtp"] = "console"
     smtp_host: str = "smtp.yandex.ru"
@@ -54,6 +66,10 @@ class Settings(BaseSettings):
     # Initial admin bootstrap
     initial_admin_email: str = "admin@example.com"
     initial_admin_password: str = "change-me-admin-password"
+
+    @property
+    def captcha_enabled(self) -> bool:
+        return bool(self.smartcaptcha_client_key and self.smartcaptcha_server_key)
 
     @property
     def allowed_image_extensions(self) -> set[str]:
