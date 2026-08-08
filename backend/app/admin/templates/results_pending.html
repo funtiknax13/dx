@@ -64,7 +64,17 @@
                   <tr><th>Дистанция</th><td>{{ '%.3f'|format(r.distance_km) }} км</td></tr>
                   <tr><th>Время</th><td>{{ (r.duration_seconds // 3600) }}:{{ '%02d' % ((r.duration_seconds % 3600) // 60) }}:{{ '%02d' % (r.duration_seconds % 60) }} ({{ r.duration_seconds }} с)</td></tr>
                   <tr><th>Темп</th><td>{{ (r.pace_seconds_per_km // 60)|int }}:{{ '%02d'|format((r.pace_seconds_per_km % 60)|int) }} /км</td></tr>
-                  <tr><th>Время старта (файл)</th><td>{{ r.start_time if r.start_time else '—' }}</td></tr>
+                  <tr><th>Время старта (файл)</th><td>
+                    {{ r.start_time if r.start_time else '—' }}
+                    {% if r.start_time and grp and grp.start_time %}
+                      {% set delta_min = ((r.start_time - grp.start_time).total_seconds() / 60)|abs %}
+                      {% if delta_min <= start_tol_min %}
+                        <span style="color:#166534;">(Δ {{ '%.0f'|format(delta_min) }} мин, в допуске ±{{ start_tol_min }})</span>
+                      {% else %}
+                        <span style="color:#991b1b;">(Δ {{ '%.0f'|format(delta_min) }} мин, вне допуска ±{{ start_tol_min }})</span>
+                      {% endif %}
+                    {% endif %}
+                  </td></tr>
                   <tr><th>Финиш-статус</th><td>{{ r.finish_status.value }}</td></tr>
                   <tr><th>Модерация</th><td>{{ r.status.value }}</td></tr>
                   <tr><th>Создан</th><td>{{ r.created_at }}</td></tr>
@@ -74,6 +84,21 @@
               <div>
                 <strong>Данные из файла</strong>
                 <table style="box-shadow:none; margin-top:6px;">
+                  <tr><th>Дистанция по файлу</th><td>
+                    {% if r.measured_distance_km is not none %}
+                      <strong>{{ '%.3f'|format(r.measured_distance_km) }} км</strong>
+                      {% if grp and grp.target_distance_km %}
+                        {% set within = (r.measured_distance_km - grp.target_distance_km)|abs <= grp.target_distance_km * distance_tol_pct / 100 %}
+                        {% if within %}
+                          <span style="color:#166534;">(в допуске ±{{ distance_tol_pct }}%)</span>
+                        {% else %}
+                          <span style="color:#991b1b;">(вне допуска ±{{ distance_tol_pct }}% от {{ grp.target_distance_km }} км — не засчитана автоматически, в поле «Дистанция» подставлен эталон)</span>
+                        {% endif %}
+                      {% endif %}
+                    {% else %}
+                      <span class="hint" style="margin:0;">— (ручной ввод или результат до обновления)</span>
+                    {% endif %}
+                  </td></tr>
                   <tr><th>Файл трека</th><td>{% if r.source_file %}<a href="{{ r.source_file }}">скачать</a>{% else %}—{% endif %}</td></tr>
                   <tr><th>Точек трека</th><td>{{ r.track_points|length if r.track_points else 0 }}</td></tr>
                   <tr><th>Точек профиля высоты</th><td>{{ r.elevation_profile|length if r.elevation_profile else 0 }}</td></tr>

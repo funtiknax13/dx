@@ -109,6 +109,12 @@ async def _save_result(
         result.screenshot = screenshot_path
 
     result.distance_km = outcome.distance_km
+    # Keep the file's own measured distance so moderation can see what was
+    # distrusted when distance_km falls back to the group target. Manual entries
+    # have no independent measurement.
+    result.measured_distance_km = (
+        parsed.distance_km if source == ResultSource.file else None
+    )
     result.duration_seconds = outcome.duration_seconds
     result.pace_seconds_per_km = outcome.pace_seconds_per_km
     result.start_time = parsed.start_time

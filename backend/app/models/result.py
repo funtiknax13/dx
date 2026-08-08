@@ -22,6 +22,11 @@ class Result(Base, TimestampMixin):
     )
 
     distance_km: Mapped[float] = mapped_column(Float, nullable=False)
+    # Distance as actually measured in the uploaded file, preserved even when
+    # auto-validation distrusts it and falls back to the group's target for
+    # `distance_km` — lets an admin see the real discrepancy during moderation.
+    # Null for manual entries (no measurement) and results from before this shipped.
+    measured_distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     pace_seconds_per_km: Mapped[float] = mapped_column(Float, nullable=False)
 

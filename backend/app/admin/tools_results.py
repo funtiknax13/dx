@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
+from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.attendance import AttendanceRecord
 from app.models.enums import ModerationStatus, UserRole
@@ -38,7 +39,14 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
     return templates.TemplateResponse(
         request,
         "results_pending.html",
-        {"active": "results", "tools_user": user, "results": results, "flash": flash},
+        {
+            "active": "results",
+            "tools_user": user,
+            "results": results,
+            "flash": flash,
+            "distance_tol_pct": settings.result_distance_tolerance_pct,
+            "start_tol_min": settings.result_start_time_tolerance_minutes,
+        },
     )
 
 
