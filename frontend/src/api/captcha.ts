@@ -3,10 +3,9 @@ import { api } from './client'
 
 export interface CaptchaConfig {
   enabled: boolean
-  client_key: string | null
 }
 
-const DISABLED: CaptchaConfig = { enabled: false, client_key: null }
+const DISABLED: CaptchaConfig = { enabled: false }
 
 // Fetched once and reused — the config doesn't change within a session, and
 // every auth/support form would otherwise re-request it.

@@ -5,7 +5,7 @@ import { ApiError } from '../api/client'
 import { useCaptchaConfig } from '../api/captcha'
 import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
-import { SmartCaptcha } from '../components/ui/SmartCaptcha'
+import { Altcha } from '../components/ui/Altcha'
 import { Spinner } from '../components/ui/Spinner'
 
 export function LoginPage() {
@@ -22,11 +22,15 @@ export function LoginPage() {
   // after repeated failures) — a normal first login never sees it.
   const [captchaRequired, setCaptchaRequired] = useState(false)
   const [captchaToken, setCaptchaToken] = useState('')
+  // Bumped to remount the widget for a fresh token — each token is single-use
+  // (server-side replay protection), so a failed attempt needs a new one.
+  const [captchaNonce, setCaptchaNonce] = useState(0)
   const captcha = useCaptchaConfig()
 
+  // Only stores the token — must NOT clear the error, or the widget's async
+  // re-solve would wipe a "wrong password" message moments after it appears.
   const handleToken = useCallback((token: string) => {
     setCaptchaToken(token)
-    setError(null)
   }, [])
 
   const submit = async (e: FormEvent) => {
@@ -49,6 +53,9 @@ export function LoginPage() {
             : 'Не удалось войти',
         )
       }
+      // The token (if any) is now spent — refresh the widget for the next try.
+      setCaptchaToken('')
+      setCaptchaNonce((n) => n + 1)
     } finally {
       setLoading(false)
     }
@@ -93,8 +100,8 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {captchaRequired && captcha?.enabled && captcha.client_key && (
-          <SmartCaptcha sitekey={captcha.client_key} onToken={handleToken} />
+        {captchaRequired && captcha?.enabled && (
+          <Altcha key={captchaNonce} onToken={handleToken} />
         )}
         <button
           type="submit"

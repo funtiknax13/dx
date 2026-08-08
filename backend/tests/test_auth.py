@@ -10,8 +10,7 @@ from app.services import rate_guard
 
 
 def _enable_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "smartcaptcha_client_key", "test-client-key")
-    monkeypatch.setattr(settings, "smartcaptcha_server_key", "test-server-key")
+    monkeypatch.setattr(settings, "altcha_hmac_key", "test-altcha-secret")
 
 REGISTER = {
     "first_name": "Nina",
@@ -146,11 +145,53 @@ async def test_captcha_config_reflects_settings(
 ) -> None:
     r = await client.get("/api/v1/auth/captcha-config")
     assert r.status_code == 200
-    assert r.json() == {"enabled": False, "client_key": None}
+    assert r.json() == {"enabled": False}
 
     _enable_captcha(monkeypatch)
     r = await client.get("/api/v1/auth/captcha-config")
-    assert r.json() == {"enabled": True, "client_key": "test-client-key"}
+    assert r.json() == {"enabled": True}
+
+
+@pytest.mark.asyncio
+async def test_altcha_challenge_solution_roundtrip(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import hashlib
+    import json
+
+    from app.services import captcha_service
+
+    captcha_service.clear_used()
+    _enable_captcha(monkeypatch)
+
+    ch = (await client.get("/api/v1/auth/altcha-challenge")).json()
+    number = next(
+        n
+        for n in range(ch["maxnumber"] + 1)
+        if hashlib.sha256(f"{ch['salt']}{n}".encode()).hexdigest() == ch["challenge"]
+    )
+    payload = base64.b64encode(
+        json.dumps(
+            {
+                "algorithm": ch["algorithm"],
+                "challenge": ch["challenge"],
+                "number": number,
+                "salt": ch["salt"],
+                "signature": ch["signature"],
+            }
+        ).encode()
+    ).decode()
+
+    assert await captcha_service.verify_captcha(payload, None) is True
+    # A solved challenge can't be replayed.
+    assert await captcha_service.verify_captcha(payload, None) is False
+    # A forged signature is rejected.
+    captcha_service.clear_used()
+    tampered = json.loads(base64.b64decode(payload))
+    tampered["signature"] = "0" * 64
+    bad = base64.b64encode(json.dumps(tampered).encode()).decode()
+    assert await captcha_service.verify_captcha(bad, None) is False
 
 
 @pytest.mark.asyncio

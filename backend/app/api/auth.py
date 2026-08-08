@@ -31,7 +31,7 @@ from app.schemas.auth import (
     TokenPair,
 )
 from app.services import rate_guard
-from app.services.captcha_service import verify_captcha
+from app.services.captcha_service import create_challenge, verify_captcha
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
@@ -55,12 +55,14 @@ async def _require_captcha_if_gated(
 
 @router.get("/captcha-config")
 async def captcha_config() -> dict[str, object]:
-    """Public: lets the SPA render the widget with the right key, or skip it
-    entirely when captcha isn't configured."""
-    return {
-        "enabled": settings.captcha_enabled,
-        "client_key": settings.smartcaptcha_client_key or None,
-    }
+    """Public: tells the SPA whether to render the captcha widget at all."""
+    return {"enabled": settings.captcha_enabled}
+
+
+@router.get("/altcha-challenge")
+async def altcha_challenge() -> dict[str, object]:
+    """Public: a fresh proof-of-work challenge for the Altcha widget to solve."""
+    return create_challenge()
 
 
 GENERIC_REGISTER_OK = MessageResponse(

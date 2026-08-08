@@ -32,11 +32,16 @@ class Settings(BaseSettings):
     result_distance_tolerance_pct: float = 10.0
     result_start_time_tolerance_minutes: int = 60
 
-    # Yandex SmartCaptcha — leave both keys empty to disable captcha entirely
-    # (dev/tests). client_key is public (rendered in the widget), server_key is
-    # secret (used to validate tokens server-side).
-    smartcaptcha_client_key: str = ""
-    smartcaptcha_server_key: str = ""
+    # Altcha (self-hosted, proof-of-work) — no external service, no signup. Set
+    # a random secret (e.g. `openssl rand -hex 32`) to enable; leave empty to
+    # disable captcha entirely (dev/tests). This key both signs challenges and
+    # verifies solutions, so it must stay secret and stable.
+    altcha_hmac_key: str = ""
+    # Proof-of-work difficulty: the widget brute-forces a number in [0, this].
+    # Higher = more CPU cost per solve (raises the bar for bots, but also makes
+    # a phone work harder). ~50k–100k is near-instant; crank to 500k–2M for a
+    # noticeable per-attempt cost.
+    altcha_max_number: int = 100_000
     # Adaptive gate: a captcha is only required once an IP has this many recent
     # failures/attempts within the window (login/register). Anonymous support
     # tickets always require one when captcha is enabled.
@@ -69,7 +74,7 @@ class Settings(BaseSettings):
 
     @property
     def captcha_enabled(self) -> bool:
-        return bool(self.smartcaptcha_client_key and self.smartcaptcha_server_key)
+        return bool(self.altcha_hmac_key)
 
     @property
     def allowed_image_extensions(self) -> set[str]:

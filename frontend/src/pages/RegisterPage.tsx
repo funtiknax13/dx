@@ -5,7 +5,7 @@ import { ApiError } from '../api/client'
 import { useCaptchaConfig } from '../api/captcha'
 import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
-import { SmartCaptcha } from '../components/ui/SmartCaptcha'
+import { Altcha } from '../components/ui/Altcha'
 import { Spinner } from '../components/ui/Spinner'
 
 export function RegisterPage() {
@@ -23,11 +23,14 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [captchaRequired, setCaptchaRequired] = useState(false)
   const [captchaToken, setCaptchaToken] = useState('')
+  // Bumped to remount the widget for a fresh single-use token after a failure.
+  const [captchaNonce, setCaptchaNonce] = useState(0)
   const captcha = useCaptchaConfig()
 
+  // Only stores the token — clearing the error here would wipe a real error
+  // when the widget's async re-solve fires right after a failed attempt.
   const handleToken = useCallback((token: string) => {
     setCaptchaToken(token)
-    setError(null)
   }, [])
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -69,6 +72,9 @@ export function RegisterPage() {
           err instanceof ApiError ? err.message : 'Не удалось зарегистрироваться',
         )
       }
+      // Spent token — refresh the widget for the next attempt.
+      setCaptchaToken('')
+      setCaptchaNonce((n) => n + 1)
     } finally {
       setLoading(false)
     }
@@ -169,8 +175,8 @@ export function RegisterPage() {
             <p className="mt-1.5 text-xs text-signal-600">{fieldErrors.consent}</p>
           )}
         </div>
-        {captchaRequired && captcha?.enabled && captcha.client_key && (
-          <SmartCaptcha sitekey={captcha.client_key} onToken={handleToken} />
+        {captchaRequired && captcha?.enabled && (
+          <Altcha key={captchaNonce} onToken={handleToken} />
         )}
         <button
           type="submit"

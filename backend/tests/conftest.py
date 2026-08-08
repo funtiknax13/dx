@@ -12,6 +12,10 @@ os.environ["MEDIA_URL"] = "/media"
 os.environ["EMAIL_BACKEND"] = "console"
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["ADMIN_SECRET_KEY"] = "test-admin-secret"
+# Force captcha OFF regardless of any ALTCHA_HMAC_KEY in the dev .env the test
+# container also reads — tests that exercise the captcha enable it explicitly.
+# (An env var overrides the .env file, so an empty value wins.)
+os.environ["ALTCHA_HMAC_KEY"] = ""
 os.makedirs(os.environ["MEDIA_ROOT"], exist_ok=True)
 
 import pytest  # noqa: E402

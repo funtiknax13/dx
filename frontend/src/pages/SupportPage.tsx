@@ -6,7 +6,7 @@ import { ApiError } from '../api/client'
 import { useCaptchaConfig } from '../api/captcha'
 import { useAsync } from '../lib/useAsync'
 import { PageLoader } from '../components/ui/Spinner'
-import { SmartCaptcha } from '../components/ui/SmartCaptcha'
+import { Altcha } from '../components/ui/Altcha'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { formatDate } from '../lib/format'
 import { IconMail, IconSpark } from '../components/ui/icons'
@@ -20,14 +20,17 @@ export function SupportPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [captchaToken, setCaptchaToken] = useState('')
+  // Bumped to remount the widget for a fresh single-use token after each submit.
+  const [captchaNonce, setCaptchaNonce] = useState(0)
   const captcha = useCaptchaConfig()
   // Anonymous submissions always carry a captcha (when configured); logged-in
   // users are already accountable, so they skip it.
-  const needCaptcha = !isAuthenticated && !!captcha?.enabled && !!captcha.client_key
+  const needCaptcha = !isAuthenticated && !!captcha?.enabled
 
+  // Only stores the token — clearing the error here would wipe a real error
+  // when the widget's async re-solve fires right after a failed attempt.
   const handleToken = useCallback((token: string) => {
     setCaptchaToken(token)
-    setError(null)
   }, [])
 
   const {
@@ -61,6 +64,9 @@ export function SupportPage() {
       }
     } finally {
       setSubmitting(false)
+      // Whether it succeeded or failed, the token is now spent — get a fresh one.
+      setCaptchaToken('')
+      setCaptchaNonce((n) => n + 1)
     }
   }
 
@@ -127,9 +133,7 @@ export function SupportPage() {
             className="field"
           />
         </div>
-        {needCaptcha && captcha?.client_key && (
-          <SmartCaptcha sitekey={captcha.client_key} onToken={handleToken} />
-        )}
+        {needCaptcha && <Altcha key={captchaNonce} onToken={handleToken} />}
         <button
           type="submit"
           disabled={submitting || (needCaptcha && !captchaToken)}
