@@ -49,13 +49,24 @@ class Settings(BaseSettings):
     captcha_register_threshold: int = 3
     captcha_attempt_window_minutes: int = 15
 
-    # Email — Yandex SMTP (see .env.example for how to obtain an app password)
+    # Email — primary SMTP (see .env.example for how to obtain an app password)
     email_backend: Literal["console", "smtp"] = "console"
     smtp_host: str = "smtp.yandex.ru"
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from: str = "DАЙ ХАРD <no-reply@yandex.ru>"
+
+    # Fallback SMTP — used only if the primary send fails (e.g. the free
+    # provider's daily limit is hit, or it's down). Leave host empty for no
+    # fallback. Typical setup: primary = a free no-card provider with good Gmail
+    # deliverability, fallback = your personal Yandex mailbox. Set the fallback
+    # From to the fallback account's own address so its SPF/DKIM aligns.
+    smtp_fallback_host: str = ""
+    smtp_fallback_port: int = 587
+    smtp_fallback_username: str = ""
+    smtp_fallback_password: str = ""
+    smtp_fallback_from: str = ""
 
     # SQLAdmin
     admin_secret_key: str = "change-me-too"
@@ -75,6 +86,10 @@ class Settings(BaseSettings):
     @property
     def captcha_enabled(self) -> bool:
         return bool(self.altcha_hmac_key)
+
+    @property
+    def smtp_fallback_configured(self) -> bool:
+        return bool(self.smtp_fallback_host)
 
     @property
     def allowed_image_extensions(self) -> set[str]:
