@@ -1,10 +1,11 @@
 import csv
 import io
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus
@@ -33,8 +34,23 @@ class EmailMismatch:
 
 
 @dataclass
+class SelfReportConflict:
+    """A runner self-reported a result for one distance (see
+    AttendanceRecord.self_reported) but the CSV placed them in a *different*
+    distance's protocol — the two don't merge, so they'd show in both. Surfaced
+    for the admin to reconcile; not resolved automatically."""
+
+    raw_name: str
+    self_reported_code: str
+    csv_code: str
+
+
+@dataclass
 class CsvImportResult:
     created: list[AttendanceRecord]
+    # Existing records (from a previous import or a runner's self-report)
+    # matched by (runner, distance) and updated in place instead of duplicated.
+    updated: int
     skipped_duplicates: int
     skipped_empty: int
     # Row's result cell was blank — explicitly "don't process this person".
@@ -50,14 +66,11 @@ class CsvImportResult:
     # non-empty row was routed to the event's first group regardless of tag.
     fallback_used: bool
     email_mismatches: list[EmailMismatch]
+    self_report_conflicts: list[SelfReportConflict] = field(default_factory=list)
 
     @property
     def created_count(self) -> int:
         return len(self.created)
-
-
-def _normalize(name: str) -> str:
-    return " ".join(name.strip().lower().split())
 
 
 def _normalize_tag(value: str) -> str:
@@ -72,6 +85,19 @@ def _parse_tag(raw: str) -> tuple[str, FinishStatus] | None:
     if len(value) > 1 and value.endswith("N"):
         return value[:-1], FinishStatus.dnf
     return value, FinishStatus.finished
+
+
+def _family_of(group: Group) -> str:
+    """The shared-protocol identity of a group: groups with the same
+    distance_code render as one protocol, so the normalized code is their
+    common key. A group without a code stands alone (keyed by its id). Dedup
+    keys on (runner, family) so a runner appears once per shared protocol —
+    whether added by CSV or by their own pre-protocol upload."""
+    if group.distance_code:
+        code = _normalize_tag(group.distance_code)
+        if code:
+            return code
+    return f"g{group.id}"
 
 
 async def import_attendance_csv(
@@ -138,14 +164,28 @@ async def import_attendance_csv(
     fallback_group = groups[0]
     fallback_used = not tag_map
 
-    existing_rows = await session.execute(
-        select(AttendanceRecord.group_id, AttendanceRecord.raw_name).where(
-            AttendanceRecord.group_id.in_([g.id for g in groups])
+    group_by_id = {g.id: g for g in groups}
+
+    # Existing records for this event's groups, keyed by (runner, distance
+    # family). A CSV row for a runner who already has a record in that family
+    # (from a prior import or their own pre-protocol upload) updates it in place
+    # rather than creating a duplicate — that keeps the shared protocol unified.
+    existing_records = list(
+        await session.scalars(
+            select(AttendanceRecord)
+            .where(AttendanceRecord.group_id.in_(group_by_id))
+            .options(selectinload(AttendanceRecord.result))
         )
     )
-    seen_by_group: dict[int, set[str]] = defaultdict(set)
-    for group_id, name in existing_rows:
-        seen_by_group[group_id].add(_normalize(name))
+    existing_by_runner_family: dict[tuple[int, str], AttendanceRecord] = {}
+    self_reported_by_runner: dict[int, list[tuple[str, AttendanceRecord]]] = defaultdict(list)
+    for rec in existing_records:
+        if rec.runner_id is None:
+            continue
+        fam = _family_of(group_by_id[rec.group_id])
+        existing_by_runner_family[(rec.runner_id, fam)] = rec
+        if rec.self_reported:
+            self_reported_by_runner[rec.runner_id].append((fam, rec))
 
     # Every email ever seen for each account, from past AttendanceRecords —
     # used below to flag a name-only match (guest_reused/merge_redirect) whose
@@ -163,6 +203,8 @@ async def import_attendance_csv(
         known_emails[runner_id].add(email.strip().lower())
 
     created: list[AttendanceRecord] = []
+    processed_keys: set[tuple[int, str]] = set()
+    updated = 0
     skipped_duplicates = 0
     skipped_empty = 0
     skipped_no_tag = 0
@@ -172,6 +214,7 @@ async def import_attendance_csv(
     guests_reused = 0
     merged_redirects = 0
     email_mismatches: list[EmailMismatch] = []
+    self_report_conflicts: list[SelfReportConflict] = []
 
     for row in reader:
         first_name = (row.get(first_name_col) or "").strip()
@@ -191,16 +234,19 @@ async def import_attendance_csv(
         if group is None:
             skipped_unmatched_tag += 1
             continue
-
-        seen = seen_by_group[group.id]
-        key = _normalize(raw_name)
-        if key in seen:
-            skipped_duplicates += 1
-            continue
-        seen.add(key)
+        family = _family_of(group)
 
         raw_email = (row.get(email_col) or "").strip() or None if email_col else None
+        raw_phone = (row.get(phone_col) or "").strip() or None if phone_col else None
         runner, resolution = await resolve_runner_for_csv_row(session, raw_name, raw_email)
+
+        key = (runner.id, family)
+        if key in processed_keys:
+            # Same runner + distance already handled earlier in this same file.
+            skipped_duplicates += 1
+            continue
+        processed_keys.add(key)
+
         if resolution == "email_match":
             auto_matched += 1
         elif resolution == "merge_redirect":
@@ -224,20 +270,49 @@ async def import_attendance_csv(
         if raw_email:
             known_emails[runner.id].add(raw_email.strip().lower())
 
+        existing = existing_by_runner_family.get(key)
+        if existing is not None:
+            # Merge: CSV is the source of truth for finish_status and the raw
+            # fields; the runner's own uploaded Result (if any) is preserved.
+            existing.raw_name = raw_name
+            existing.raw_email = raw_email
+            existing.raw_phone = raw_phone
+            existing.finish_status = finish_status
+            existing.self_reported = False
+            if existing.result is not None:
+                existing.result.finish_status = finish_status
+            updated += 1
+            continue
+
+        # A brand-new record. If the runner self-reported a *different* distance,
+        # the two protocols won't merge — flag it for the admin.
+        for fam, _rec in self_reported_by_runner.get(runner.id, []):
+            if fam != family:
+                self_report_conflicts.append(
+                    SelfReportConflict(
+                        raw_name=raw_name,
+                        self_reported_code=fam,
+                        csv_code=family,
+                    )
+                )
+                break
+
         record = AttendanceRecord(
             group_id=group.id,
             raw_name=raw_name,
             raw_email=raw_email,
-            raw_phone=(row.get(phone_col) or "").strip() or None if phone_col else None,
+            raw_phone=raw_phone,
             runner_id=runner.id,
             finish_status=finish_status,
         )
         session.add(record)
         created.append(record)
+        existing_by_runner_family[key] = record
 
     await session.flush()
     return CsvImportResult(
         created=created,
+        updated=updated,
         skipped_duplicates=skipped_duplicates,
         skipped_empty=skipped_empty,
         skipped_no_tag=skipped_no_tag,
@@ -248,4 +323,5 @@ async def import_attendance_csv(
         merged_redirects=merged_redirects,
         fallback_used=fallback_used,
         email_mismatches=email_mismatches,
+        self_report_conflicts=self_report_conflicts,
     )

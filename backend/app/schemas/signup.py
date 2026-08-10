@@ -45,6 +45,22 @@ class MySignupEntry(BaseModel):
     start_time: datetime | None
 
 
+class AwaitingResultEntry(BaseModel):
+    """A past event the runner signed up to, for which they can still self-report
+    a result (or one is pending). Once approved it drops off — it's then in the
+    protocol / their history."""
+
+    group_id: int
+    group_name: str
+    location: str
+    event_id: int
+    event_title: str
+    event_date: date_type
+    start_time: datetime | None
+    has_result: bool
+    moderation_status: str | None  # 'pending' | 'approved' | None
+
+
 class SignupRosterEntry(BaseModel):
     signup_id: int
     runner_id: int

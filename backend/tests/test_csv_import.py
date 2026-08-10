@@ -214,9 +214,12 @@ async def test_csv_import_reuses_existing_guest_by_name(session: AsyncSession) -
     )
     await session.commit()
 
+    # Re-importing the same person updates their existing record in place
+    # (dedup by runner+distance) rather than creating a duplicate.
     assert first.guests_created == 1
     assert second.created_count == 0
-    assert second.skipped_duplicates == 1
+    assert second.updated == 1
+    assert second.guests_reused == 1
 
 
 @pytest.mark.asyncio
@@ -387,3 +390,82 @@ async def test_csv_import_event_with_no_groups_raises(session: AsyncSession) -> 
     await session.flush()
     with pytest.raises(ValueError):
         await import_attendance_csv(session, event.id, "first_name;last_name;result\nx;y;X\n")
+
+
+@pytest.mark.asyncio
+async def test_csv_import_merges_self_reported_across_pace_subgroups(
+    session: AsyncSession,
+) -> None:
+    """A runner's own pre-protocol upload (on one pace subgroup) merges with the
+    CSV row that lands on another subgroup of the same distance — one record in
+    the shared protocol, no duplicate, CSV as source of truth for finish."""
+    from app.models.enums import ModerationStatus
+    from tests.factories import make_attendance_with_result
+
+    org = await make_user(session, "org-selfmerge@example.com", UserRole.organizer)
+    event, x1 = await make_event_group(session, org, target_km=33)
+    x1.distance_code = "X-33"
+    x2 = Group(
+        event_id=event.id, location="City", name="X-33 #2",
+        target_distance_km=33, distance_code="X-33",
+    )
+    session.add(x2)
+    await session.flush()
+
+    runner = await make_user(session, "selfmerge-runner@example.com")
+    rec = await make_attendance_with_result(
+        session, x2, runner,
+        finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+    )
+    rec.self_reported = True
+    await session.commit()
+
+    res = await import_attendance_csv(
+        session, event.id,
+        f"first_name;last_name;email;result\nT;R;{runner.email};Xn\n",
+    )
+    await session.commit()
+
+    assert res.created_count == 0
+    assert res.updated == 1
+    await session.refresh(rec, attribute_names=["result"])
+    assert rec.self_reported is False
+    assert rec.finish_status == FinishStatus.dnf  # CSV wins
+    assert rec.result is not None and rec.result.finish_status == FinishStatus.dnf
+    all_recs = list(
+        await session.scalars(
+            select(AttendanceRecord).where(AttendanceRecord.runner_id == runner.id)
+        )
+    )
+    assert len(all_recs) == 1
+
+
+@pytest.mark.asyncio
+async def test_csv_import_flags_self_report_cross_distance_conflict(
+    session: AsyncSession,
+) -> None:
+    from app.models.enums import ModerationStatus
+    from tests.factories import make_attendance_with_result
+
+    org = await make_user(session, "org-cross@example.com", UserRole.organizer)
+    event_id, x1, _d1 = await _tagged_event(session, org)
+
+    runner = await make_user(session, "cross-runner@example.com")
+    rec = await make_attendance_with_result(
+        session, x1, runner,
+        finish_status=FinishStatus.finished, moderation=ModerationStatus.approved,
+    )
+    rec.self_reported = True
+    await session.commit()
+
+    # CSV puts the same runner in the D distance instead of X.
+    res = await import_attendance_csv(
+        session, event_id,
+        f"first_name;last_name;email;result\nT;R;{runner.email};D\n",
+    )
+    await session.commit()
+
+    assert res.created_count == 1
+    assert len(res.self_report_conflicts) == 1
+    assert res.self_report_conflicts[0].self_reported_code == "X-33"
+    assert res.self_report_conflicts[0].csv_code == "D-25"

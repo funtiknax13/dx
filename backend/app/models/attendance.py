@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, ForeignKey, String
+from sqlalchemy import Boolean, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -29,6 +29,11 @@ class AttendanceRecord(Base, TimestampMixin):
         default=FinishStatus.finished,
         nullable=False,
     )
+
+    # True when a runner uploaded a result for themselves *before* the protocol
+    # (CSV) existed. A later CSV import that confirms them clears this to False,
+    # so admins can tell self-reported-only participation apart.
+    self_reported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     group = relationship("Group", back_populates="attendance_records")
     runner = relationship("User", back_populates="attendance_records")

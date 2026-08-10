@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
@@ -6,10 +6,13 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.timezone import EVENT_TZ
+from app.models.attendance import AttendanceRecord
 from app.models.event import Event
 from app.models.group import Group
+from app.models.result import Result
 from app.models.signup import Signup
 from app.schemas.signup import (
+    AwaitingResultEntry,
     EventSignupState,
     GroupSignupState,
     MySignupEntry,
@@ -90,6 +93,77 @@ async def my_signups(user: CurrentUser, session: SessionDep) -> list[MySignupEnt
         )
         for s in rows
     ]
+
+
+def _event_has_started(group: Group, event: Event) -> bool:
+    now = datetime.now(EVENT_TZ)
+    if group.start_time is not None:
+        start = group.start_time
+        if start.tzinfo is None:  # SQLite (tests) drops tzinfo — stored as UTC
+            start = start.replace(tzinfo=UTC)
+        return start <= now
+    return event.date <= now.date()
+
+
+@router.get("/users/me/signups/awaiting-result", response_model=list[AwaitingResultEntry])
+async def my_awaiting_results(
+    user: CurrentUser, session: SessionDep
+) -> list[AwaitingResultEntry]:
+    """Past events the runner signed up to where they can self-report a result
+    (or it's pending) — the entry point for uploading before the CSV protocol
+    exists. Fully-approved ones drop off (they're already in the protocol)."""
+    today = datetime.now(EVENT_TZ).date()
+    signups = list(
+        await session.scalars(
+            select(Signup)
+            .join(Event, Event.id == Signup.event_id)
+            .where(Signup.runner_id == user.id, Event.date <= today)
+            .options(selectinload(Signup.group), selectinload(Signup.event))
+            .order_by(Event.date.desc())
+        )
+    )
+
+    out: list[AwaitingResultEntry] = []
+    for s in signups:
+        if not _event_has_started(s.group, s.event):
+            continue
+        # Do they already have a record (with a result) in this distance family?
+        if s.group.distance_code:
+            family_ids = list(
+                await session.scalars(
+                    select(Group.id).where(
+                        Group.event_id == s.event_id,
+                        Group.distance_code == s.group.distance_code,
+                    )
+                )
+            )
+        else:
+            family_ids = [s.group_id]
+        record = await session.scalar(
+            select(AttendanceRecord)
+            .where(
+                AttendanceRecord.group_id.in_(family_ids),
+                AttendanceRecord.runner_id == user.id,
+            )
+            .options(selectinload(AttendanceRecord.result))
+        )
+        result: Result | None = record.result if record is not None else None
+        if result is not None and result.status.value == "approved":
+            continue  # done — in the protocol already
+        out.append(
+            AwaitingResultEntry(
+                group_id=s.group_id,
+                group_name=s.group.name,
+                location=s.group.location,
+                event_id=s.event_id,
+                event_title=s.event.title,
+                event_date=s.event.date,
+                start_time=s.group.start_time,
+                has_result=result is not None,
+                moderation_status=result.status.value if result is not None else None,
+            )
+        )
+    return out
 
 
 @router.get("/groups/{group_id}/signups", response_model=SignupRoster)

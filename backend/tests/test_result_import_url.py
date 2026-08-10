@@ -37,8 +37,10 @@ async def _make_matched_attendance(
 async def test_import_url_creates_result_from_fetched_gpx(
     session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    runner = await make_user(session, "runner-importurl1@example.com")
-    record = await _make_matched_attendance(session, runner)
+    # URL import is admin-only now (runners enter results manually), so the
+    # uploader here is an admin.
+    admin = await make_user(session, "admin-importurl1@example.com", UserRole.admin)
+    record = await _make_matched_attendance(session, admin)
     await session.commit()
 
     async def fake_fetch(url: str) -> tuple[bytes, str, str]:
@@ -47,7 +49,7 @@ async def test_import_url_creates_result_from_fetched_gpx(
 
     monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
 
-    token = create_access_token(runner.id)
+    token = create_access_token(admin.id)
     resp = await client.post(
         f"/api/v1/attendance/{record.id}/result/import-url",
         headers={"Authorization": f"Bearer {token}"},
@@ -72,9 +74,9 @@ async def test_import_url_creates_result_from_fetched_gpx(
 async def test_import_url_uses_measured_distance_when_within_tolerance(
     session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    runner = await make_user(session, "runner-importurl1b@example.com")
+    admin = await make_user(session, "admin-importurl1b@example.com", UserRole.admin)
     # Target close to the GPX's real ~0.25km track so it's within tolerance.
-    record = await _make_matched_attendance(session, runner, target_km=0.25)
+    record = await _make_matched_attendance(session, admin, target_km=0.25)
     await session.commit()
 
     async def fake_fetch(url: str) -> tuple[bytes, str, str]:
@@ -82,7 +84,7 @@ async def test_import_url_uses_measured_distance_when_within_tolerance(
 
     monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
 
-    token = create_access_token(runner.id)
+    token = create_access_token(admin.id)
     resp = await client.post(
         f"/api/v1/attendance/{record.id}/result/import-url",
         headers={"Authorization": f"Bearer {token}"},
@@ -99,8 +101,8 @@ async def test_import_url_uses_measured_distance_when_within_tolerance(
 async def test_import_url_rejects_unrecognized_format(
     session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    runner = await make_user(session, "runner-importurl2@example.com")
-    record = await _make_matched_attendance(session, runner)
+    admin = await make_user(session, "admin-importurl2@example.com", UserRole.admin)
+    record = await _make_matched_attendance(session, admin)
     await session.commit()
 
     async def fake_fetch(url: str) -> tuple[bytes, str, str]:
@@ -108,7 +110,7 @@ async def test_import_url_rejects_unrecognized_format(
 
     monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
 
-    token = create_access_token(runner.id)
+    token = create_access_token(admin.id)
     resp = await client.post(
         f"/api/v1/attendance/{record.id}/result/import-url",
         headers={"Authorization": f"Bearer {token}"},
@@ -125,8 +127,8 @@ async def test_import_url_translates_fetch_error_to_400(
     """Covers the SSRF-rejection path (private IP, non-https, etc.) without
     depending on real DNS/network state in the test run — safe_fetch's own
     validation logic is covered directly in test_safe_fetch.py."""
-    runner = await make_user(session, "runner-importurl3@example.com")
-    record = await _make_matched_attendance(session, runner)
+    admin = await make_user(session, "admin-importurl3@example.com", UserRole.admin)
+    record = await _make_matched_attendance(session, admin)
     await session.commit()
 
     async def fake_fetch(url: str) -> tuple[bytes, str, str]:
@@ -134,7 +136,7 @@ async def test_import_url_translates_fetch_error_to_400(
 
     monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
 
-    token = create_access_token(runner.id)
+    token = create_access_token(admin.id)
     resp = await client.post(
         f"/api/v1/attendance/{record.id}/result/import-url",
         headers={"Authorization": f"Bearer {token}"},
@@ -194,30 +196,28 @@ async def test_import_url_forbidden_for_a_different_runner(
 
 @pytest.mark.asyncio
 async def test_resubmit_blocked_while_pending(
-    session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    session: AsyncSession, client: AsyncClient
 ) -> None:
     """A runner can't just keep re-attempting while their first submission is
-    sitting in the moderation queue — see _check_no_pending_result."""
+    sitting in the moderation queue — see _check_no_pending_result. Runners now
+    submit manually (distance + time + screenshot), so this exercises that path."""
     runner = await make_user(session, "runner-importurl7@example.com")
-    record = await _make_matched_attendance(session, runner)  # target 10km, GPX ~0.25km -> pending
+    record = await _make_matched_attendance(session, runner)
     await session.commit()
 
-    async def fake_fetch(url: str) -> tuple[bytes, str, str]:
-        return SAMPLE_GPX, "application/gpx+xml", ""
-
-    monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
     token = create_access_token(runner.id)
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {"url": "https://watch.example.com/export/abc"}
+    data = {"distance_km": "10.0", "duration_seconds": "2100"}
+    files = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
 
     first = await client.post(
-        f"/api/v1/attendance/{record.id}/result/import-url", headers=headers, json=payload
+        f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
     )
-    assert first.status_code == 201
+    assert first.status_code == 201, first.text
     assert first.json()["status"] == "pending"
 
     second = await client.post(
-        f"/api/v1/attendance/{record.id}/result/import-url", headers=headers, json=payload
+        f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
     )
     assert second.status_code == 409
     assert "проверки" in second.json()["detail"]
@@ -232,26 +232,28 @@ async def test_admin_can_resubmit_even_while_pending(
     record = await _make_matched_attendance(session, runner)
     await session.commit()
 
+    # Runner's manual submission lands in the queue (pending)…
+    runner_token = create_access_token(runner.id)
+    first = await client.post(
+        f"/api/v1/attendance/{record.id}/result",
+        headers={"Authorization": f"Bearer {runner_token}"},
+        data={"distance_km": "10.0", "duration_seconds": "2100"},
+        files={"image": ("shot.png", b"fake-image-bytes", "image/png")},
+    )
+    assert first.status_code == 201, first.text
+    result_id = first.json()["id"]
+
+    # …but an admin can still overwrite it (URL import is admin-only) despite the
+    # pending gate, reusing the same 1:1 result.
     async def fake_fetch(url: str) -> tuple[bytes, str, str]:
         return SAMPLE_GPX, "application/gpx+xml", ""
 
     monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
-    payload = {"url": "https://watch.example.com/export/abc"}
-
-    runner_token = create_access_token(runner.id)
-    first = await client.post(
-        f"/api/v1/attendance/{record.id}/result/import-url",
-        headers={"Authorization": f"Bearer {runner_token}"},
-        json=payload,
-    )
-    assert first.status_code == 201
-    result_id = first.json()["id"]
-
     admin_token = create_access_token(admin.id)
     second = await client.post(
         f"/api/v1/attendance/{record.id}/result/import-url",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=payload,
+        json={"url": "https://watch.example.com/export/abc"},
     )
     assert second.status_code == 201, second.text
     assert second.json()["id"] == result_id
@@ -259,7 +261,7 @@ async def test_admin_can_resubmit_even_while_pending(
 
 @pytest.mark.asyncio
 async def test_resubmit_allowed_again_once_approved(
-    session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    session: AsyncSession, client: AsyncClient
 ) -> None:
     from app.models.enums import ModerationStatus
     from app.models.result import Result
@@ -268,18 +270,15 @@ async def test_resubmit_allowed_again_once_approved(
     record = await _make_matched_attendance(session, runner)
     await session.commit()
 
-    async def fake_fetch(url: str) -> tuple[bytes, str, str]:
-        return SAMPLE_GPX, "application/gpx+xml", ""
-
-    monkeypatch.setattr("app.api.results.fetch_external_workout_file", fake_fetch)
     token = create_access_token(runner.id)
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {"url": "https://watch.example.com/export/abc"}
+    data = {"distance_km": "10.0", "duration_seconds": "2100"}
+    files = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
 
     first = await client.post(
-        f"/api/v1/attendance/{record.id}/result/import-url", headers=headers, json=payload
+        f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
     )
-    assert first.status_code == 201
+    assert first.status_code == 201, first.text
 
     result = await session.scalar(
         select(Result).where(Result.attendance_record_id == record.id)
@@ -288,8 +287,9 @@ async def test_resubmit_allowed_again_once_approved(
     result.status = ModerationStatus.approved
     await session.commit()
 
+    # Once approved (not pending), a correction is allowed again — same result row.
     second = await client.post(
-        f"/api/v1/attendance/{record.id}/result/import-url", headers=headers, json=payload
+        f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
     )
     assert second.status_code == 201, second.text
     assert second.json()["id"] == result.id

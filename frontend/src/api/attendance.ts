@@ -125,9 +125,23 @@ export const attendanceApi = {
 
   // Alternative to uploading a file: a GPX/FIT export link from the watch's
   // own app (Suunto/Garmin/Coros etc). Fetched and validated server-side —
-  // see backend/app/services/safe_fetch.py.
+  // see backend/app/services/safe_fetch.py. Admin-only now.
   importResultUrl: async (attendanceId: number | string, url: string) =>
     mapResult(
       await api.post<RawResult>(`/attendance/${attendanceId}/result/import-url`, { url }),
     ),
+
+  // Self-report a result for a group you're signed up to, before the protocol
+  // (CSV) exists — creates a self_reported attendance record. Manual + required
+  // screenshot; see backend/app/api/results.py::submit_group_result.
+  submitGroupResult: async (
+    groupId: number | string,
+    payload: { distance_km: number; duration_seconds: number; image: File },
+  ) => {
+    const form = new FormData()
+    form.append('distance_km', String(payload.distance_km))
+    form.append('duration_seconds', String(Math.round(payload.duration_seconds)))
+    form.append('image', payload.image)
+    return mapResult(await api.post<RawResult>(`/groups/${groupId}/result`, form))
+  },
 }

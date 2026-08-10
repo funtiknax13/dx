@@ -28,9 +28,10 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
                 select(Result)
                 .where(Result.status == ModerationStatus.pending)
                 .options(
-                    selectinload(Result.attendance_record)
-                    .selectinload(AttendanceRecord.group)
-                    .selectinload(Group.event),
+                    selectinload(Result.attendance_record).options(
+                        selectinload(AttendanceRecord.group).selectinload(Group.event),
+                        selectinload(AttendanceRecord.runner),
+                    ),
                 )
                 .order_by(Result.id.desc())
             )

@@ -1,14 +1,17 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.timezone import EVENT_TZ
 from app.models.attendance import AttendanceRecord
-from app.models.enums import ModerationStatus, ResultSource, UserRole
+from app.models.enums import FinishStatus, ModerationStatus, ResultSource, UserRole
+from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
+from app.models.signup import Signup
 from app.schemas.result import ImportUrlRequest, ResultOut
 from app.services.fit_service import parse_fit
 from app.services.gpx_service import TrackParseError, parse_gpx
@@ -62,6 +65,49 @@ async def _check_no_pending_result(
             "Результат уже отправлен и ожидает проверки администратором — "
             "дождитесь решения, прежде чем загружать новый",
         )
+
+
+def _require_manual_screenshot(user: CurrentUser, image: UploadFile | None) -> None:
+    """A runner's manual entry has no track, so a screenshot (date/time of start,
+    distance, run time, track visible) is the only evidence — required for them.
+    Admins entering data by hand are trusted and exempt."""
+    if user.role != UserRole.admin and (image is None or not image.filename):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "К ручному результату нужен скриншот, где видны дата и время старта, "
+            "дистанция, время пробежки и трек.",
+        )
+
+
+async def _save_screenshot(image: UploadFile) -> str:
+    try:
+        return await save_image(image, "result_screenshots")
+    except (FileTooLargeError, InvalidFileTypeError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+async def _family_group_ids(session: SessionDep, group: Group) -> list[int]:
+    """All groups sharing this group's distance_code (one shared protocol), or
+    just this group when it has no code."""
+    if group.distance_code:
+        ids = await session.scalars(
+            select(Group.id).where(
+                Group.event_id == group.event_id,
+                Group.distance_code == group.distance_code,
+            )
+        )
+        return list(ids)
+    return [group.id]
+
+
+def _event_has_started(group: Group, event: Event) -> bool:
+    now = datetime.now(EVENT_TZ)
+    if group.start_time is not None:
+        start = group.start_time
+        if start.tzinfo is None:  # SQLite (tests) drops tzinfo — stored as UTC
+            start = start.replace(tzinfo=UTC)
+        return start <= now
+    return event.date <= now.date()
 
 
 async def _save_result(
@@ -163,6 +209,12 @@ async def submit_result(
 
     source_file_path: str | None = None
     if file is not None and file.filename:
+        # GPX/FIT upload is admin-only now — runners enter results manually.
+        if user.role != UserRole.admin:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Загрузка GPX/FIT недоступна — введите результат вручную.",
+            )
         try:
             path, content, ext = await save_track_file(file, "results")
         except (FileTooLargeError, InvalidFileTypeError) as exc:
@@ -180,6 +232,7 @@ async def submit_result(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "Manual entry requires distance_km and duration_seconds",
             )
+        _require_manual_screenshot(user, image)
         parsed = ParsedTrack(
             distance_km=distance_km,
             duration_seconds=duration_seconds,
@@ -224,6 +277,12 @@ async def import_result_from_url(
     """Alternative to uploading a file: fetch a GPX/FIT export link from a
     watch's own app (Suunto/Garmin/Coros etc — see safe_fetch for how the
     fetch is kept SSRF-safe) and treat it exactly like an uploaded file."""
+    # URL import is admin-only now — runners enter results manually.
+    if user.role != UserRole.admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Импорт по ссылке недоступен — введите результат вручную.",
+        )
     record = await _load_record(session, attendance_id)
     _check_can_submit(user, record)
     await _check_no_pending_result(session, user, record)
@@ -256,6 +315,92 @@ async def import_result_from_url(
 
     return await _save_result(
         session, record, group, parsed, ResultSource.file, source_file_path
+    )
+
+
+@router.post(
+    "/groups/{group_id}/result",
+    response_model=ResultOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_group_result(
+    group_id: int,
+    user: CurrentUser,
+    session: SessionDep,
+    image: UploadFile | None = None,
+    distance_km: Annotated[float | None, Form()] = None,
+    duration_seconds: Annotated[int | None, Form()] = None,
+    start_time: Annotated[datetime | None, Form()] = None,
+) -> Result:
+    """Self-report a result for a group you're signed up to, *before* the
+    protocol (CSV) exists. Manual entry only, screenshot required. Creates a
+    `self_reported` AttendanceRecord that a later CSV import merges into (so no
+    duplicate in the shared protocol)."""
+    group = await session.get(Group, group_id)
+    if group is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
+
+    signup = await session.scalar(
+        select(Signup).where(
+            Signup.event_id == group.event_id, Signup.runner_id == user.id
+        )
+    )
+    if signup is None or signup.group_id != group_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Вы не записаны в эту группу")
+
+    event = await session.get(Event, group.event_id)
+    assert event is not None
+    if not _event_has_started(group, event):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Загрузить результат можно только после старта группы.",
+        )
+
+    if distance_km is None or duration_seconds is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Укажите дистанцию и время.",
+        )
+    _require_manual_screenshot(user, image)
+
+    # Reuse the runner's existing record in this distance family if any (e.g. a
+    # re-submission), else create a self-reported one.
+    family_ids = await _family_group_ids(session, group)
+    record = await session.scalar(
+        select(AttendanceRecord).where(
+            AttendanceRecord.group_id.in_(family_ids),
+            AttendanceRecord.runner_id == user.id,
+        )
+    )
+    if record is None:
+        record = AttendanceRecord(
+            group_id=group.id,
+            raw_name=f"{user.first_name} {user.last_name}",
+            raw_email=user.email,
+            runner_id=user.id,
+            finish_status=FinishStatus.finished,
+            self_reported=True,
+        )
+        session.add(record)
+        await session.flush()
+
+    await _check_no_pending_result(session, user, record)
+
+    screenshot_path = (
+        await _save_screenshot(image) if image is not None and image.filename else None
+    )
+    parsed = ParsedTrack(
+        distance_km=distance_km, duration_seconds=duration_seconds, start_time=start_time
+    )
+    return await _save_result(
+        session,
+        record,
+        group,
+        parsed,
+        ResultSource.manual,
+        None,
+        screenshot_path=screenshot_path,
+        update_screenshot=screenshot_path is not None,
     )
 
 

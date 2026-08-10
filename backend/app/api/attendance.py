@@ -36,11 +36,13 @@ async def import_csv(
     await session.commit()
     return CsvImportResponse(
         created=result.created_count,
+        updated=result.updated,
         skipped_duplicates=result.skipped_duplicates,
         skipped_empty=result.skipped_empty,
         skipped_no_tag=result.skipped_no_tag,
         skipped_unmatched_tag=result.skipped_unmatched_tag,
         fallback_used=result.fallback_used,
+        self_report_conflicts=len(result.self_report_conflicts),
     )
 
 

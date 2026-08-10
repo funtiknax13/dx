@@ -1,11 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ParticipationEntry } from '../types'
 import { formatDate, formatDistance, formatDuration, formatPace } from '../lib/format'
 import { attendanceApi } from '../api/attendance'
-import { ApiError } from '../api/client'
+import { ManualResultForm } from './ManualResultForm'
 import { IconFlag } from './ui/icons'
-import { Spinner } from './ui/Spinner'
 
 interface Props {
   history: ParticipationEntry[]
@@ -116,161 +115,12 @@ function HistoryRow({
 }
 
 function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: () => void }) {
-  const [mode, setMode] = useState<'file' | 'url' | 'manual'>('file')
-  const [distance, setDistance] = useState('')
-  const [duration, setDuration] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [image, setImage] = useState<File | null>(null)
-  const [url, setUrl] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setBusy(true)
-    try {
-      if (mode === 'file') {
-        if (!file) {
-          setError('Выберите файл GPX или FIT')
-          return
-        }
-        await attendanceApi.submitResultFile(attendanceId, file)
-      } else if (mode === 'url') {
-        if (!url.trim()) {
-          setError('Вставьте ссылку на экспорт тренировки')
-          return
-        }
-        await attendanceApi.importResultUrl(attendanceId, url.trim())
-      } else {
-        const distanceKm = Number(distance.replace(',', '.'))
-        const durationSeconds = parseDuration(duration)
-        if (!distanceKm || !durationSeconds) {
-          setError('Укажите дистанцию (км) и время (чч:мм:сс)')
-          return
-        }
-        await attendanceApi.submitResultManual(attendanceId, {
-          distance_km: distanceKm,
-          duration_seconds: durationSeconds,
-          image,
-        })
-      }
-      onDone()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось сохранить результат')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
-    <form onSubmit={submit} className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
-      <div className="mb-3 inline-flex rounded-full border border-ink/10 bg-white p-1 text-xs font-semibold">
-        <button
-          type="button"
-          onClick={() => setMode('file')}
-          className={`rounded-full px-3 py-1.5 transition ${mode === 'file' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
-        >
-          Загрузить GPX/FIT
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('url')}
-          className={`rounded-full px-3 py-1.5 transition ${mode === 'url' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
-        >
-          Ссылка на GPX
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('manual')}
-          className={`rounded-full px-3 py-1.5 transition ${mode === 'manual' ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'}`}
-        >
-          Ввести вручную
-        </button>
-      </div>
-
-      {mode === 'file' ? (
-        <input
-          type="file"
-          accept=".gpx,.fit"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-full file:border file:border-ink/15 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-600 hover:file:border-ink/30"
-        />
-      ) : mode === 'url' ? (
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-ink-600">
-            Вставить ссылку на GPX
-          </label>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://… ссылка на GPX"
-            className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
-          />
-          <p className="mt-1.5 text-xs text-clay">
-            Прямая ссылка на экспорт тренировки в GPX из приложения часов (Suunto, Garmin,
-            Coros и т.п.).
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-ink-600">Дистанция, км</label>
-              <input
-                value={distance}
-                onChange={(e) => setDistance(e.target.value)}
-                placeholder="33.2"
-                inputMode="decimal"
-                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-ink-600">Время, чч:мм:сс</label>
-              <input
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                placeholder="3:10:00"
-                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-ink-600">
-              Скриншот пробежки (необязательно)
-            </label>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(e) => setImage(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-full file:border file:border-ink/15 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-600 hover:file:border-ink/30"
-            />
-            <p className="mt-1.5 text-xs text-clay">
-              Фото экрана часов или приложения — как подтверждение результата.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {error && <p className="mt-2 text-xs text-signal-600">{error}</p>}
-
-      <button type="submit" disabled={busy} className="btn-primary btn-sm mt-3">
-        {busy ? <Spinner className="h-4 w-4" /> : 'Отправить на проверку'}
-      </button>
-      <p className="mt-2 text-xs text-clay">
-        Результат из файла с подходящей дистанцией и временем старта засчитывается сразу, иначе —
-        после проверки администратором. Ручной ввод всегда проверяется вручную.
-      </p>
-    </form>
+    <div className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
+      <ManualResultForm
+        onSubmit={(d) => attendanceApi.submitResultManual(attendanceId, d)}
+        onDone={onDone}
+      />
+    </div>
   )
-}
-
-function parseDuration(input: string): number {
-  const parts = input.split(':').map((p) => Number(p.trim()))
-  if (parts.some((p) => Number.isNaN(p))) return 0
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
-  if (parts.length === 2) return parts[0] * 60 + parts[1]
-  if (parts.length === 1) return parts[0]
-  return 0
 }

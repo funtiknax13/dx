@@ -113,6 +113,7 @@
       первую группу события целиком.</p>
     {% endif %}
     <p>Добавлено записей: <strong>{{ result.created_count }}</strong></p>
+    <p>Обновлено существующих (совпал бегун+дистанция, в т.ч. самозагрузка): <strong>{{ result.updated }}</strong></p>
     <p>Сопоставлено по email: {{ result.auto_matched }}</p>
     <p>Направлено на уже объединённый аккаунт (по имени): {{ result.merged_redirects }}</p>
     <p>Использован существующий гостевой профиль (по имени): {{ result.guests_reused }}</p>
@@ -123,6 +124,30 @@
     <p>Пропущено — тег не найден ни у одной группы: {{ result.skipped_unmatched_tag }}</p>
     <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
   </div>
+
+  {% if result.self_report_conflicts %}
+  <div class="card" style="border:1px solid #fca5a5;">
+    <h2 style="margin-top:0;">⚠ Самозагрузка на другую дистанцию ({{ result.self_report_conflicts|length }})</h2>
+    <p class="hint">
+      Эти бегуны сами загрузили результат на одну дистанцию, а в CSV попали на
+      другую — общий протокол у них разный, записи не объединились, поэтому они
+      могут показаться в обоих протоколах. Проверьте и при необходимости удалите
+      лишнюю запись через SQLAdmin.
+    </p>
+    <table style="margin-top:8px;">
+      <thead><tr><th>Имя</th><th>Самозагрузка (дистанция)</th><th>В CSV (дистанция)</th></tr></thead>
+      <tbody>
+        {% for c in result.self_report_conflicts %}
+        <tr>
+          <td>{{ c.raw_name }}</td>
+          <td>{{ c.self_reported_code }}</td>
+          <td>{{ c.csv_code }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 
   {% if result.email_mismatches %}
   <div class="card" style="border:1px solid #fde68a;">

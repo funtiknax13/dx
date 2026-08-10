@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { guestsApi } from '../api/guests'
-import { signupsApi } from '../api/signups'
+import { signupsApi, type AwaitingResultEntry } from '../api/signups'
+import { attendanceApi } from '../api/attendance'
 import { ApiError } from '../api/client'
+import { ManualResultForm } from '../components/ManualResultForm'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, formatTime, fullName } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
@@ -32,6 +34,7 @@ export function ProfilePage() {
 
   const stats = useAsync(() => usersApi.publicProfile(user!.id), [user?.id])
   const upcoming = useAsync(() => signupsApi.mine(), [user?.id])
+  const awaiting = useAsync(() => signupsApi.awaitingResults(), [user?.id])
   const claims = useAsync(() => guestsApi.myClaims(), [user?.id])
   // Once a guest profile has already been claimed and approved, there's
   // nothing left to look for — keep offering the search only to accounts
@@ -84,6 +87,23 @@ export function ProfilePage() {
         <div className="mt-8">
           <h3 className="mb-4 font-display text-xl">Предстоящие события</h3>
           <UpcomingSignups entries={upcoming.data} />
+        </div>
+      )}
+
+      {awaiting.data && awaiting.data.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-1 font-display text-xl">Загрузить результат</h3>
+          <p className="mb-4 text-sm text-ink-600">
+            Прошедшие события, куда вы записаны. Можно загрузить свой результат, не дожидаясь
+            протокола.
+          </p>
+          <AwaitingResults
+            entries={awaiting.data}
+            onSubmitted={() => {
+              awaiting.reload()
+              stats.reload()
+            }}
+          />
         </div>
       )}
 
@@ -155,6 +175,73 @@ function UpcomingSignups({ entries }: { entries: MySignupEntry[] }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+function AwaitingResults({
+  entries,
+  onSubmitted,
+}: {
+  entries: AwaitingResultEntry[]
+  onSubmitted: () => void
+}) {
+  return (
+    <ul className="space-y-3">
+      {entries.map((e) => (
+        <AwaitingResultRow key={e.group_id} entry={e} onSubmitted={onSubmitted} />
+      ))}
+    </ul>
+  )
+}
+
+function AwaitingResultRow({
+  entry: e,
+  onSubmitted,
+}: {
+  entry: AwaitingResultEntry
+  onSubmitted: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const pending = e.moderation_status === 'pending'
+
+  return (
+    <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
+      <div className="flex items-center gap-4 p-4">
+        <div className="min-w-0 flex-1">
+          <Link
+            to={`/groups/${e.group_id}`}
+            className="block truncate font-display text-base text-ink hover:text-signal"
+          >
+            {e.event_title}
+          </Link>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-600">
+            <span className="inline-flex items-center gap-1">
+              <IconCalendar width={13} height={13} className="text-signal" />
+              {formatDate(e.event_date, { day: 'numeric', month: 'long' })}
+            </span>
+            <span>{e.group_name}</span>
+          </p>
+        </div>
+        {pending ? (
+          <span className="chip shrink-0 bg-ink/10 text-ink-600">На проверке</span>
+        ) : (
+          <button onClick={() => setOpen((v) => !v)} className="btn-primary btn-sm shrink-0" type="button">
+            {open ? 'Закрыть' : 'Загрузить'}
+          </button>
+        )}
+      </div>
+      {open && !pending && (
+        <div className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
+          <ManualResultForm
+            onSubmit={(d) => attendanceApi.submitGroupResult(e.group_id, d)}
+            onDone={() => {
+              setOpen(false)
+              onSubmitted()
+            }}
+          />
+        </div>
+      )}
+    </li>
   )
 }
 
