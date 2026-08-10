@@ -3,14 +3,16 @@ from typing import Any
 from sqladmin import ModelView
 from sqladmin.filters import BooleanFilter, OperationColumnFilter, StaticValuesFilter
 from sqladmin.widgets import BooleanInputWidget
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Select
 from starlette.requests import Request
 from wtforms import PasswordField
 from wtforms.validators import Length
 
+from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.models.attendance import AttendanceRecord
+from app.models.city import City
 from app.models.event import Event, EventPhoto
 from app.models.group import Group
 from app.models.guest_claim import GuestClaim
@@ -270,8 +272,59 @@ class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
     ]
 
 
+# Manually-added cities get ids above GeoNames' range so a dataset reload
+# (app.scripts.cities load, which upserts by geonameid) never clashes with or
+# overwrites them.
+_MANUAL_CITY_ID_BASE = 900_000_000
+
+
+class CityAdmin(BaseAdmin, model=City):
+    name = "Город"
+    name_plural = "Города"
+    icon = "fa-solid fa-city"
+    column_list = [
+        City.id,
+        City.name,
+        City.region,
+        City.country,
+        City.population,
+        City.lat,
+        City.lng,
+    ]
+    column_searchable_list = [City.name, City.name_ascii]
+    column_sortable_list = [City.id, City.name, City.population]
+    # The search_* fold columns are derived (see below), not entered by hand.
+    form_columns = [
+        City.name,
+        City.name_ascii,
+        City.country_code,
+        City.country,
+        City.region,
+        City.lat,
+        City.lng,
+        City.population,
+    ]
+
+    async def on_model_change(
+        self, data: dict[str, Any], model: Any, is_created: bool, request: Request
+    ) -> None:
+        # Keep the lowercased search columns in sync with the display/latin names
+        # so search keeps working after a manual add/edit.
+        name = (data.get("name") or "").strip()
+        name_ascii = (data.get("name_ascii") or "").strip()
+        data["search_name"] = name.lower()
+        data["search_ascii"] = name_ascii.lower()
+        if is_created:
+            async with SessionLocal() as session:
+                current_max = await session.scalar(select(func.max(City.id)))
+            new_id = max(current_max or 0, _MANUAL_CITY_ID_BASE) + 1
+            data["id"] = new_id
+            model.id = new_id
+
+
 ALL_VIEWS = [
     UserAdmin,
+    CityAdmin,
     EventAdmin,
     EventPhotoAdmin,
     GroupAdmin,
