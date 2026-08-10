@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
@@ -18,6 +18,8 @@ from app.services.survey_service import unread_response_count
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-support"], include_in_schema=False)
 
+PAGE_SIZE = 25
+
 
 async def _require_staff(request: Request) -> User | None:
     """Unlike surveys/CSV-import/moderation, tickets are visible to both
@@ -30,23 +32,47 @@ async def support_list(request: Request) -> HTMLResponse | RedirectResponse:
     user = await _require_staff(request)
     if user is None:
         return login_redirect()
+
+    status_filter = request.query_params.get("status", "all")
+    if status_filter not in ("all", "open", "closed"):
+        status_filter = "all"
+    try:
+        page = max(1, int(request.query_params.get("page", "1")))
+    except ValueError:
+        page = 1
+
     async with SessionLocal() as session:
+        base = select(SupportTicket)
+        count_base = select(func.count()).select_from(SupportTicket)
+        if status_filter == "open":
+            base = base.where(SupportTicket.status == TicketStatus.open)
+            count_base = count_base.where(SupportTicket.status == TicketStatus.open)
+        elif status_filter == "closed":
+            base = base.where(SupportTicket.status == TicketStatus.closed)
+            count_base = count_base.where(SupportTicket.status == TicketStatus.closed)
+
+        total = await session.scalar(count_base) or 0
+        total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = min(page, total_pages)
+
         tickets = list(
             await session.scalars(
-                select(SupportTicket)
-                .options(
+                base.options(
                     selectinload(SupportTicket.messages), selectinload(SupportTicket.created_by)
                 )
                 # "open" > "closed" alphabetically, so desc() puts open tickets first.
                 .order_by(SupportTicket.status.desc(), SupportTicket.id.desc())
+                .offset((page - 1) * PAGE_SIZE)
+                .limit(PAGE_SIZE)
             )
         )
         rows = [
             {
                 "ticket": t,
-                "unread": any(
-                    not m.is_staff and m.read_at is None for m in t.messages
-                ),
+                "unread": any(not m.is_staff and m.read_at is None for m in t.messages),
+                # Last word is the reporter's — even if a staffer has *read* it,
+                # nobody has replied yet, so it still needs attention.
+                "awaiting_reply": bool(t.messages) and not t.messages[-1].is_staff,
                 "last_message": t.messages[-1] if t.messages else None,
             }
             for t in tickets
@@ -54,7 +80,15 @@ async def support_list(request: Request) -> HTMLResponse | RedirectResponse:
     return templates.TemplateResponse(
         request,
         "support_list.html",
-        {"active": "support", "tools_user": user, "rows": rows},
+        {
+            "active": "support",
+            "tools_user": user,
+            "rows": rows,
+            "total": total,
+            "page": page,
+            "total_pages": total_pages,
+            "status_filter": status_filter,
+        },
     )
 
 

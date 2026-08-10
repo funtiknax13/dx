@@ -27,8 +27,17 @@ from app.models.user import User
 SESSION_KEY = "admin_user_id"
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+# Stored datetimes are UTC-aware (see combine_event_date_and_time); every admin
+# view must render them as Cheboksary wall-clock time (see EVENT_TZ), never UTC
+# or the viewer's own zone.
 templates.env.filters["local_time"] = (
     lambda dt: dt.astimezone(EVENT_TZ).strftime("%H:%M") if dt else ""
+)
+templates.env.filters["local_date"] = (
+    lambda dt: dt.astimezone(EVENT_TZ).strftime("%d.%m.%Y") if dt else ""
+)
+templates.env.filters["local_dt"] = (
+    lambda dt: dt.astimezone(EVENT_TZ).strftime("%d.%m.%Y %H:%M") if dt else ""
 )
 
 

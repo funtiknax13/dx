@@ -244,6 +244,17 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
         display_name = (
             f"{rec.runner.first_name} {rec.runner.last_name}" if rec.runner else rec.raw_name
         )
+        # In the shared protocol the distance is always the group's reference
+        # distance — where exactly a runner's GPS wandered doesn't matter, so we
+        # don't surface the file's own measured distance. Pace is therefore
+        # derived from that canonical distance and the real finish time, not from
+        # whatever pace was stored against the (possibly different) measured km.
+        canonical_distance = group.target_distance_km
+        pace = (
+            round(res.duration_seconds / canonical_distance)
+            if res and res.duration_seconds and canonical_distance
+            else None
+        )
         return ProtocolEntry(
             rank=None,
             attendance_id=rec.id,
@@ -253,9 +264,9 @@ async def protocol(group_id: int, session: SessionDep) -> Protocol:
             latest_achievement=(
                 latest_thresholds.get(rec.runner_id) if rec.runner_id is not None else None
             ),
-            distance_km=res.distance_km if res else None,
+            distance_km=canonical_distance if res else None,
             duration_seconds=res.duration_seconds if res else None,
-            pace_seconds_per_km=res.pace_seconds_per_km if res else None,
+            pace_seconds_per_km=pace,
             finish_status=rec.finish_status.value,
             moderation_status=res.status.value if res else None,
         )

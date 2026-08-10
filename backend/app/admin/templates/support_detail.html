@@ -22,7 +22,7 @@
   <div class="card">
     {% for m in ticket.messages %}
     <div style="margin-bottom:14px;padding:10px 12px;border-radius:6px;background:{{ '#eff6ff' if m.is_staff else '#f9fafb' }};">
-      <div class="hint">{{ 'Поддержка' if m.is_staff else 'Обратившийся' }} · {{ m.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+      <div class="hint">{{ 'Поддержка' if m.is_staff else 'Обратившийся' }} · {{ m.created_at|local_dt }}</div>
       <div style="white-space:pre-wrap;">{{ m.body }}</div>
     </div>
     {% endfor %}

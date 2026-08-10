@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
@@ -13,6 +13,8 @@ from app.models.result import Result
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
 
+PAGE_SIZE = 25
+
 
 @router.get("/results", response_class=HTMLResponse, response_model=None)
 async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
@@ -22,7 +24,21 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
     if user.role != UserRole.admin:
         # Result approval is an Admin-only function per CLAUDE.md.
         return RedirectResponse("/admin-tools", status_code=303)
+
+    try:
+        page = max(1, int(request.query_params.get("page", "1")))
+    except ValueError:
+        page = 1
+
     async with SessionLocal() as session:
+        total = await session.scalar(
+            select(func.count())
+            .select_from(Result)
+            .where(Result.status == ModerationStatus.pending)
+        )
+        total = total or 0
+        total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = min(page, total_pages)
         results = list(
             await session.scalars(
                 select(Result)
@@ -34,6 +50,8 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
                     ),
                 )
                 .order_by(Result.id.desc())
+                .offset((page - 1) * PAGE_SIZE)
+                .limit(PAGE_SIZE)
             )
         )
     flash = request.query_params.get("flash")
@@ -45,6 +63,9 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
             "tools_user": user,
             "results": results,
             "flash": flash,
+            "total": total,
+            "page": page,
+            "total_pages": total_pages,
             "distance_tol_pct": settings.result_distance_tolerance_pct,
             "start_tol_min": settings.result_start_time_tolerance_minutes,
         },

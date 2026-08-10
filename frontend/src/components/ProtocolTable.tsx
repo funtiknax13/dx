@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { Protocol, ProtocolRow } from '../types'
 import { Avatar } from './ui/Avatar'
-import { formatDistance, formatDuration, formatPace } from '../lib/format'
+import { formatDuration, formatPace } from '../lib/format'
 import { IconFlag } from './ui/icons'
 
 function medal(place?: number | null) {
@@ -95,11 +95,8 @@ function ProtocolRowLine({ row }: { row: ProtocolRow }) {
           formatDuration(row.duration_seconds)
         )}
       </td>
-      <td className="hidden py-3 pr-3 text-right font-mono text-sm tabular text-ink-600 sm:table-cell">
+      <td className="py-3 pr-4 text-right font-mono text-sm tabular text-ink-600">
         {isPending ? '' : formatPace(row.pace_seconds_per_km)}
-      </td>
-      <td className="hidden py-3 pr-4 text-right font-mono text-sm tabular text-ink-600 md:table-cell">
-        {isPending ? '' : formatDistance(row.distance_km)}
       </td>
     </tr>
   )
@@ -138,8 +135,7 @@ export function ProtocolTable({ protocol }: { protocol: Protocol }) {
               <th className="py-2.5 pl-4 pr-2 font-semibold">#</th>
               <th className="py-2.5 pr-3 font-semibold">Участник</th>
               <th className="py-2.5 pr-3 text-right font-semibold">Время</th>
-              <th className="hidden py-2.5 pr-3 text-right font-semibold sm:table-cell">Темп</th>
-              <th className="hidden py-2.5 pr-4 text-right font-semibold md:table-cell">Дист.</th>
+              <th className="py-2.5 pr-4 text-right font-semibold">Темп</th>
             </tr>
           </thead>
           <tbody>
