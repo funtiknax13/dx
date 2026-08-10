@@ -221,21 +221,3 @@ async def test_login_gate_requires_captcha_after_repeated_failures(
     r = await client.post("/api/v1/auth/login", json={**bad, "captcha_token": "solved"})
     assert r.status_code == 401
     rate_guard.clear_all()
-
-
-@pytest.mark.asyncio
-async def test_anonymous_support_requires_captcha_when_enabled(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _enable_captcha(monkeypatch)
-    body = {"body": "Нужна помощь", "guest_name": "Гость"}
-
-    # No token from an anonymous reporter → gated.
-    assert (await client.post("/api/v1/support/tickets", json=body)).status_code == 428
-
-    async def _ok(*_a: object, **_k: object) -> bool:
-        return True
-
-    monkeypatch.setattr("app.api.support.verify_captcha", _ok)
-    r = await client.post("/api/v1/support/tickets", json={**body, "captcha_token": "solved"})
-    assert r.status_code == 201, r.text

@@ -9,21 +9,9 @@ from tests.factories import make_user
 
 
 @pytest.mark.asyncio
-async def test_create_ticket_anonymous_requires_guest_name(client: AsyncClient) -> None:
+async def test_create_ticket_requires_authentication(client: AsyncClient) -> None:
     resp = await client.post("/api/v1/support/tickets", json={"body": "Help"})
-    assert resp.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_create_ticket_anonymous_with_guest_name_succeeds(client: AsyncClient) -> None:
-    resp = await client.post(
-        "/api/v1/support/tickets",
-        json={"body": "Stuck registering", "guest_name": "Ivan"},
-    )
-    assert resp.status_code == 201, resp.text
-    body = resp.json()
-    assert body["status"] == "open"
-    assert body["has_unread"] is False
+    assert resp.status_code in (401, 403)
 
 
 @pytest.mark.asyncio
@@ -108,7 +96,7 @@ async def test_ticket_detail_marks_staff_messages_read_and_unread_count_drops(
 
 
 @pytest.mark.asyncio
-async def test_reporter_reply_reopens_closed_ticket_via_api(
+async def test_reporter_cannot_reopen_closed_ticket_via_reply(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     from app.models.enums import TicketStatus
@@ -125,5 +113,7 @@ async def test_reporter_reply_reopens_closed_ticket_via_api(
         headers={"Authorization": f"Bearer {token}"},
         json={"body": "One more thing"},
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["status"] == "open"
+    assert resp.status_code == 409, resp.text
+
+    await session.refresh(ticket)
+    assert ticket.status == TicketStatus.closed

@@ -32,23 +32,9 @@ async def test_create_ticket_for_logged_in_user(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_ticket_anonymous_stores_guest_contact(session: AsyncSession) -> None:
-    ticket = await create_ticket(
-        session,
-        user=None,
-        body="Stuck registering",
-        guest_name="Ivan",
-        guest_contact="ivan@example.com",
-    )
-    await session.commit()
-
-    assert ticket.created_by_user_id is None
-    assert ticket.guest_name == "Ivan"
-    assert ticket.guest_contact == "ivan@example.com"
-
-
-@pytest.mark.asyncio
-async def test_reporter_message_reopens_closed_ticket(session: AsyncSession) -> None:
+async def test_reporter_message_does_not_reopen_closed_ticket(session: AsyncSession) -> None:
+    """A closed ticket stays closed even if a reporter message is appended —
+    only staff reopen (the reporter-reply API blocks replies once closed)."""
     runner = await make_user(session, "runner-support2@example.com")
     await session.commit()
     ticket = await create_ticket(session, user=runner, body="First message")
@@ -58,13 +44,13 @@ async def test_reporter_message_reopens_closed_ticket(session: AsyncSession) -> 
     await add_message(session, ticket, sender=runner, is_staff=False, body="Still broken")
     await session.commit()
 
-    assert ticket.status == TicketStatus.open
+    assert ticket.status == TicketStatus.closed
 
 
 @pytest.mark.asyncio
 async def test_staff_message_does_not_reopen_closed_ticket(session: AsyncSession) -> None:
     """A staff reply on an already-closed ticket is a closing note, not a
-    sign the issue reopened — asymmetric with the reporter-message case."""
+    sign the issue reopened."""
     runner = await make_user(session, "runner-support3@example.com")
     admin = await make_user(session, "admin-support3@example.com", UserRole.admin)
     await session.commit()

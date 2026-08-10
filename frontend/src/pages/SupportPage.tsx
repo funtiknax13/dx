@@ -1,12 +1,11 @@
-import { useCallback, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { supportApi } from '../api/support'
 import { ApiError } from '../api/client'
-import { useCaptchaConfig } from '../api/captcha'
 import { useAsync } from '../lib/useAsync'
 import { PageLoader } from '../components/ui/Spinner'
-import { Altcha } from '../components/ui/Altcha'
+import { StatePanel } from '../components/ui/StatePanel'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { formatDate } from '../lib/format'
 import { IconMail, IconSpark } from '../components/ui/icons'
@@ -14,59 +13,32 @@ import { IconMail, IconSpark } from '../components/ui/icons'
 export function SupportPage() {
   const { isAuthenticated } = useAuth()
   const [body, setBody] = useState('')
-  const [guestName, setGuestName] = useState('')
-  const [guestContact, setGuestContact] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState('')
-  // Bumped to remount the widget for a fresh single-use token after each submit.
-  const [captchaNonce, setCaptchaNonce] = useState(0)
-  const captcha = useCaptchaConfig()
-  // Anonymous submissions always carry a captcha (when configured); logged-in
-  // users are already accountable, so they skip it.
-  const needCaptcha = !isAuthenticated && !!captcha?.enabled
-
-  // Only stores the token — clearing the error here would wipe a real error
-  // when the widget's async re-solve fires right after a failed attempt.
-  const handleToken = useCallback((token: string) => {
-    setCaptchaToken(token)
-  }, [])
 
   const {
     data: tickets,
     loading: ticketsLoading,
     reload,
-  } = useAsync(() => (isAuthenticated ? supportApi.myTickets() : Promise.resolve([])), [isAuthenticated])
+  } = useAsync(
+    () => (isAuthenticated ? supportApi.myTickets() : Promise.resolve([])),
+    [isAuthenticated],
+  )
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
     try {
-      await supportApi.createTicket({
-        body,
-        guest_name: isAuthenticated ? undefined : guestName,
-        guest_contact: isAuthenticated ? undefined : guestContact || undefined,
-        captcha_token: captchaToken || undefined,
-      })
+      await supportApi.createTicket({ body })
       setBody('')
-      setGuestName('')
-      setGuestContact('')
-      setCaptchaToken('')
       setSuccess(true)
       reload()
     } catch (err) {
-      if (err instanceof ApiError && err.status === 428) {
-        setError('Подтвердите, что вы не робот, и повторите отправку.')
-      } else {
-        setError(err instanceof ApiError ? err.message : 'Не удалось отправить обращение')
-      }
+      setError(err instanceof ApiError ? err.message : 'Не удалось отправить обращение')
     } finally {
       setSubmitting(false)
-      // Whether it succeeded or failed, the token is now spent — get a fresh one.
-      setCaptchaToken('')
-      setCaptchaNonce((n) => n + 1)
     }
   }
 
@@ -80,68 +52,46 @@ export function SupportPage() {
         Вопрос по регистрации, событию или результату — напишите, организаторы ответят здесь же.
       </p>
 
-      <form onSubmit={submit} className="card mt-8 space-y-5 p-6 sm:p-8">
-        <FormError message={error} />
-        {success && <FormSuccess message="Обращение отправлено — ответ придёт сюда." />}
-        {!isAuthenticated && (
-          <>
-            <div>
-              <label htmlFor="guest_name" className="field-label">
-                Ваше имя *
-              </label>
-              <input
-                id="guest_name"
-                type="text"
-                required
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                className="field"
-              />
-            </div>
-            <div>
-              <label htmlFor="guest_contact" className="field-label">
-                Как с вами связаться (email/телефон)
-              </label>
-              <input
-                id="guest_contact"
-                type="text"
-                value={guestContact}
-                onChange={(e) => setGuestContact(e.target.value)}
-                className="field"
-              />
-              <p className="mt-1.5 text-xs text-ink-600">
-                Ответить внутри сайта можно только зарегистрированным — если хотите получить
-                ответ, оставьте контакт или{' '}
-                <Link to="/register" className="underline">
-                  зарегистрируйтесь
+      {isAuthenticated ? (
+        <form onSubmit={submit} className="card mt-8 space-y-5 p-6 sm:p-8">
+          <FormError message={error} />
+          {success && <FormSuccess message="Обращение отправлено — ответ придёт сюда." />}
+          <div>
+            <label htmlFor="body" className="field-label">
+              Сообщение *
+            </label>
+            <textarea
+              id="body"
+              rows={5}
+              required
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className="field"
+            />
+          </div>
+          <button type="submit" disabled={submitting} className="btn-primary">
+            {submitting ? 'Отправка…' : 'Отправить'}
+          </button>
+        </form>
+      ) : (
+        <div className="mt-8">
+          <StatePanel
+            title="Войдите, чтобы написать в поддержку"
+            description="Обращения доступны только зарегистрированным участникам — так мы сможем ответить вам прямо на сайте."
+            icon={<IconMail />}
+            action={
+              <div className="flex gap-3">
+                <Link to="/login" state={{ from: '/support' }} className="btn-primary">
+                  Войти
                 </Link>
-                .
-              </p>
-            </div>
-          </>
-        )}
-        <div>
-          <label htmlFor="body" className="field-label">
-            Сообщение *
-          </label>
-          <textarea
-            id="body"
-            rows={5}
-            required
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            className="field"
+                <Link to="/register" className="btn-ghost">
+                  Зарегистрироваться
+                </Link>
+              </div>
+            }
           />
         </div>
-        {needCaptcha && <Altcha key={captchaNonce} onToken={handleToken} />}
-        <button
-          type="submit"
-          disabled={submitting || (needCaptcha && !captchaToken)}
-          className="btn-primary"
-        >
-          {submitting ? 'Отправка…' : 'Отправить'}
-        </button>
-      </form>
+      )}
 
       {isAuthenticated && (
         <div className="mt-10">
@@ -159,10 +109,20 @@ export function SupportPage() {
                     className="card flex items-center justify-between gap-4 p-4 transition hover:border-ink/25"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">{t.preview}</p>
-                      <p className="mt-1 text-xs text-ink-600">
-                        {formatDate(t.created_at)} ·{' '}
-                        {t.status === 'open' ? 'открыт' : 'закрыт'}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`chip shrink-0 ${
+                            t.status === 'open'
+                              ? 'bg-signal/12 text-signal-600'
+                              : 'bg-ink text-paper'
+                          }`}
+                        >
+                          {t.status === 'open' ? 'Открыт' : 'Закрыт'}
+                        </span>
+                        <p className="truncate text-sm font-semibold text-ink">{t.preview}</p>
+                      </div>
+                      <p className="mt-1.5 font-mono text-[0.7rem] uppercase tracking-[0.12em] text-clay">
+                        {formatDate(t.created_at)}
                       </p>
                     </div>
                     {t.has_unread && (

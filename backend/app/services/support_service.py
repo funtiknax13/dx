@@ -13,26 +13,22 @@ from app.models.user import User
 async def create_ticket(
     session: AsyncSession,
     *,
-    user: User | None,
+    user: User,
     body: str,
-    guest_name: str | None = None,
-    guest_contact: str | None = None,
 ) -> SupportTicket:
-    """Start a new ticket with its first message. `user` is None for an
-    anonymous reporter (someone with no account, e.g. stuck registering) —
-    guest_name is required in that case so staff know who they're talking to."""
+    """Start a new ticket with its first message. Support is for logged-in users
+    only (the guest_name/guest_contact columns remain for legacy/anonymized
+    tickets, but new tickets always have an account)."""
     ticket = SupportTicket(
         status=TicketStatus.open,
-        created_by_user_id=user.id if user else None,
-        guest_name=None if user else guest_name,
-        guest_contact=None if user else guest_contact,
+        created_by_user_id=user.id,
     )
     session.add(ticket)
     await session.flush()
     session.add(
         SupportMessage(
             ticket_id=ticket.id,
-            sender_user_id=user.id if user else None,
+            sender_user_id=user.id,
             is_staff=False,
             body=body,
         )
@@ -49,9 +45,9 @@ async def add_message(
     is_staff: bool,
     body: str,
 ) -> SupportMessage:
-    """A new message from the reporter reopens a closed ticket — staff
-    replying to an already-closed ticket does not (that's a deliberate
-    "closing note", not a sign the issue is unresolved again)."""
+    """Append a message. A staff-closed ticket is not reopened here — only staff
+    can reopen it (the reporter-reply endpoint blocks replies once closed), so a
+    resolved thread stays resolved."""
     message = SupportMessage(
         ticket_id=ticket.id,
         sender_user_id=sender.id if sender else None,
@@ -59,8 +55,6 @@ async def add_message(
         body=body,
     )
     session.add(message)
-    if not is_staff and ticket.status == TicketStatus.closed:
-        ticket.status = TicketStatus.open
     await session.flush()
 
     if is_staff and ticket.created_by_user_id is not None:

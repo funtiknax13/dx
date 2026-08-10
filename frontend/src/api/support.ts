@@ -2,12 +2,8 @@ import { api } from './client'
 import type { SupportTicketDetail, SupportTicketSummary } from '../types'
 
 export const supportApi = {
-  createTicket: (payload: {
-    body: string
-    guest_name?: string
-    guest_contact?: string
-    captcha_token?: string
-  }) => api.post<SupportTicketSummary>('/support/tickets', payload),
+  createTicket: (payload: { body: string }) =>
+    api.post<SupportTicketSummary>('/support/tickets', payload),
 
   myTickets: () => api.get<SupportTicketSummary[]>('/support/tickets'),
 

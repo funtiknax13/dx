@@ -3,7 +3,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.enums import UserRole
+from app.models.enums import TicketStatus, UserRole
+from app.models.support import SupportMessage, SupportTicket
 from app.services.support_service import create_ticket
 from tests.factories import make_user
 
@@ -45,7 +46,14 @@ async def test_reply_blocked_for_anonymous_ticket(
 ) -> None:
     admin = await make_user(session, "admin-support2@example.com", UserRole.admin)
     await session.commit()
-    ticket = await create_ticket(session, user=None, body="Stuck", guest_name="Ivan")
+    # Legacy anonymous ticket (support is login-only now, but old/anonymized
+    # tickets can still exist) — build it directly, not via the service.
+    ticket = SupportTicket(status=TicketStatus.open, created_by_user_id=None, guest_name="Ivan")
+    session.add(ticket)
+    await session.flush()
+    session.add(
+        SupportMessage(ticket_id=ticket.id, sender_user_id=None, is_staff=False, body="Stuck")
+    )
     await session.commit()
     await _login(client, admin.id)
 
