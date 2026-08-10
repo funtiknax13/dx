@@ -164,6 +164,11 @@ function mapAchievement(raw: RawAchievement): Achievement {
 export const usersApi = {
   me: async () => mapUser(await api.get<RawUser>('/users/me')),
 
+  /** The current user's completeness gate — used to decide whether they can
+   * write to support (same gate as the community rating). */
+  myAccess: () =>
+    api.get<{ lock_reason: StatsLockReason; missing_fields: string[] }>('/users/me/access'),
+
   updateMe: async (payload: UpdateProfilePayload) =>
     mapUser(await api.patch<RawUser>('/users/me', payload)),
 

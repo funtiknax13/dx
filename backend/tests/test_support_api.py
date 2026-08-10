@@ -15,6 +15,28 @@ async def test_create_ticket_requires_authentication(client: AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
+async def test_incomplete_profile_cannot_create_ticket(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner = await make_user(session, "incomplete-support@example.com", complete_profile=False)
+    await session.commit()
+    token = create_access_token(runner.id)
+
+    resp = await client.post(
+        "/api/v1/support/tickets",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"body": "Help me"},
+    )
+    assert resp.status_code == 403, resp.text
+
+    # ...and the self-endpoint reports the same gate so the UI can pre-empt it.
+    access = await client.get(
+        "/api/v1/users/me/access", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert access.json()["lock_reason"] == "profile_incomplete"
+
+
+@pytest.mark.asyncio
 async def test_create_ticket_authenticated_links_to_user(
     session: AsyncSession, client: AsyncClient
 ) -> None:

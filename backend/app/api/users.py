@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.auth import MessageResponse
 from app.schemas.common import Page
 from app.schemas.user import (
+    AccessLockOut,
     AccountDeleteRequest,
     AccountExport,
     AccountExportHistoryItem,
@@ -41,6 +42,14 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("/me", response_model=UserMe)
 async def get_me(user: CurrentUser) -> User:
     return user
+
+
+@router.get("/me/access", response_model=AccessLockOut)
+async def get_my_access(user: CurrentUser, session: SessionDep) -> AccessLockOut:
+    """Whether the current user has finished the profile/survey completeness gate
+    — used to decide up front whether they can write to support."""
+    reason, missing = await stats_access_lock(session, user)
+    return AccessLockOut(lock_reason=reason, missing_fields=missing)
 
 
 @router.patch("/me", response_model=UserMe)

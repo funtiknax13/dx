@@ -14,6 +14,7 @@ from app.schemas.support import (
     SupportTicketDetailOut,
     SupportTicketOut,
 )
+from app.services.profile_completeness_service import stats_access_lock
 from app.services.support_service import (
     add_message,
     create_ticket,
@@ -34,6 +35,17 @@ def _preview(ticket: SupportTicket) -> str:
 async def create_support_ticket(
     payload: SupportTicketCreate, user: CurrentUser, session: SessionDep
 ) -> SupportTicketOut:
+    # Same completeness gate as the community rating: a runner who hasn't
+    # finished their profile (or the newbie survey) can't write in yet — it's
+    # part of the "fill your profile" motivation mechanic.
+    reason, _ = await stats_access_lock(session, user)
+    if reason is not None:
+        detail = (
+            "Пройдите анкету новичка, чтобы писать в поддержку."
+            if reason == "survey_required"
+            else "Заполните профиль до конца, чтобы писать в поддержку."
+        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail)
     ticket = await create_ticket(session, user=user, body=payload.body)
     await session.commit()
     return SupportTicketOut(

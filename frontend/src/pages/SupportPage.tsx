@@ -2,13 +2,14 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { supportApi } from '../api/support'
+import { usersApi } from '../api/users'
 import { ApiError } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { formatDate } from '../lib/format'
-import { IconMail, IconSpark } from '../components/ui/icons'
+import { IconMail, IconSpark, IconUser } from '../components/ui/icons'
 
 export function SupportPage() {
   const { isAuthenticated } = useAuth()
@@ -25,6 +26,14 @@ export function SupportPage() {
     () => (isAuthenticated ? supportApi.myTickets() : Promise.resolve([])),
     [isAuthenticated],
   )
+
+  // Same completeness gate as the community rating — an unfinished profile /
+  // pending newbie survey can't write to support yet.
+  const access = useAsync(
+    () => (isAuthenticated ? usersApi.myAccess() : Promise.resolve(null)),
+    [isAuthenticated],
+  )
+  const lockReason = access.data?.lock_reason ?? null
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -52,7 +61,55 @@ export function SupportPage() {
         Вопрос по регистрации, событию или результату — напишите, организаторы ответят здесь же.
       </p>
 
-      {isAuthenticated ? (
+      {!isAuthenticated ? (
+        <div className="mt-8">
+          <StatePanel
+            title="Войдите, чтобы написать в поддержку"
+            description="Обращения доступны только зарегистрированным участникам — так мы сможем ответить вам прямо на сайте."
+            icon={<IconMail />}
+            action={
+              <div className="flex gap-3">
+                <Link to="/login" state={{ from: '/support' }} className="btn-primary">
+                  Войти
+                </Link>
+                <Link to="/register" className="btn-ghost">
+                  Зарегистрироваться
+                </Link>
+              </div>
+            }
+          />
+        </div>
+      ) : access.loading ? (
+        <div className="mt-8">
+          <PageLoader />
+        </div>
+      ) : lockReason === 'survey_required' ? (
+        <div className="mt-8">
+          <StatePanel
+            title="Сначала пройдите анкету новичка"
+            description="Ответьте на короткую анкету новичка — после этого откроются и поддержка, и рейтинг сообщества."
+            icon={<IconSpark />}
+            action={
+              <Link to="/survey?from=/support" className="btn-primary">
+                Пройти анкету
+              </Link>
+            }
+          />
+        </div>
+      ) : lockReason === 'profile_incomplete' ? (
+        <div className="mt-8">
+          <StatePanel
+            title="Сначала заполните профиль"
+            description="Обращения в поддержку доступны после заполнения профиля до конца — заодно откроется рейтинг сообщества."
+            icon={<IconUser />}
+            action={
+              <Link to="/profile" className="btn-primary">
+                Заполнить профиль
+              </Link>
+            }
+          />
+        </div>
+      ) : (
         <form onSubmit={submit} className="card mt-8 space-y-5 p-6 sm:p-8">
           <FormError message={error} />
           {success && <FormSuccess message="Обращение отправлено — ответ придёт сюда." />}
@@ -73,24 +130,6 @@ export function SupportPage() {
             {submitting ? 'Отправка…' : 'Отправить'}
           </button>
         </form>
-      ) : (
-        <div className="mt-8">
-          <StatePanel
-            title="Войдите, чтобы написать в поддержку"
-            description="Обращения доступны только зарегистрированным участникам — так мы сможем ответить вам прямо на сайте."
-            icon={<IconMail />}
-            action={
-              <div className="flex gap-3">
-                <Link to="/login" state={{ from: '/support' }} className="btn-primary">
-                  Войти
-                </Link>
-                <Link to="/register" className="btn-ghost">
-                  Зарегистрироваться
-                </Link>
-              </div>
-            }
-          />
-        </div>
       )}
 
       {isAuthenticated && (

@@ -41,6 +41,14 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class AccessLockOut(BaseModel):
+    """The current user's completeness gate (see profile_completeness_service).
+    None reason = unlocked; "profile_incomplete" / "survey_required" otherwise."""
+
+    lock_reason: str | None
+    missing_fields: list[str]
+
+
 class ParticipationHistoryItem(BaseModel):
     attendance_id: int
     group_id: int
