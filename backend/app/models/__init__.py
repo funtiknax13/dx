@@ -1,5 +1,6 @@
 from app.models.attendance import AttendanceRecord
 from app.models.base import Base
+from app.models.city import City
 from app.models.enums import (
     ClaimStatus,
     FinishStatus,
@@ -24,6 +25,7 @@ from app.models.user import User
 __all__ = [
     "Base",
     "User",
+    "City",
     "Event",
     "EventPhoto",
     "Group",

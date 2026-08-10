@@ -30,6 +30,7 @@ export interface User {
   email: string
   role: Role
   city?: string | null
+  city_id?: number | null
   gender?: Gender | null
   birthday?: string | null // ISO date
   phone?: string | null
@@ -297,6 +298,7 @@ export interface UpdateProfilePayload {
   first_name?: string
   last_name?: string
   city?: string | null
+  city_id?: number | null
   gender?: Gender | null
   birthday?: string | null
   phone?: string | null

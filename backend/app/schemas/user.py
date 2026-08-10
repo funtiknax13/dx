@@ -15,6 +15,7 @@ class UserMe(BaseModel):
     role: UserRole
     email_verified: bool
     city: str | None = None
+    city_id: int | None = None
     gender: Gender | None = None
     birthday: date | None = None
     phone: str | None = None
@@ -28,6 +29,9 @@ class UserMe(BaseModel):
 class UserUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    # Picked from the canonical list; the server mirrors the chosen city's name
+    # into `city` for display. `city` is still accepted for legacy/free-text.
+    city_id: int | None = None
     city: str | None = Field(default=None, max_length=120)
     gender: Gender | None = None
     birthday: date | None = None

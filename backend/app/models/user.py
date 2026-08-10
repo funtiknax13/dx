@@ -23,8 +23,13 @@ class User(Base, TimestampMixin):
     )
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    # Optional profile fields
+    # Optional profile fields. `city` stays the free-text display label; when the
+    # user picks from the canonical list, `city_id` links a City row (with
+    # coordinates, for a future participants map) and `city` mirrors its name.
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    city_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cities.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     gender: Mapped[Gender | None] = mapped_column(
         Enum(Gender, native_enum=False, length=20), nullable=True
     )

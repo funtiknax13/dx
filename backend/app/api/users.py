@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.security import hash_password, verify_password
 from app.models.attendance import AttendanceRecord
+from app.models.city import City
 from app.models.event import Event
 from app.models.group import Group
 from app.models.signup import Signup
@@ -64,6 +65,11 @@ async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep)
         del updates["prior_experience"]
     for field, value in updates.items():
         setattr(user, field, value)
+    # Keep the free-text `city` label in sync with the picked canonical city, so
+    # existing displays/exports keep working and completeness still sees a value.
+    if "city_id" in updates:
+        city = await session.get(City, user.city_id) if user.city_id is not None else None
+        user.city = city.name if city is not None else None
     await session.commit()
     await session.refresh(user)
     return user

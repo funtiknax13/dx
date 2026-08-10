@@ -10,10 +10,19 @@ import { formatDate, formatTime, fullName } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
+import { CityAutocomplete } from '../components/ui/CityAutocomplete'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
-import type { Gender, GuestClaim, GuestProfile, MySignupEntry, PriorExperience, User } from '../types'
+import type {
+  Gender,
+  GuestClaim,
+  GuestProfile,
+  MySignupEntry,
+  PriorExperience,
+  UpdateProfilePayload,
+  User,
+} from '../types'
 
 type Tab = 'profile' | 'security'
 
@@ -245,6 +254,7 @@ function ProfileForm({
     first_name: user?.first_name ?? '',
     last_name: user?.last_name ?? '',
     city: user?.city ?? '',
+    city_id: user?.city_id ?? null,
     gender: (user?.gender ?? '') as Gender | '',
     birthday: user?.birthday ?? '',
     phone: user?.phone ?? '',
@@ -274,11 +284,19 @@ function ProfileForm({
       return
     }
     setLoading(true)
+    // City: a canonical pick sends city_id (server mirrors the name); a legacy
+    // free-text value with no id is kept as text; empty clears both.
+    const cityFields: Pick<UpdateProfilePayload, 'city' | 'city_id'> =
+      form.city_id != null
+        ? { city_id: form.city_id }
+        : form.city.trim()
+          ? { city: form.city.trim() }
+          : { city: null, city_id: null }
     try {
       const updated = await usersApi.updateMe({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
-        city: form.city.trim() || null,
+        ...cityFields,
         gender: form.gender || null,
         birthday: form.birthday || null,
         phone: form.phone.trim() || null,
@@ -332,13 +350,13 @@ function ProfileForm({
           <Field label="Фамилия *" name="last_name" value={form.last_name} onChange={set('last_name')} required />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Город"
-            name="city"
-            placeholder="Не указан"
+          <CityAutocomplete
             value={form.city}
-            onChange={set('city')}
             error={missing.city ? REQUIRED_HINT : undefined}
+            onSelect={(c) => {
+              setForm((f) => ({ ...f, city: c?.name ?? '', city_id: c?.id ?? null }))
+              setSaved(false)
+            }}
           />
           <SelectField
             label="Пол"

@@ -21,6 +21,7 @@ interface RawUser {
   email: string
   role: User['role']
   city?: string | null
+  city_id?: number | null
   gender?: User['gender']
   birthday?: string | null
   phone?: string | null

@@ -150,6 +150,22 @@ docker compose -f docker-compose.prod.yml up -d --build   # пересобира
 `docker compose restart` **не** подхватывает изменения `.env` — если менял
 секреты, нужно `docker compose -f docker-compose.prod.yml up -d --force-recreate api`.
 
+### Справочник городов (GeoNames)
+
+Список городов для выбора города в профиле лежит готовым файлом в репозитории
+(`backend/app/data/cities.csv.gz`, данные © GeoNames, CC BY 4.0). После первой
+выкатки этой фичи (и после обновления файла) залить его в БД — команда
+идемпотентна, интернет не нужен:
+
+```bash
+docker compose -f docker-compose.prod.yml exec api python -m app.scripts.cities load
+# один раз — перенести старые текстовые города пользователей на справочник:
+docker compose -f docker-compose.prod.yml exec api python -m app.scripts.cities backfill
+```
+
+Обновить сам датасет (локально, качает GeoNames) — `python -m app.scripts.cities
+build`, затем закоммитить обновлённый `cities.csv.gz`.
+
 ### 7.1 CI/CD (автодеплой при пуше в main)
 
 `.github/workflows/ci.yml` содержит джобу `deploy`, которая запускается
