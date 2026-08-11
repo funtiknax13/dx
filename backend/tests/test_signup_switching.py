@@ -22,6 +22,10 @@ async def test_signing_up_for_another_group_switches_instead_of_duplicating(
 ) -> None:
     org = await make_user(session, "org-switch@example.com", UserRole.organizer)
     event, group_a = await make_event_group(session, org)
+    # Signups are only allowed before the run starts (no retroactive signup),
+    # so push this event into the future.
+    event.date = date.today() + timedelta(days=7)
+    group_a.start_time = None
     group_b = Group(
         event_id=event.id, location="Другое место", name="Group B", target_distance_km=15
     )
@@ -51,6 +55,8 @@ async def test_group_signup_state_reports_other_group_in_same_event(
 ) -> None:
     org = await make_user(session, "org-other@example.com", UserRole.organizer)
     event, group_a = await make_event_group(session, org)
+    event.date = date.today() + timedelta(days=7)
+    group_a.start_time = None
     group_b = Group(
         event_id=event.id, location="Другое место", name="Group B", target_distance_km=15
     )
@@ -73,6 +79,8 @@ async def test_event_signup_state_reflects_current_group(
 ) -> None:
     org = await make_user(session, "org-event-state@example.com", UserRole.organizer)
     event, group = await make_event_group(session, org)
+    event.date = date.today() + timedelta(days=7)
+    group.start_time = None
     runner = await make_user(session, "event-state@example.com", UserRole.runner)
     await session.commit()
 
@@ -118,12 +126,33 @@ async def test_my_signups_only_lists_upcoming_events(
 
 
 @pytest.mark.asyncio
+async def test_cannot_sign_up_for_a_started_event(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """No retroactive signup: once the run has started, the way into the protocol
+    is a self-reported result or a CSV import, not a new signup."""
+    org = await make_user(session, "org-past-signup@example.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)
+    event.date = date.today() - timedelta(days=1)
+    group.start_time = None  # fall back to the (past) event date
+    runner = await make_user(session, "past-signup@example.com", UserRole.runner)
+    await session.commit()
+
+    resp = await client.post(f"/api/v1/groups/{group.id}/signups", headers=_auth(runner.id))
+    assert resp.status_code == 409, resp.text
+    assert "началась" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_signups_for_different_events_are_both_allowed(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     org = await make_user(session, "org-multi@example.com", UserRole.organizer)
     event1, group1 = await make_event_group(session, org)
     event2, group2 = await make_event_group(session, org)
+    for ev, grp in ((event1, group1), (event2, group2)):
+        ev.date = date.today() + timedelta(days=7)
+        grp.start_time = None
     runner = await make_user(session, "multi-event@example.com", UserRole.runner)
     await session.commit()
 

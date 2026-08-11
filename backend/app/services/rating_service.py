@@ -1,15 +1,30 @@
 from dataclasses import dataclass
 
-from sqlalchemy import Select, case, func, select
+from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus
+from app.models.enums import FinishStatus, ModerationStatus
 from app.models.event import Event
 from app.models.group import Group
+from app.models.result import Result
 from app.models.user import User
 from app.services.baseline_service import get_all_baselines, get_baseline
 from app.services.date_windows import calendar_window, current_year
+
+
+def counts_toward_rating() -> ColumnElement[bool]:
+    """A participation counts only when someone the community trusts vouched for
+    it: an admin's CSV import (any non-self-reported `finished` record — a Result
+    is optional there), or an admin-*approved* self-reported result. A runner's
+    own self-reported run is just an unverified claim until then — a signup isn't
+    a training, and neither is an unmoderated self-report. Callers must
+    `outerjoin(Result, ...)` for the approval half of this condition to resolve."""
+    return or_(
+        AttendanceRecord.self_reported.is_(False),
+        Result.status == ModerationStatus.approved,
+    )
 
 
 @dataclass
@@ -22,23 +37,25 @@ class RatingEntry:
 
 
 def _count_query(period: str, runner_id: int | None = None) -> Select[tuple[int | None, int]]:
-    """A participation counts for rating as soon as the attendance is marked
-    `finished` and linked to an account — uploading a Result is optional (see
-    CLAUDE.md): CSV import already marks everyone `finished` by default, and that
-    alone is enough to count. Uploading a Result can later flip it to `dnf`, which
-    drops it out of the count; a *pending* (not yet approved) Result doesn't change
-    finish_status, so it keeps counting either way. Groups with
-    counts_toward_rating=False (e.g. a social/kids run) are excluded regardless."""
+    """A CSV-imported participation counts as soon as the attendance is marked
+    `finished` and linked to an account — uploading a Result is optional there.
+    A *self-reported* run, by contrast, only counts once an admin approves its
+    Result (see counts_toward_rating): the runner's own claim isn't proof of a
+    training. Uploading a Result can flip finish_status to `dnf`, which drops it
+    out of the count regardless. Groups with counts_toward_rating=False (e.g. a
+    social/kids run) are excluded either way."""
     stmt = (
         select(
             AttendanceRecord.runner_id,
             func.count(AttendanceRecord.id).label("finished_count"),
         )
         .join(Group, Group.id == AttendanceRecord.group_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id.is_not(None),
             AttendanceRecord.finish_status == FinishStatus.finished,
             Group.counts_toward_rating.is_(True),
+            counts_toward_rating(),
         )
         .group_by(AttendanceRecord.runner_id)
     )
@@ -114,10 +131,12 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
         .select_from(AttendanceRecord)
         .join(Group, Group.id == AttendanceRecord.group_id)
         .join(Event, Event.id == Group.event_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id.is_not(None),
             AttendanceRecord.finish_status == FinishStatus.finished,
             Group.counts_toward_rating.is_(True),
+            counts_toward_rating(),
         )
         .group_by(AttendanceRecord.runner_id)
     )

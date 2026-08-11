@@ -445,3 +445,47 @@ async def test_all_time_tie_breaks_on_km(session: AsyncSession) -> None:
 
     rating = await compute_rating(session, "all")
     assert [e.runner_id for e in rating] == [r1.id, r2.id]
+
+
+@pytest.mark.asyncio
+async def test_self_reported_pending_result_does_not_count(session: AsyncSession) -> None:
+    """A runner's own self-reported run is an unverified claim (signup/self-report
+    is not proof of a training) — it stays out of the rating until an admin
+    approves it, unlike a CSV import that an admin already vouched for."""
+    org = await make_user(session, "org-selfreport@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-selfreport@example.com")
+    _, group = await make_event_group(session, org)
+
+    await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.pending,
+        self_reported=True,
+    )
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 0
+    assert await compute_rating(session, "all") == []
+
+
+@pytest.mark.asyncio
+async def test_self_reported_counts_once_approved(session: AsyncSession) -> None:
+    org = await make_user(session, "org-selfreport2@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-selfreport2@example.com")
+    _, group = await make_event_group(session, org)
+
+    await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+        self_reported=True,
+    )
+    await session.commit()
+
+    assert await runner_finished_count(session, runner.id, "all") == 1
+    rating = await compute_rating(session, "all")
+    assert [e.runner_id for e in rating] == [runner.id]

@@ -127,7 +127,11 @@ export function GroupDetailPage() {
               </div>
             </div>
 
-            <SignupControl groupId={group.id} authenticated={isAuthenticated} onChange={reload} />
+            {/* Signup is intent to run — only before the event. Once it's past,
+                the way in is a self-reported result (profile) or a CSV import. */}
+            {isUpcoming && (
+              <SignupControl groupId={group.id} authenticated={isAuthenticated} onChange={reload} />
+            )}
           </div>
         </div>
       </header>

@@ -199,6 +199,18 @@ async def create_signup(group_id: int, user: CurrentUser, session: SessionDep) -
     if group is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
 
+    # No signing up after the fact: a signup is an intent to run, which only
+    # makes sense before the run starts. Once the group has started, the way in
+    # is a self-reported result or a CSV import (actual participation), not a
+    # retroactive signup.
+    event = await session.get(Event, group.event_id)
+    assert event is not None
+    if _event_has_started(group, event):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Тренировка уже началась — запись закрыта.",
+        )
+
     # One signup per event: if the runner already has one for this event
     # (possibly a different group), move it here instead of erroring —
     # picking a different pace group shouldn't require unsigning first.

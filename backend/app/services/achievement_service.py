@@ -8,7 +8,9 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
+from app.models.result import Result
 from app.services.baseline_service import get_baseline, get_baselines
+from app.services.rating_service import counts_toward_rating
 
 # Full-DX-count thresholds shown as milestone badges.
 ACHIEVEMENT_MILESTONES: list[int] = [25, 50, 100, 150, 200, 250, 300]
@@ -45,10 +47,12 @@ async def compute_achievements(
             .select_from(AttendanceRecord)
             .join(Group, Group.id == AttendanceRecord.group_id)
             .join(Event, Event.id == Group.event_id)
+            .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
             .where(
                 AttendanceRecord.runner_id == runner_id,
                 AttendanceRecord.finish_status == FinishStatus.finished,
                 Group.counts_toward_rating.is_(True),
+                counts_toward_rating(),
             )
             .order_by(Event.date)
         )
@@ -108,10 +112,12 @@ async def get_latest_thresholds(
     rows = await session.execute(
         select(AttendanceRecord.runner_id, func.count(AttendanceRecord.id))
         .join(Group, Group.id == AttendanceRecord.group_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id.in_(runner_ids),
             AttendanceRecord.finish_status == FinishStatus.finished,
             Group.counts_toward_rating.is_(True),
+            counts_toward_rating(),
         )
         .group_by(AttendanceRecord.runner_id)
     )

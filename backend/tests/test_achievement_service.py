@@ -179,3 +179,39 @@ async def test_get_latest_thresholds_includes_baseline_only_runner(
 
     result = await get_latest_thresholds(session, [runner.id], milestones=[25, 50])
     assert result == {runner.id: 25}
+
+
+@pytest.mark.asyncio
+async def test_achievements_exclude_unapproved_self_reported(session: AsyncSession) -> None:
+    """A self-reported run only contributes to milestone badges once approved —
+    same rule as the rating (see rating_service.counts_toward_rating)."""
+    from sqlalchemy import select
+
+    from app.models.enums import ModerationStatus
+    from app.models.result import Result
+    from tests.factories import make_attendance_with_result
+
+    org = await make_user(session, "org-ach-self@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-ach-self@example.com")
+    _, group = await make_event_group(session, org, target_km=10)
+
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.pending,
+        self_reported=True,
+    )
+    await session.commit()
+
+    assert (await get_latest_thresholds(session, [runner.id], milestones=[1])) == {}
+    entries = await compute_achievements(session, runner.id, milestones=[1])
+    assert entries[0].reached is False
+
+    result = await session.scalar(select(Result).where(Result.attendance_record_id == rec.id))
+    assert result is not None
+    result.status = ModerationStatus.approved
+    await session.commit()
+
+    assert (await get_latest_thresholds(session, [runner.id], milestones=[1])) == {runner.id: 1}

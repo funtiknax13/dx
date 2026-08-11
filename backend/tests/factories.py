@@ -76,12 +76,14 @@ async def make_attendance_with_result(
     *,
     finish_status: FinishStatus,
     moderation: ModerationStatus,
+    self_reported: bool = False,
 ) -> AttendanceRecord:
     rec = AttendanceRecord(
         group_id=group.id,
         raw_name=f"{runner.first_name} {runner.last_name}" if runner else "Unknown",
         runner_id=runner.id if runner else None,
         finish_status=finish_status,
+        self_reported=self_reported,
     )
     session.add(rec)
     await session.flush()
