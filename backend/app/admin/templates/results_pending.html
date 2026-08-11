@@ -53,6 +53,20 @@
   #lb.open { display:grid; }
   #lb img { max-width:100%; max-height:86vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
   #lb .hint { position:fixed; top:16px; right:20px; color:#e5e7eb; font-size:13px; }
+
+  .rj-overlay { position:fixed; inset:0; background:rgba(17,24,39,.7); display:none; place-items:center;
+                z-index:1100; padding:20px; }
+  .rj-overlay.open { display:grid; }
+  .rj-box { background:#fff; border-radius:12px; width:100%; max-width:520px; padding:20px;
+            box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .rj-box h3 { margin:0 0 4px; font-size:17px; }
+  .rj-box .rj-hint { color:#6b7280; font-size:13px; margin:0 0 12px; }
+  .rj-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .rj-preset { background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; border-radius:999px;
+               padding:5px 11px; font-size:12px; cursor:pointer; }
+  .rj-preset:hover { background:#e5e7eb; }
+  .rj-box textarea { width:100%; min-height:88px; resize:vertical; }
+  .rj-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
 </style>
 
 <div class="mod-head">
@@ -145,10 +159,7 @@
       <form class="inline" method="post" action="/admin-tools/results/{{ r.id }}/approve">
         <button type="submit">Подтвердить</button>
       </form>
-      <form class="inline" method="post" action="/admin-tools/results/{{ r.id }}/reject"
-            onsubmit="return confirm('Удалить этот результат?');">
-        <button type="submit" class="danger">Отклонить</button>
-      </form>
+      <button type="button" class="danger" onclick="openReject({{ r.id }})">Отклонить</button>
       <span class="spacer"></span>
       {% if r.source_file %}<a class="dl" href="{{ r.source_file }}">Скачать трек</a>{% endif %}
     </div>
@@ -171,9 +182,43 @@
   <span class="hint">Клик или Esc — закрыть</span>
   <img id="lb-img" src="" alt="">
 </div>
+
+<div id="reject-modal" class="rj-overlay">
+  <form class="rj-box" method="post" id="reject-form">
+    <h3>Отклонить результат</h3>
+    <p class="rj-hint">Бегун получит закрытый тикет в поддержке с этим текстом и письмо на почту.</p>
+    <div class="rj-presets">
+      <button type="button" class="rj-preset" data-text="На скриншоте не указана или не совпадает дата старта.">Дата не совпадает</button>
+      <button type="button" class="rj-preset" data-text="Дистанция на скриншоте не совпадает с заявленной.">Дистанция не совпадает</button>
+      <button type="button" class="rj-preset" data-text="Время на скриншоте не совпадает с заявленным.">Время не совпадает</button>
+      <button type="button" class="rj-preset" data-text="Скриншот нечитаемый или на нём не виден трек маршрута.">Нет трека / нечитаемо</button>
+      <button type="button" class="rj-preset" data-text="Скриншот не соответствует этой тренировке.">Не та тренировка</button>
+    </div>
+    <textarea name="reason" id="reject-reason" placeholder="Причина отклонения — выберите шаблон выше или напишите свой текст…" required></textarea>
+    <div class="rj-actions">
+      <button type="button" class="secondary" onclick="closeReject()">Отмена</button>
+      <button type="submit" class="danger">Отклонить и уведомить</button>
+    </div>
+  </form>
+</div>
+
 <script>
   function lbOpen(src){ document.getElementById('lb-img').src = src; document.getElementById('lb').classList.add('open'); }
   function lbClose(){ document.getElementById('lb').classList.remove('open'); }
-  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') lbClose(); });
+
+  function openReject(id){
+    var form = document.getElementById('reject-form');
+    form.action = '/admin-tools/results/' + id + '/reject';
+    document.getElementById('reject-reason').value = '';
+    document.getElementById('reject-modal').classList.add('open');
+  }
+  function closeReject(){ document.getElementById('reject-modal').classList.remove('open'); }
+  document.querySelectorAll('.rj-preset').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.getElementById('reject-reason').value = btn.getAttribute('data-text');
+    });
+  });
+
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ lbClose(); closeReject(); } });
 </script>
 {% endblock %}

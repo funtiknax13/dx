@@ -37,6 +37,29 @@ async def create_ticket(
     return ticket
 
 
+async def create_staff_ticket(
+    session: AsyncSession,
+    *,
+    recipient: User,
+    admin: User | None,
+    body: str,
+    closed: bool = True,
+) -> SupportTicket:
+    """A ticket staff opens *to* a runner (the reverse of the usual flow) — e.g.
+    to tell them a submitted result wasn't accepted at moderation. Opens already
+    resolved (closed) with a single staff message; the runner gets the same
+    notification email as any staff reply (see add_message) and can still reply
+    to reopen the thread if they want to discuss it."""
+    ticket = SupportTicket(
+        status=TicketStatus.closed if closed else TicketStatus.open,
+        created_by_user_id=recipient.id,
+    )
+    session.add(ticket)
+    await session.flush()
+    await add_message(session, ticket, sender=admin, is_staff=True, body=body)
+    return ticket
+
+
 async def add_message(
     session: AsyncSession,
     ticket: SupportTicket,

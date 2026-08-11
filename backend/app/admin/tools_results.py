@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -10,6 +10,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import ModerationStatus, UserRole
 from app.models.group import Group
 from app.models.result import Result
+from app.services.support_service import create_staff_ticket
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
 
@@ -87,21 +88,73 @@ async def approve_result(request: Request, result_id: int) -> RedirectResponse:
     return RedirectResponse("/admin-tools/results?flash=Результат подтверждён", status_code=303)
 
 
+def _rejection_message(result: Result, record: AttendanceRecord | None, reason: str) -> str:
+    """The body of the closed support ticket a runner gets when their result is
+    rejected — names the run so they know which one, plus the admin's reason."""
+    group = record.group if record is not None else None
+    event = group.event if group is not None else None
+    dur = result.duration_seconds
+    lines = ["Ваш результат не принят по итогам проверки.", ""]
+    if event is not None:
+        lines.append(f"Событие: {event.title}")
+    if group is not None:
+        lines.append(f"Группа: {group.name}")
+    lines.append(
+        f"Результат: {result.distance_km:.2f} км, "
+        f"{dur // 3600}:{dur % 3600 // 60:02d}:{dur % 60:02d}"
+    )
+    reason = reason.strip()
+    if reason:
+        lines += ["", f"Причина: {reason}"]
+    lines += ["", "Вы можете загрузить результат заново, устранив замечание."]
+    return "\n".join(lines)
+
+
 @router.post("/results/{result_id}/reject", response_model=None)
-async def reject_result(request: Request, result_id: int) -> RedirectResponse:
+async def reject_result(
+    request: Request, result_id: int, reason: str = Form("")
+) -> RedirectResponse:
     """Delete a bogus/duplicate result so the runner can resubmit — CLAUDE.md doesn't
     define a distinct 'rejected' status, and leaving it pending forever would just
-    clutter the queue."""
+    clutter the queue. The runner is told why via a closed support ticket."""
     user = await get_tools_user(request)
     if user is None:
         return login_redirect()
     if user.role != UserRole.admin:
         return RedirectResponse("/admin-tools", status_code=303)
     async with SessionLocal() as session:
-        result = await session.get(Result, result_id)
-        if result is not None:
-            await session.delete(result)
-            await session.commit()
+        result = await session.scalar(
+            select(Result)
+            .where(Result.id == result_id)
+            .options(
+                selectinload(Result.attendance_record).options(
+                    selectinload(AttendanceRecord.group).selectinload(Group.event),
+                    selectinload(AttendanceRecord.runner),
+                )
+            )
+        )
+        if result is None:
+            return RedirectResponse(
+                "/admin-tools/results?flash=Результат не найден", status_code=303
+            )
+        record = result.attendance_record
+        runner = record.runner if record is not None else None
+        # Only real accounts can receive a ticket (guests/unmatched can't log in).
+        if runner is not None and not runner.is_guest:
+            await create_staff_ticket(
+                session,
+                recipient=runner,
+                admin=user,
+                body=_rejection_message(result, record, reason),
+            )
+        await session.delete(result)
+        # A self-reported record exists only because of the runner's own,
+        # now-rejected, claim — remove it so they don't linger "в пути" in the
+        # protocol. A CSV/admin record is authoritative: keep it, drop only the
+        # result, and let them resubmit.
+        if record is not None and record.self_reported:
+            await session.delete(record)
+        await session.commit()
     return RedirectResponse(
-        "/admin-tools/results?flash=Результат отклонён и удалён", status_code=303
+        "/admin-tools/results?flash=Результат отклонён, бегун уведомлён", status_code=303
     )
