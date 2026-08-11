@@ -13,9 +13,14 @@ class RatingItem(BaseModel):
 class RatingResponse(BaseModel):
     period: str
     entries: list[RatingItem]
-    # The requesting user's own entry, only when they're authenticated and
-    # outside `entries` (i.e. past the top-N cutoff) — already visible in
-    # `entries` otherwise, no need to repeat it.
+    # Full ranking size (all pages) and the current page, so the frontend can
+    # build a pager. 0-activity runners are already excluded (see compute_rating).
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    # The requesting user's own entry, only when they're authenticated and NOT
+    # on the current page — already visible in `entries` otherwise. Its `rank`
+    # lets the frontend point at the page the user is on.
     me: RatingItem | None = None
     # None = unlocked. "anonymous" or "profile_incomplete" — see
     # profile_completeness_service.stats_access_lock. When locked, entries/me

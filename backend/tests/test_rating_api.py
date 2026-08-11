@@ -22,12 +22,12 @@ async def _finish_n(session: AsyncSession, group, runner_id: int, n: int) -> Non
 
 
 @pytest.mark.asyncio
-async def test_rating_top_n_and_me_row(
+async def test_rating_pagination_and_me_row(
     session: AsyncSession, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import app.api.rating as rating_module
 
-    monkeypatch.setattr(rating_module, "TOP_N", 2)
+    monkeypatch.setattr(rating_module, "PAGE_SIZE", 2)
 
     org = await make_user(session, "org-rtop@example.com", UserRole.organizer)
     r1 = await make_user(session, "r1-rtop@example.com")
@@ -35,9 +35,6 @@ async def test_rating_top_n_and_me_row(
     r3 = await make_user(session, "r3-rtop@example.com")
     _, group = await make_event_group(session, org)
 
-    # Distinct AttendanceRecord counts require distinct groups per finish
-    # since attendance is one row per run — reuse the same group, it's fine,
-    # counts_toward_rating defaults True.
     await _finish_n(session, group, r1.id, 3)
     await _finish_n(session, group, r2.id, 2)
     await _finish_n(session, group, r3.id, 1)
@@ -51,20 +48,38 @@ async def test_rating_top_n_and_me_row(
     assert body["entries"] == []
     assert body["me"] is None
 
-    # r3 is rank 3, outside top 2, and has a complete profile -> unlocked,
-    # gets a "me" row.
+    # Page 1 shows the first PAGE_SIZE ranked runners; r3 is on page 2, so with a
+    # complete profile they get a "me" row and total/page metadata is returned.
     token3 = create_access_token(r3.id)
     resp3 = await client.get("/api/v1/rating", headers={"Authorization": f"Bearer {token3}"})
     body3 = resp3.json()
     assert body3["lock_reason"] is None
     assert [e["runner_id"] for e in body3["entries"]] == [r1.id, r2.id]
+    assert body3["total"] == 3
+    assert body3["page"] == 1
+    assert body3["page_size"] == 2
     assert body3["me"]["runner_id"] == r3.id
     assert body3["me"]["rank"] == 3
 
-    # r1 is rank 1, already in entries -> "me" stays None (no duplicate row).
+    # r1 is rank 1, already on page 1 -> "me" stays None (no duplicate row).
     token1 = create_access_token(r1.id)
     resp1 = await client.get("/api/v1/rating", headers={"Authorization": f"Bearer {token1}"})
     assert resp1.json()["me"] is None
+
+    # Page 2 lists r3; now r3 is on-page (me None) while r1 (page 1) gets a me row.
+    p2_r3 = await client.get(
+        "/api/v1/rating?page=2", headers={"Authorization": f"Bearer {token3}"}
+    )
+    body_p2 = p2_r3.json()
+    assert [e["runner_id"] for e in body_p2["entries"]] == [r3.id]
+    assert body_p2["page"] == 2
+    assert body_p2["me"] is None
+
+    p2_r1 = await client.get(
+        "/api/v1/rating?page=2", headers={"Authorization": f"Bearer {token1}"}
+    )
+    assert p2_r1.json()["me"]["runner_id"] == r1.id
+    assert p2_r1.json()["me"]["rank"] == 1
 
 
 @pytest.mark.asyncio

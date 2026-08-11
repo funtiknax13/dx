@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.api.deps import OptionalUser, SessionDep
 from app.schemas.rating import RatingItem, RatingResponse
@@ -9,19 +9,30 @@ from app.services.rating_service import compute_rating
 
 router = APIRouter(tags=["rating"])
 
-TOP_N = 20
+PAGE_SIZE = 20
 
 
 @router.get("/rating", response_model=RatingResponse)
 async def rating(
-    session: SessionDep, user: OptionalUser, period: Literal["all", "year", "month"] = "all"
+    session: SessionDep,
+    user: OptionalUser,
+    period: Literal["all", "year", "month"] = "all",
+    page: int = Query(1, ge=1),
 ) -> RatingResponse:
     lock_reason, missing_fields = await stats_access_lock(session, user)
     if lock_reason is not None:
         return RatingResponse(
-            period=period, entries=[], lock_reason=lock_reason, missing_fields=missing_fields
+            period=period,
+            entries=[],
+            total=0,
+            page=1,
+            page_size=PAGE_SIZE,
+            lock_reason=lock_reason,
+            missing_fields=missing_fields,
         )
 
+    # compute_rating already drops anyone with 0 activity in the window, so the
+    # ranking never lists someone sitting at 0 for the selected period.
     entries = await compute_rating(session, period)
     items = [
         RatingItem(
@@ -35,10 +46,28 @@ async def rating(
         for i, e in enumerate(entries, start=1)
     ]
 
+    total = len(items)
+    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    start = (page - 1) * PAGE_SIZE
+    page_items = items[start : start + PAGE_SIZE]
+
+    # Only surface a personal "me" row when the user is ranked but *not* on the
+    # page being viewed — otherwise they're already visible. Its rank tells the
+    # frontend which page to highlight.
     me = None
     if user is not None:
-        mine = next((it for it in items if it.runner_id == user.id), None)
-        if mine is not None and mine.rank > TOP_N:
-            me = mine
+        on_page = {it.runner_id for it in page_items}
+        me = next(
+            (it for it in items if it.runner_id == user.id and it.runner_id not in on_page),
+            None,
+        )
 
-    return RatingResponse(period=period, entries=items[:TOP_N], me=me)
+    return RatingResponse(
+        period=period,
+        entries=page_items,
+        total=total,
+        page=page,
+        page_size=PAGE_SIZE,
+        me=me,
+    )

@@ -4,12 +4,12 @@ import { ratingApi } from '../api/rating'
 import { leaderboardApi } from '../api/leaderboard'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { fullName } from '../lib/format'
+import { fullName, plural } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconTrophy } from '../components/ui/icons'
-import type { RatingPeriod, StatsLockReason } from '../types'
+import type { RatingEntry, RatingPeriod, StatsLockReason } from '../types'
 
 const FIELD_LABELS: Record<string, string> = {
   birthday: 'дата рождения',
@@ -62,11 +62,21 @@ export function RatingPage() {
   const { user: authUser } = useAuth()
   const [view, setView] = useState<View>('rating')
   const [period, setPeriod] = useState<RatingPeriod>('all')
+  const [page, setPage] = useState(1)
+
+  const changeView = (v: View) => {
+    setView(v)
+    setPage(1)
+  }
+  const changePeriod = (p: RatingPeriod) => {
+    setPeriod(p)
+    setPage(1)
+  }
 
   const { data, loading, error, reload } = useAsync(async () => {
     if (view === 'rating') {
-      const { entries, me, lockReason, missingFields } = await ratingApi.list(period)
-      const toDisplay = (e: (typeof entries)[number]): DisplayEntry => ({
+      const res = await ratingApi.list(period, page)
+      const toDisplay = (e: RatingEntry): DisplayEntry => ({
         rank: e.rank,
         user_id: e.user_id,
         first_name: e.first_name,
@@ -77,11 +87,18 @@ export function RatingPage() {
         valueLabel: 'балл',
         secondary: { value: e.finished_count, label: 'финишей' },
       })
+      const totalPages = Math.max(1, Math.ceil(res.total / res.pageSize))
       return {
-        entries: entries.map(toDisplay),
-        me: me ? toDisplay(me) : null,
-        lockReason,
-        missingFields,
+        entries: res.entries.map(toDisplay),
+        me: res.me ? toDisplay(res.me) : null,
+        lockReason: res.lockReason,
+        missingFields: res.missingFields,
+        pagination: {
+          page: res.page,
+          totalPages,
+          total: res.total,
+          myPage: res.me ? Math.ceil(res.me.rank / res.pageSize) : null,
+        },
       }
     }
     // Streak is period-agnostic — always fetched as "all" regardless of the
@@ -104,13 +121,18 @@ export function RatingPage() {
       me: me ? toDisplay(me) : null,
       lockReason,
       missingFields,
+      pagination: null,
     }
-  }, [view, period])
+  }, [view, period, page])
 
   const entries = data?.entries ?? []
   const meEntry = data?.me ?? null
-  const podium = entries.slice(0, 3)
-  const rest = entries.slice(3)
+  const pagination = data?.pagination ?? null
+  // The podium (top 3) only makes sense on the first page of the full ranking;
+  // deeper pages are a plain ranked list.
+  const showPodium = !pagination || pagination.page === 1
+  const podium = showPodium ? entries.slice(0, 3) : []
+  const rest = showPodium ? entries.slice(3) : entries
   const hasSecondary = entries.some((e) => e.secondary)
 
   return (
@@ -130,7 +152,11 @@ export function RatingPage() {
               <IconTrophy width={16} height={16} /> Лидерборд
             </span>
             <span className="chip border border-paper/15 bg-paper/[0.06] text-paper/60">
-              Топ-20
+              {view === 'rating'
+                ? pagination
+                  ? `${pagination.total} ${plural(pagination.total, 'участник', 'участника', 'участников')}`
+                  : 'Все участники'
+                : 'Топ-20'}
             </span>
           </div>
           <h1 className="mt-3 font-display text-4xl leading-tight sm:text-5xl">
@@ -143,7 +169,7 @@ export function RatingPage() {
               {VIEWS.map(([key, label]) => (
                 <button
                   key={key}
-                  onClick={() => setView(key)}
+                  onClick={() => changeView(key)}
                   className={`rounded-full px-4 py-1.5 transition ${
                     view === key ? 'bg-volt text-ink' : 'text-paper/70 hover:text-paper'
                   }`}
@@ -157,7 +183,7 @@ export function RatingPage() {
                 {PERIODS.map(([key, label]) => (
                   <button
                     key={key}
-                    onClick={() => setPeriod(key)}
+                    onClick={() => changePeriod(key)}
                     className={`rounded-full px-4 py-1.5 transition ${
                       period === key ? 'bg-volt text-ink' : 'text-paper/70 hover:text-paper'
                     }`}
@@ -217,17 +243,108 @@ export function RatingPage() {
 
             {meEntry && (
               <div className="mt-4 overflow-hidden rounded-xl2 border border-signal/30 bg-signal-wash shadow-card">
-                <div className="border-b border-signal/20 px-4 py-2 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-signal-600">
-                  Ваш результат
+                <div className="flex items-center justify-between gap-2 border-b border-signal/20 px-4 py-2 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-signal-600">
+                  <span>Ваш результат</span>
+                  {pagination?.myPage && (
+                    <button
+                      onClick={() => setPage(pagination.myPage!)}
+                      className="rounded-full bg-signal px-2 py-0.5 text-white transition hover:opacity-90"
+                    >
+                      Стр. {pagination.myPage} →
+                    </button>
+                  )}
                 </div>
                 <ul>
                   <RatingRow entry={meEntry} hasSecondary={hasSecondary} isMe />
                 </ul>
               </div>
             )}
+
+            {pagination && (
+              <RatingPager
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                myPage={pagination.myPage}
+                onChange={setPage}
+              />
+            )}
           </>
         )}
       </section>
+    </div>
+  )
+}
+
+/** Windowed page list: always first + last + a small window around the current
+ * page, plus the viewer's own page (so it can be marked), with 'gap' markers
+ * standing in for the skipped runs. */
+function pageWindow(current: number, total: number, myPage: number | null): (number | 'gap')[] {
+  const wanted = new Set<number>([1, total, current, current - 1, current + 1])
+  if (myPage) wanted.add(myPage)
+  const sorted = [...wanted].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
+  const out: (number | 'gap')[] = []
+  let prev = 0
+  for (const p of sorted) {
+    if (p - prev > 1) out.push('gap')
+    out.push(p)
+    prev = p
+  }
+  return out
+}
+
+function RatingPager({
+  page,
+  totalPages,
+  myPage,
+  onChange,
+}: {
+  page: number
+  totalPages: number
+  myPage: number | null
+  onChange: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
+  return (
+    <div className="mt-8 flex flex-wrap items-center justify-center gap-1.5">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={page <= 1}
+        className="btn-ghost btn-sm disabled:pointer-events-none disabled:opacity-40"
+        aria-label="Предыдущая страница"
+      >
+        ←
+      </button>
+      {pageWindow(page, totalPages, myPage).map((n, i) =>
+        n === 'gap' ? (
+          <span key={`gap-${i}`} className="px-1 text-clay">
+            …
+          </span>
+        ) : (
+          <button
+            key={n}
+            onClick={() => onChange(n)}
+            title={n === myPage ? 'Ваша страница' : undefined}
+            className={`relative grid h-9 min-w-9 place-items-center rounded-lg px-2 font-mono text-sm tabular transition ${
+              n === page ? 'bg-ink text-paper' : 'text-ink-600 hover:bg-ink/5'
+            } ${n === myPage && n !== page ? 'ring-2 ring-signal ring-offset-1' : ''}`}
+          >
+            {n}
+            {n === myPage && (
+              <span className="absolute -right-1.5 -top-1.5 rounded-full bg-signal px-1 text-[0.5rem] font-semibold leading-tight text-white">
+                Вы
+              </span>
+            )}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page >= totalPages}
+        className="btn-ghost btn-sm disabled:pointer-events-none disabled:opacity-40"
+        aria-label="Следующая страница"
+      >
+        →
+      </button>
     </div>
   )
 }
