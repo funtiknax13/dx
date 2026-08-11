@@ -47,23 +47,31 @@ def _check_can_submit(user: CurrentUser, record: AttendanceRecord) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your result")
 
 
-async def _check_no_pending_result(
+async def _check_resubmit_allowed(
     session: SessionDep, user: CurrentUser, record: AttendanceRecord
 ) -> None:
-    """Once a result is sitting in the moderation queue, a runner can't just
-    keep re-submitting attempts hoping one auto-validates — they wait for
-    Admin's decision. Admin themselves can still overwrite at any time
-    (e.g. fixing something directly instead of going through the queue)."""
+    """A runner can (re)upload only when there's nothing to wait on and nothing
+    final: a *pending* result is still in the moderation queue, and an *approved*
+    one is settled — both block a new upload. A *rejected* result (or no result
+    yet) can be replaced, so the runner can fix the problem and resubmit. Admin is
+    never blocked (they can overwrite directly instead of going via the queue)."""
     if user.role == UserRole.admin:
         return
     existing = await session.scalar(
         select(Result).where(Result.attendance_record_id == record.id)
     )
-    if existing is not None and existing.status == ModerationStatus.pending:
+    if existing is None:
+        return
+    if existing.status == ModerationStatus.pending:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "Результат уже отправлен и ожидает проверки администратором — "
             "дождитесь решения, прежде чем загружать новый",
+        )
+    if existing.status == ModerationStatus.approved:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Результат уже подтверждён — повторная загрузка недоступна.",
         )
 
 
@@ -202,7 +210,7 @@ async def submit_result(
 ) -> Result:
     record = await _load_record(session, attendance_id)
     _check_can_submit(user, record)
-    await _check_no_pending_result(session, user, record)
+    await _check_resubmit_allowed(session, user, record)
 
     group = await session.get(Group, record.group_id)
     assert group is not None
@@ -285,7 +293,7 @@ async def import_result_from_url(
         )
     record = await _load_record(session, attendance_id)
     _check_can_submit(user, record)
-    await _check_no_pending_result(session, user, record)
+    await _check_resubmit_allowed(session, user, record)
 
     group = await session.get(Group, record.group_id)
     assert group is not None
@@ -384,7 +392,7 @@ async def submit_group_result(
         session.add(record)
         await session.flush()
 
-    await _check_no_pending_result(session, user, record)
+    await _check_resubmit_allowed(session, user, record)
 
     screenshot_path = (
         await _save_screenshot(image) if image is not None and image.filename else None

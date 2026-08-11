@@ -25,6 +25,10 @@ class ResultSource(enum.StrEnum):
 class ModerationStatus(enum.StrEnum):
     pending = "pending"
     approved = "approved"
+    # Result reviewed and turned down (bad screenshot, wrong data, …). Kept
+    # rather than deleted so the runner sees it was rejected and can re-upload;
+    # never counts toward the protocol/rating (that needs `approved`).
+    rejected = "rejected"
 
 
 class ClaimStatus(enum.StrEnum):

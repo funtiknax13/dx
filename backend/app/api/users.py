@@ -240,6 +240,7 @@ async def user_history(
                 event_date=event.date,
                 finish_status=rec.finish_status.value,
                 has_result=rec.result is not None,
+                moderation_status=rec.result.status.value if rec.result is not None else None,
             )
         )
     return Page(items=items, total=total or 0, page=page, page_size=page_size)

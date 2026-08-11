@@ -62,6 +62,9 @@ class ParticipationHistoryItem(BaseModel):
     event_date: date
     finish_status: str
     has_result: bool
+    # pending / approved / rejected / None — lets the owner's view know whether a
+    # rejected result can be re-uploaded (see ParticipationHistory on the frontend).
+    moderation_status: str | None = None
 
 
 class AchievementItem(BaseModel):

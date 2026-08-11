@@ -12,7 +12,7 @@ export interface AwaitingResultEntry {
   event_date: string
   start_time: string | null
   has_result: boolean
-  moderation_status: 'pending' | 'approved' | null
+  moderation_status: 'pending' | 'approved' | 'rejected' | null
 }
 
 export const signupsApi = {

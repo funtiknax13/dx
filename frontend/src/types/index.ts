@@ -4,7 +4,7 @@
 export type Role = 'runner' | 'organizer' | 'admin'
 export type Gender = 'male' | 'female'
 export type FinishStatus = 'finished' | 'dnf'
-export type ModerationStatus = 'pending' | 'approved'
+export type ModerationStatus = 'pending' | 'approved' | 'rejected'
 /** Self-reported at profile completion — "have you run a DX before signing
  * up?" Drives whether an inline guest-profile claim search is offered.
  * Only asked of accounts registered after this field shipped — every

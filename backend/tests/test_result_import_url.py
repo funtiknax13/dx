@@ -260,9 +260,11 @@ async def test_admin_can_resubmit_even_while_pending(
 
 
 @pytest.mark.asyncio
-async def test_resubmit_allowed_again_once_approved(
+async def test_resubmit_blocked_once_approved(
     session: AsyncSession, client: AsyncClient
 ) -> None:
+    """An approved result is final — a runner can't overwrite it (see
+    _check_resubmit_allowed). Only an admin could, and only via the queue."""
     from app.models.enums import ModerationStatus
     from app.models.result import Result
 
@@ -287,9 +289,46 @@ async def test_resubmit_allowed_again_once_approved(
     result.status = ModerationStatus.approved
     await session.commit()
 
-    # Once approved (not pending), a correction is allowed again — same result row.
+    second = await client.post(
+        f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
+    )
+    assert second.status_code == 409, second.text
+    assert "подтверждён" in second.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_resubmit_allowed_after_rejected(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A rejected result isn't final — the runner can upload a corrected one,
+    which overwrites the rejected row and goes back to pending."""
+    from app.models.enums import ModerationStatus
+    from app.models.result import Result
+
+    runner = await make_user(session, "runner-importurl10@example.com")
+    record = await _make_matched_attendance(session, runner)
+    await session.commit()
+
+    token = create_access_token(runner.id)
+    headers = {"Authorization": f"Bearer {token}"}
+    data = {"distance_km": "10.0", "duration_seconds": "2100"}
+    files = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
+
+    first = await client.post(
+        f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
+    )
+    assert first.status_code == 201, first.text
+
+    result = await session.scalar(
+        select(Result).where(Result.attendance_record_id == record.id)
+    )
+    assert result is not None
+    result.status = ModerationStatus.rejected
+    await session.commit()
+
     second = await client.post(
         f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
     )
     assert second.status_code == 201, second.text
     assert second.json()["id"] == result.id
+    assert second.json()["status"] == "pending"

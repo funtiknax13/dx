@@ -203,6 +203,7 @@ function AwaitingResultRow({
 }) {
   const [open, setOpen] = useState(false)
   const pending = e.moderation_status === 'pending'
+  const rejected = e.moderation_status === 'rejected'
 
   return (
     <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
@@ -225,9 +226,12 @@ function AwaitingResultRow({
         {pending ? (
           <span className="chip shrink-0 bg-ink/10 text-ink-600">На проверке</span>
         ) : (
-          <button onClick={() => setOpen((v) => !v)} className="btn-primary btn-sm shrink-0" type="button">
-            {open ? 'Закрыть' : 'Загрузить'}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {rejected && <span className="chip bg-signal/10 text-signal-600">Отклонён</span>}
+            <button onClick={() => setOpen((v) => !v)} className="btn-primary btn-sm" type="button">
+              {open ? 'Закрыть' : rejected ? 'Загрузить заново' : 'Загрузить'}
+            </button>
+          </div>
         )}
       </div>
       {open && !pending && (

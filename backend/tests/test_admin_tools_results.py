@@ -26,7 +26,7 @@ async def _result_id(session: AsyncSession, attendance_id: int) -> int:
 
 
 @pytest.mark.asyncio
-async def test_reject_self_reported_notifies_runner_and_removes_record(
+async def test_reject_marks_rejected_and_notifies_runner(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     admin = await make_user(session, "admin-reject1@example.com", UserRole.admin)
@@ -54,15 +54,13 @@ async def test_reject_self_reported_notifies_runner_and_removes_record(
         follow_redirects=False,
     )
     assert resp.status_code == 303
+    session.expire_all()
 
-    # Result and the self-reported record are both gone.
-    assert (
-        await session.scalar(select(Result).where(Result.attendance_record_id == rec_id)) is None
-    )
-    assert (
-        await session.scalar(select(AttendanceRecord).where(AttendanceRecord.id == rec_id))
-        is None
-    )
+    # The result is kept but marked rejected (not deleted); the record stays.
+    result = await session.scalar(select(Result).where(Result.id == result_id))
+    assert result is not None
+    assert result.status == ModerationStatus.rejected
+    assert await session.get(AttendanceRecord, rec_id) is not None
 
     # The runner got a closed ticket with a staff message carrying the reason.
     ticket = await session.scalar(
@@ -107,13 +105,13 @@ async def test_reject_csv_record_keeps_attendance(
         follow_redirects=False,
     )
     assert resp.status_code == 303
+    session.expire_all()
 
-    # The (authoritative) attendance stays; only the result is dropped.
-    assert (
-        await session.scalar(select(AttendanceRecord).where(AttendanceRecord.id == rec_id))
-        is not None
-    )
-    assert await session.scalar(select(Result).where(Result.id == result_id)) is None
+    # The attendance stays and the result is kept, marked rejected.
+    assert await session.get(AttendanceRecord, rec_id) is not None
+    result = await session.scalar(select(Result).where(Result.id == result_id))
+    assert result is not None
+    assert result.status == ModerationStatus.rejected
     # Runner still notified.
     assert (
         await session.scalar(
@@ -148,4 +146,7 @@ async def test_reject_unmatched_record_creates_no_ticket(
         follow_redirects=False,
     )
     assert resp.status_code == 303
+    session.expire_all()
     assert await session.scalar(select(SupportTicket)) is None
+    result = await session.scalar(select(Result).where(Result.id == result_id))
+    assert result is not None and result.status == ModerationStatus.rejected

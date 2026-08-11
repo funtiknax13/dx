@@ -51,10 +51,12 @@ function HistoryRow({
 }) {
   const [open, setOpen] = useState(false)
   const finished = h.finish_status === 'finished'
-  // While a submitted result is pending moderation, resubmitting is blocked
-  // (see backend/app/api/results.py) — the form only reappears once it's
-  // either approved (to allow a correction) or there's no result at all yet.
-  const needsResult = editable && (h.has_result === false || h.moderation_status === 'approved')
+  const rejected = h.moderation_status === 'rejected'
+  // The upload form is offered only when there's nothing final to protect: no
+  // result yet, or a rejected one to redo. A pending result is awaiting
+  // moderation and an approved one is settled — neither can be re-uploaded
+  // (see _check_resubmit_allowed in backend/app/api/results.py).
+  const needsResult = editable && (h.has_result === false || rejected)
 
   return (
     <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
@@ -83,13 +85,18 @@ function HistoryRow({
           </div>
         </div>
         {needsResult ? (
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="btn-primary btn-sm shrink-0"
-            type="button"
-          >
-            {open ? 'Закрыть' : 'Добавить результат'}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {rejected && (
+              <span className="chip bg-signal/10 text-signal-600">Отклонён</span>
+            )}
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="btn-primary btn-sm"
+              type="button"
+            >
+              {open ? 'Закрыть' : rejected ? 'Загрузить заново' : 'Добавить результат'}
+            </button>
+          </div>
         ) : (
           <div className="hidden shrink-0 text-right sm:block">
             <div className="font-mono text-sm font-semibold tabular text-ink">

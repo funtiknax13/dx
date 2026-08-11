@@ -114,9 +114,10 @@ def _rejection_message(result: Result, record: AttendanceRecord | None, reason: 
 async def reject_result(
     request: Request, result_id: int, reason: str = Form("")
 ) -> RedirectResponse:
-    """Delete a bogus/duplicate result so the runner can resubmit — CLAUDE.md doesn't
-    define a distinct 'rejected' status, and leaving it pending forever would just
-    clutter the queue. The runner is told why via a closed support ticket."""
+    """Turn a result down: mark it `rejected` (a distinct, kept status — not a
+    delete) so the runner sees it wasn't accepted and can upload a corrected one,
+    and tell them why via a closed support ticket. A rejected result never counts
+    toward the protocol/rating, but stays visible instead of silently vanishing."""
     user = await get_tools_user(request)
     if user is None:
         return login_redirect()
@@ -147,13 +148,7 @@ async def reject_result(
                 admin=user,
                 body=_rejection_message(result, record, reason),
             )
-        await session.delete(result)
-        # A self-reported record exists only because of the runner's own,
-        # now-rejected, claim — remove it so they don't linger "в пути" in the
-        # protocol. A CSV/admin record is authoritative: keep it, drop only the
-        # result, and let them resubmit.
-        if record is not None and record.self_reported:
-            await session.delete(record)
+        result.status = ModerationStatus.rejected
         await session.commit()
     return RedirectResponse(
         "/admin-tools/results?flash=Результат отклонён, бегун уведомлён", status_code=303
