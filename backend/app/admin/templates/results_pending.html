@@ -33,6 +33,7 @@
   .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-size:13px; }
   .kv dt { color:#6b7280; }
   .kv dd { margin:0; color:#111827; text-align:right; font-variant-numeric:tabular-nums; }
+  .kv .paren { color:#9ca3af; font-size:12px; }
   .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px,1fr)); gap:6px; }
   .shot { display:block; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; cursor:zoom-in;
           background:#f8fafc; position:relative; }
@@ -94,7 +95,10 @@
   {% set ev = grp.event if grp else None %}
   {% set runner = rec.runner if rec else None %}
   {% set duration = '%d:%02d:%02d'|format(r.duration_seconds // 3600, (r.duration_seconds % 3600) // 60, r.duration_seconds % 60) %}
-  {% set pace_sec = (r.duration_seconds / grp.target_distance_km) if grp and grp.target_distance_km else r.pace_seconds_per_km %}
+  {# Runner's own pace (from the distance they actually submitted), with the
+     group-distance pace shown in parentheses for comparison. #}
+  {% set runner_pace = (r.duration_seconds / r.distance_km) if r.distance_km else r.pace_seconds_per_km %}
+  {% set group_pace = (r.duration_seconds / grp.target_distance_km) if grp and grp.target_distance_km else None %}
   <details class="mod-card">
     <summary class="mod-top">
       <div class="mod-avatar">
@@ -144,7 +148,11 @@
         <dl class="kv">
           <dt>Дистанция</dt><dd>{{ '%.2f'|format(r.distance_km) }} км</dd>
           <dt>Время</dt><dd>{{ duration }}</dd>
-          <dt>Темп</dt><dd>{{ (pace_sec // 60)|int }}:{{ '%02d'|format((pace_sec % 60)|int) }} /км</dd>
+          <dt>Темп</dt>
+          <dd>
+            {{ (runner_pace // 60)|int }}:{{ '%02d'|format((runner_pace % 60)|int) }} /км
+            {% if group_pace %}<span class="paren">({{ (group_pace // 60)|int }}:{{ '%02d'|format((group_pace % 60)|int) }} по группе)</span>{% endif %}
+          </dd>
           <dt>Добавлено</dt><dd>{{ r.created_at|local_dt }}</dd>
         </dl>
       </div>
