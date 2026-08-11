@@ -208,7 +208,7 @@ async def test_resubmit_blocked_while_pending(
     token = create_access_token(runner.id)
     headers = {"Authorization": f"Bearer {token}"}
     data = {"distance_km": "10.0", "duration_seconds": "2100"}
-    files = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
+    files = {"images": ("shot.png", b"fake-image-bytes", "image/png")}
 
     first = await client.post(
         f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
@@ -238,7 +238,7 @@ async def test_admin_can_resubmit_even_while_pending(
         f"/api/v1/attendance/{record.id}/result",
         headers={"Authorization": f"Bearer {runner_token}"},
         data={"distance_km": "10.0", "duration_seconds": "2100"},
-        files={"image": ("shot.png", b"fake-image-bytes", "image/png")},
+        files={"images": ("shot.png", b"fake-image-bytes", "image/png")},
     )
     assert first.status_code == 201, first.text
     result_id = first.json()["id"]
@@ -275,7 +275,7 @@ async def test_resubmit_blocked_once_approved(
     token = create_access_token(runner.id)
     headers = {"Authorization": f"Bearer {token}"}
     data = {"distance_km": "10.0", "duration_seconds": "2100"}
-    files = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
+    files = {"images": ("shot.png", b"fake-image-bytes", "image/png")}
 
     first = await client.post(
         f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files
@@ -312,7 +312,7 @@ async def test_resubmit_allowed_after_rejected(
     token = create_access_token(runner.id)
     headers = {"Authorization": f"Bearer {token}"}
     data = {"distance_km": "10.0", "duration_seconds": "2100"}
-    files = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
+    files = {"images": ("shot.png", b"fake-image-bytes", "image/png")}
 
     first = await client.post(
         f"/api/v1/attendance/{record.id}/result", headers=headers, data=data, files=files

@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../api/client'
 import { Spinner } from './ui/Spinner'
 
 export interface ManualResultData {
   distance_km: number
   duration_seconds: number
-  image: File
+  images: File[]
 }
 
 function parseDuration(input: string): number {
@@ -17,9 +17,11 @@ function parseDuration(input: string): number {
   return 0
 }
 
-/** Manual result entry: distance + time + a required screenshot. GPX/URL upload
- * is gone for runners — the screenshot (with the fields listed below visible) is
- * the evidence an admin moderates. */
+/** Manual result entry: distance + time + at least one required screenshot.
+ * GPX/URL upload is gone for runners — the screenshots (with the fields listed
+ * below visible across one or more of them) are the evidence an admin moderates.
+ * Several are allowed for when a single screen can't show the date and the track
+ * at once. */
 export function ManualResultForm({
   onSubmit,
   onDone,
@@ -29,9 +31,23 @@ export function ManualResultForm({
 }) {
   const [distance, setDistance] = useState('')
   const [duration, setDuration] = useState('')
-  const [image, setImage] = useState<File | null>(null)
+  const [images, setImages] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return
+    const picked = Array.from(files)
+    setImages((prev) => {
+      // Dedupe by name+size so re-picking the same file doesn't double it.
+      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`))
+      return [...prev, ...picked.filter((f) => !seen.has(`${f.name}:${f.size}`))]
+    })
+    if (inputRef.current) inputRef.current.value = '' // allow re-selecting the same file
+  }
+
+  const removeAt = (i: number) => setImages((prev) => prev.filter((_, idx) => idx !== i))
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -42,13 +58,13 @@ export function ManualResultForm({
       setError('Укажите дистанцию (км) и время (чч:мм:сс)')
       return
     }
-    if (!image) {
-      setError('Прикрепите скриншот пробежки')
+    if (images.length === 0) {
+      setError('Прикрепите хотя бы один скриншот пробежки')
       return
     }
     setBusy(true)
     try {
-      await onSubmit({ distance_km: distanceKm, duration_seconds: durationSeconds, image })
+      await onSubmit({ distance_km: distanceKm, duration_seconds: durationSeconds, images })
       onDone?.()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось сохранить результат')
@@ -82,16 +98,40 @@ export function ManualResultForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-semibold text-ink-600">
-          Скриншот пробежки *
+          Скриншоты пробежки *
         </label>
         <input
+          ref={inputRef}
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+          multiple
+          onChange={(e) => addFiles(e.target.files)}
           className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-full file:border file:border-ink/15 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-600 hover:file:border-ink/30"
         />
+
+        {images.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {images.map((f, i) => (
+              <li
+                key={`${f.name}:${f.size}:${i}`}
+                className="flex items-center justify-between gap-2 rounded-lg border border-ink/10 bg-white px-2.5 py-1.5 text-xs"
+              >
+                <span className="truncate text-ink-600">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  className="shrink-0 rounded px-1.5 text-clay hover:text-signal"
+                  aria-label="Убрать"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="mt-2 rounded-lg border border-ink/10 bg-white/60 p-2.5 text-xs text-ink-600">
-          На скриншоте должны быть чётко видны:
+          На скриншотах (можно несколько) должны быть чётко видны:
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             <li>дата и время старта</li>
             <li>дистанция</li>
@@ -99,7 +139,8 @@ export function ManualResultForm({
             <li>трек маршрута</li>
           </ul>
           <span className="mt-1.5 block text-clay">
-            Без этих данных результат не примут на модерации.
+            Если на одном экране всё не помещается — приложите несколько. Без этих данных
+            результат не примут на модерации.
           </span>
         </div>
       </div>

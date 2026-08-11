@@ -28,7 +28,7 @@ class ResultOut(BaseModel):
     start_time: datetime | None
     source: str
     source_file: str | None
-    screenshot: str | None
+    screenshots: list[str] | None
     track_points: list[Any] | None
     elevation_profile: list[Any] | None
     telemetry: dict[str, Any] | None

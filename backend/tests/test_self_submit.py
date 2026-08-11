@@ -11,7 +11,7 @@ from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.signup import Signup
 from tests.factories import make_event_group, make_user
 
-_IMG = {"image": ("shot.png", b"fake-image-bytes", "image/png")}
+_IMG = {"images": ("shot.png", b"fake-image-bytes", "image/png")}
 
 
 def _auth(user_id: int) -> dict[str, str]:
@@ -134,3 +134,36 @@ async def test_self_submit_future_event_blocked(
         files=_IMG,
     )
     assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_self_submit_accepts_multiple_screenshots(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Several screenshots are allowed when one screen can't show the date and
+    the track at once — all are stored on the result."""
+    org = await make_user(session, "org-multi@e.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)  # past
+    runner = await make_user(session, "run-multi@e.com")
+    session.add(Signup(runner_id=runner.id, group_id=group.id, event_id=event.id))
+    await session.commit()
+
+    r = await client.post(
+        f"/api/v1/groups/{group.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "10", "duration_seconds": "3000"},
+        files=[
+            ("images", ("date.png", b"img-a", "image/png")),
+            ("images", ("track.png", b"img-b", "image/png")),
+        ],
+    )
+    assert r.status_code == 201, r.text
+    assert len(r.json()["screenshots"]) == 2
+
+    rec = await session.scalar(
+        select(AttendanceRecord).where(AttendanceRecord.runner_id == runner.id)
+    )
+    assert rec is not None
+    await session.refresh(rec, attribute_names=["result"])
+    assert rec.result is not None
+    assert len(rec.result.screenshots or []) == 2

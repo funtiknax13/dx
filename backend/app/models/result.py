@@ -38,9 +38,11 @@ class Result(Base, TimestampMixin):
     )
     source_file: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Optional screenshot uploaded alongside a manual entry (a photo of the
-    # watch/app screen) — evidence for a result that has no GPX/FIT track.
-    screenshot: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Optional screenshots uploaded alongside a manual entry (photos of the
+    # watch/app screen) — evidence for a result that has no GPX/FIT track. A
+    # list so a runner can attach several when one screen can't show everything
+    # (e.g. one frame with the date, another with the route/track).
+    screenshots: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # Extracted from file when possible (JSON): track points, elevation profile, FIT telemetry.
     track_points: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
