@@ -1,74 +1,76 @@
 import { useMemo } from 'react'
-import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet'
-import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { Layer, Map, Marker, Source } from 'react-map-gl/maplibre'
+import type { Feature, LineString } from 'geojson'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import type { TrackPoint } from '../types'
-
-function FitBounds({ bounds }: { bounds: LatLngBoundsExpression | null }) {
-  const map = useMap()
-  useMemo(() => {
-    if (bounds) {
-      map.fitBounds(bounds, { padding: [24, 24] })
-    }
-  }, [bounds, map])
-  return null
-}
+import { OSM_STYLE } from './mapStyle'
 
 export function RouteMap({ points, className = '' }: { points: TrackPoint[]; className?: string }) {
-  const path = useMemo<LatLngExpression[]>(
-    () => points.map((p) => [p.lat, p.lng] as LatLngExpression),
+  const line = useMemo<Feature<LineString>>(
+    () => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
+      properties: {},
+    }),
     [points],
   )
 
-  const bounds = useMemo<LatLngBoundsExpression | null>(() => {
+  const bounds = useMemo<[[number, number], [number, number]] | null>(() => {
     if (!points.length) return null
     const lats = points.map((p) => p.lat)
     const lngs = points.map((p) => p.lng)
     return [
-      [Math.min(...lats), Math.min(...lngs)],
-      [Math.max(...lats), Math.max(...lngs)],
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)],
     ]
   }, [points])
 
   if (!points.length) return null
-
-  const start = path[0]
-  const finish = path[path.length - 1]
-  const center = start
+  const start = points[0]
+  const finish = points[points.length - 1]
 
   return (
     <div className={`overflow-hidden rounded-xl2 border border-ink/[0.08] shadow-card ${className}`}>
-      <MapContainer
-        center={center}
-        zoom={13}
-        scrollWheelZoom={false}
+      <Map
+        initialViewState={
+          bounds
+            ? { bounds, fitBoundsOptions: { padding: 24 } }
+            : { longitude: start.lng, latitude: start.lat, zoom: 13 }
+        }
         style={{ height: '100%', width: '100%', minHeight: 320 }}
-        attributionControl
+        mapStyle={OSM_STYLE}
+        scrollZoom={false}
+        dragRotate={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {/* black casing + white inner line — reads as a track marking on any tile set */}
-        <Polyline positions={path} pathOptions={{ color: '#0E0E0D', weight: 7, opacity: 0.9 }} />
-        <Polyline positions={path} pathOptions={{ color: '#F7F7F5', weight: 3, opacity: 1 }} />
-        {/* start = hollow, finish = solid — distinguishable without color */}
-        <CircleMarker
-          center={start}
-          radius={7}
-          pathOptions={{ color: '#0E0E0D', weight: 2, fillColor: '#F7F7F5', fillOpacity: 1 }}
-        >
-          <Tooltip direction="top">Старт</Tooltip>
-        </CircleMarker>
-        <CircleMarker
-          center={finish}
-          radius={7}
-          pathOptions={{ color: '#0E0E0D', weight: 2, fillColor: '#0E0E0D', fillOpacity: 1 }}
-        >
-          <Tooltip direction="top">Финиш</Tooltip>
-        </CircleMarker>
-        <FitBounds bounds={bounds} />
-      </MapContainer>
+        {/* black casing + white inner line — reads as a track marking on any tiles */}
+        <Source id="route" type="geojson" data={line}>
+          <Layer
+            id="route-casing"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': '#0E0E0D', 'line-width': 7, 'line-opacity': 0.9 }}
+          />
+          <Layer
+            id="route-line"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': '#F7F7F5', 'line-width': 3 }}
+          />
+        </Source>
+        {/* start = hollow, finish = solid — distinguishable without colour */}
+        <Marker longitude={start.lng} latitude={start.lat} anchor="center">
+          <span
+            title="Старт"
+            className="block h-3.5 w-3.5 rounded-full border-2 border-ink bg-paper"
+          />
+        </Marker>
+        <Marker longitude={finish.lng} latitude={finish.lat} anchor="center">
+          <span
+            title="Финиш"
+            className="block h-3.5 w-3.5 rounded-full border-2 border-paper bg-ink"
+          />
+        </Marker>
+      </Map>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { groupsApi } from '../api/groups'
 import { signupsApi } from '../api/signups'
@@ -7,8 +7,6 @@ import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { formatDistance, formatTime, isPast, paceRange, plural } from '../lib/format'
 import { ProtocolTable } from '../components/ProtocolTable'
-import { RouteMap } from '../components/RouteMap'
-import { LocationMap } from '../components/LocationMap'
 import { ElevationProfile } from '../components/ElevationProfile'
 import { yandexMapsUrl } from '../lib/maps'
 import { Avatar } from '../components/ui/Avatar'
@@ -31,6 +29,12 @@ import type {
   RouteMap as RouteMapData,
   SignupRoster,
 } from '../types'
+
+// Lazy — MapLibre GL is heavy, so it only downloads when a map is actually shown.
+const RouteMap = lazy(() => import('../components/RouteMap').then((m) => ({ default: m.RouteMap })))
+const LocationMap = lazy(() =>
+  import('../components/LocationMap').then((m) => ({ default: m.LocationMap })),
+)
 
 export function GroupDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -207,12 +211,18 @@ export function GroupDetailPage() {
                   Открыть в картах <IconArrow width={14} height={14} className="-rotate-45" />
                 </a>
               </div>
-              <LocationMap
-                lat={group.start_lat}
-                lng={group.start_lng}
-                label={group.location ?? undefined}
-                className="h-[180px]"
-              />
+              <Suspense
+                fallback={
+                  <div className="h-[180px] animate-pulse rounded-xl2 border border-ink/[0.08] bg-ink/5" />
+                }
+              >
+                <LocationMap
+                  lat={group.start_lat}
+                  lng={group.start_lng}
+                  label={group.location ?? undefined}
+                  className="h-[180px]"
+                />
+              </Suspense>
             </div>
           )}
 
@@ -233,7 +243,13 @@ export function GroupDetailPage() {
 
           {hasRoute && route ? (
             <>
-              <RouteMap points={route.points} className="h-[320px]" />
+              <Suspense
+                fallback={
+                  <div className="h-[320px] animate-pulse rounded-xl2 border border-ink/[0.08] bg-ink/5" />
+                }
+              >
+                <RouteMap points={route.points} className="h-[320px]" />
+              </Suspense>
               {route.distance_km != null && (
                 <div className="grid grid-cols-3 gap-2">
                   <MiniStat label="Дистанция" value={`${route.distance_km.toFixed(1)} км`} />

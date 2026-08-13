@@ -127,12 +127,30 @@
   }
 }
 
-/* Leaflet — keep tiles under our UI, round the container */
-.leaflet-container {
+/* MapLibre — keep tiles under our UI, round the container */
+.maplibregl-map {
   font-family: theme('fontFamily.sans');
   background: #dcdcd9;
 }
-.leaflet-control-attribution {
+.maplibregl-ctrl-attrib {
   font-size: 10px !important;
   background: rgba(246, 246, 245, 0.8) !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: inherit;
+}
+/* Permanent label above a location marker (see LocationMap). */
+.map-pin-label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(14, 14, 13, 0.85);
+  color: #f7f7f5;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  pointer-events: none;
 }
