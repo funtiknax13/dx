@@ -10,6 +10,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
     "altcha": "^2.3.0",
     "leaflet": "^1.9.4",
     "react": "^18.3.1",
