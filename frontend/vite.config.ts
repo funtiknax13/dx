@@ -51,6 +51,9 @@ export default defineConfig({
     // the whole app in dev). Serving it as native ESM instead avoids that.
     exclude: ['maplibre-gl'],
   },
+  // MapLibre creates its worker with { type: 'module' }, so the worker Vite
+  // bundles for it (see mapStyle.ts) must be an ES module too.
+  worker: { format: 'es' },
   server: {
     host: '0.0.0.0',
     port: 5173,
