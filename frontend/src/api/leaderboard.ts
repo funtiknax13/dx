@@ -1,5 +1,11 @@
 import { api } from './client'
-import type { LeaderboardEntry, LeaderboardMetric, RatingPeriod, StatsLockReason } from '../types'
+import type {
+  LeaderboardEntry,
+  LeaderboardMetric,
+  RatingGender,
+  RatingPeriod,
+  StatsLockReason,
+} from '../types'
 
 interface RawLeaderboardItem {
   rank: number
@@ -34,6 +40,7 @@ export const leaderboardApi = {
   list: async (
     metric: LeaderboardMetric,
     period: RatingPeriod = 'all',
+    gender: RatingGender = 'all',
   ): Promise<{
     entries: LeaderboardEntry[]
     me: LeaderboardEntry | null
@@ -41,7 +48,9 @@ export const leaderboardApi = {
     missingFields: string[]
   }> => {
     // No `auth: false` — see api/rating.ts for why.
-    const res = await api.get<RawLeaderboardResponse>('/leaderboard', { query: { metric, period } })
+    const res = await api.get<RawLeaderboardResponse>('/leaderboard', {
+      query: { metric, period, gender },
+    })
     return {
       entries: res.entries.map(mapItem),
       me: res.me ? mapItem(res.me) : null,

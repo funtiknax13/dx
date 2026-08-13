@@ -17,12 +17,14 @@ async def rating(
     session: SessionDep,
     user: OptionalUser,
     period: Literal["all", "year", "month"] = "all",
+    gender: Literal["all", "male", "female"] = "all",
     page: int = Query(1, ge=1),
 ) -> RatingResponse:
     lock_reason, missing_fields = await stats_access_lock(session, user)
     if lock_reason is not None:
         return RatingResponse(
             period=period,
+            gender=gender,
             entries=[],
             total=0,
             page=1,
@@ -33,7 +35,7 @@ async def rating(
 
     # compute_rating already drops anyone with 0 activity in the window, so the
     # ranking never lists someone sitting at 0 for the selected period.
-    entries = await compute_rating(session, period)
+    entries = await compute_rating(session, period, gender)
     items = [
         RatingItem(
             rank=i,
@@ -65,6 +67,7 @@ async def rating(
 
     return RatingResponse(
         period=period,
+        gender=gender,
         entries=page_items,
         total=total,
         page=page,

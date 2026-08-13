@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus, ModerationStatus, UserRole
+from app.models.enums import FinishStatus, Gender, ModerationStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
 from app.services.rating_service import compute_rating, runner_finished_count
@@ -166,6 +166,34 @@ async def test_rating_excludes_groups_opted_out_of_rating(session: AsyncSession)
     rating = await compute_rating(session, "all")
     assert len(rating) == 1
     assert rating[0].finished_count == 1
+
+
+@pytest.mark.asyncio
+async def test_rating_splits_by_gender(session: AsyncSession) -> None:
+    """"male"/"female" restrict the ranking to runners of that gender; "all"
+    keeps everyone, and runners with no gender set (e.g. guests) show up only
+    in "all"."""
+    org = await make_user(session, "org-gender@example.com", UserRole.organizer)
+    man = await make_user(session, "man@example.com")
+    man.gender = Gender.male
+    woman = await make_user(session, "woman@example.com")
+    woman.gender = Gender.female
+    nobody = await make_user(session, "nobody@example.com")
+    nobody.gender = None
+    _, group = await make_event_group(session, org)
+
+    for runner in (man, woman, nobody):
+        await _bare_attendance(session, group, runner, finish_status=FinishStatus.finished)
+    await session.commit()
+
+    all_ids = {e.runner_id for e in await compute_rating(session, "all", "all")}
+    assert all_ids == {man.id, woman.id, nobody.id}
+
+    male_ids = {e.runner_id for e in await compute_rating(session, "all", "male")}
+    assert male_ids == {man.id}
+
+    female_ids = {e.runner_id for e in await compute_rating(session, "all", "female")}
+    assert female_ids == {woman.id}
 
 
 @pytest.mark.asyncio

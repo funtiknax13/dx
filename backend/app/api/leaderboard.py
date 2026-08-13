@@ -18,22 +18,24 @@ async def leaderboard(
     user: OptionalUser,
     metric: Literal["dx", "km", "streak"] = "dx",
     period: Literal["all", "year", "month"] = "all",
+    gender: Literal["all", "male", "female"] = "all",
 ) -> LeaderboardResponse:
     lock_reason, missing_fields = await stats_access_lock(session, user)
     if lock_reason is not None:
         return LeaderboardResponse(
             metric=metric,
             period=period,
+            gender=gender,
             entries=[],
             lock_reason=lock_reason,
             missing_fields=missing_fields,
         )
 
     if metric == "streak":
-        entries = await compute_streak_leaderboard(session)
+        entries = await compute_streak_leaderboard(session, gender)
         period = "all"  # streak is inherently period-agnostic
     else:
-        entries = await compute_leaderboard(session, metric, period)
+        entries = await compute_leaderboard(session, metric, period, gender)
 
     items = [
         LeaderboardItem(
@@ -53,4 +55,6 @@ async def leaderboard(
         if mine is not None and mine.rank > TOP_N:
             me = mine
 
-    return LeaderboardResponse(metric=metric, period=period, entries=items[:TOP_N], me=me)
+    return LeaderboardResponse(
+        metric=metric, period=period, gender=gender, entries=items[:TOP_N], me=me
+    )

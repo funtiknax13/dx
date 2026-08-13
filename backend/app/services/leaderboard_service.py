@@ -13,6 +13,7 @@ from app.models.group import Group
 from app.models.user import User
 from app.services.baseline_service import get_all_baselines
 from app.services.date_windows import calendar_window, current_year
+from app.services.rating_service import gender_filtered_ids
 
 Metric = Literal["dx", "km"]
 
@@ -146,7 +147,7 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
 
 
 async def compute_leaderboard(
-    session: AsyncSession, metric: Metric, period: str = "all"
+    session: AsyncSession, metric: Metric, period: str = "all", gender: str = "all"
 ) -> list[LeaderboardEntry]:
     """Top runners by "dx" (count of finished attendances in groups that count
     toward the rating — i.e. "full DX") or "km" (sum of those groups'
@@ -156,6 +157,10 @@ async def compute_leaderboard(
     month/year, not a trailing N days. Ties are broken by cascading through
     the other metric and broader windows — see _sort_key."""
     rows = await _bulk_ranking_rows(session)
+
+    allowed = await gender_filtered_ids(session, rows.keys(), gender)
+    if allowed is not None:
+        rows = {rid: r for rid, r in rows.items() if rid in allowed}
 
     # A runner with no activity in the requested window shouldn't be ranked
     # in it at all — the bulk fetch above includes everyone with *any*
@@ -193,7 +198,9 @@ async def compute_leaderboard(
     return entries
 
 
-async def compute_streak_leaderboard(session: AsyncSession) -> list[LeaderboardEntry]:
+async def compute_streak_leaderboard(
+    session: AsyncSession, gender: str = "all"
+) -> list[LeaderboardEntry]:
     """Top runners by *current* streak of consecutive attended past events —
     any group counts, including "P" (see app.services.stats_service for the
     per-profile version of this same algorithm). Period-agnostic: a streak is
@@ -246,6 +253,10 @@ async def compute_streak_leaderboard(session: AsyncSession) -> list[LeaderboardE
             current = current + 1 if event_id in attended else 0
         if current > 0:
             streak_map[runner_id] = current
+
+    allowed = await gender_filtered_ids(session, streak_map.keys(), gender)
+    if allowed is not None:
+        streak_map = {rid: s for rid, s in streak_map.items() if rid in allowed}
 
     if not streak_map:
         return []

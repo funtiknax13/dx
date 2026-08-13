@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { RatingEntry, RatingPeriod, StatsLockReason } from '../types'
+import type { RatingEntry, RatingGender, RatingPeriod, StatsLockReason } from '../types'
 
 interface RawRatingItem {
   rank: number
@@ -38,6 +38,7 @@ export const ratingApi = {
   list: async (
     period: RatingPeriod = 'all',
     page = 1,
+    gender: RatingGender = 'all',
   ): Promise<{
     entries: RatingEntry[]
     total: number
@@ -50,7 +51,7 @@ export const ratingApi = {
     // No `auth: false` here — the request client already attaches the token
     // when a session exists, and the endpoint stays public either way; being
     // logged in just adds a personalized `me` row when off the current page.
-    const res = await api.get<RawRatingResponse>('/rating', { query: { period, page } })
+    const res = await api.get<RawRatingResponse>('/rating', { query: { period, page, gender } })
     return {
       entries: res.entries.map(mapItem),
       total: res.total,

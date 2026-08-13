@@ -267,6 +267,8 @@ export interface RatingEntry {
 
 export type RatingPeriod = 'all' | 'year' | 'month'
 
+export type RatingGender = 'all' | 'male' | 'female'
+
 export type LeaderboardMetric = 'dx' | 'km' | 'streak'
 
 /** Informational top by count of full DX, by km (calendar-period windowed,

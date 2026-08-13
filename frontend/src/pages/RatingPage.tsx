@@ -9,7 +9,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconTrophy } from '../components/ui/icons'
-import type { RatingEntry, RatingPeriod, StatsLockReason } from '../types'
+import type { RatingEntry, RatingGender, RatingPeriod, StatsLockReason } from '../types'
 
 const FIELD_LABELS: Record<string, string> = {
   birthday: 'дата рождения',
@@ -39,6 +39,12 @@ const PERIODS: [RatingPeriod, string][] = [
   ['month', 'За этот месяц'],
 ]
 
+const GENDERS: [RatingGender, string][] = [
+  ['all', 'Все'],
+  ['male', 'Мужчины'],
+  ['female', 'Женщины'],
+]
+
 const VIEW_SUBTITLE: Record<View, string> = {
   rating: 'Рейтинг строится по числу завершённых пробежек (finished), подтверждённых администратором. Чем активнее бежишь — тем выше в таблице.',
   streak: 'Топ по текущей серии подряд посещённых DX — считается по любой группе, не только по полным дистанциям.',
@@ -65,6 +71,7 @@ export function RatingPage() {
   const { user: authUser } = useAuth()
   const [view, setView] = useState<View>('rating')
   const [period, setPeriod] = useState<RatingPeriod>('all')
+  const [gender, setGender] = useState<RatingGender>('all')
   const [page, setPage] = useState(1)
 
   const changeView = (v: View) => {
@@ -75,10 +82,14 @@ export function RatingPage() {
     setPeriod(p)
     setPage(1)
   }
+  const changeGender = (g: RatingGender) => {
+    setGender(g)
+    setPage(1)
+  }
 
   const { data, loading, error, reload } = useAsync(async () => {
     if (view === 'rating') {
-      const res = await ratingApi.list(period, page)
+      const res = await ratingApi.list(period, page, gender)
       const toDisplay = (e: RatingEntry): DisplayEntry => ({
         rank: e.rank,
         user_id: e.user_id,
@@ -109,6 +120,7 @@ export function RatingPage() {
     const { entries, me, lockReason, missingFields } = await leaderboardApi.list(
       view,
       view === 'streak' ? 'all' : period,
+      gender,
     )
     const toDisplay = (e: (typeof entries)[number]): DisplayEntry => ({
       rank: e.rank,
@@ -126,7 +138,7 @@ export function RatingPage() {
       missingFields,
       pagination: null,
     }
-  }, [view, period, page])
+  }, [view, period, gender, page])
 
   const entries = data?.entries ?? []
   const meEntry = data?.me ?? null
@@ -196,6 +208,19 @@ export function RatingPage() {
                 ))}
               </div>
             )}
+            <div className="inline-flex rounded-full border border-paper/15 bg-paper/[0.06] p-1 text-sm font-semibold">
+              {GENDERS.map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => changeGender(key)}
+                  className={`rounded-full px-4 py-1.5 transition ${
+                    gender === key ? 'bg-volt text-ink' : 'text-paper/70 hover:text-paper'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>

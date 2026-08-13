@@ -12,6 +12,7 @@ class RatingItem(BaseModel):
 
 class RatingResponse(BaseModel):
     period: str
+    gender: str = "all"
     entries: list[RatingItem]
     # Full ranking size (all pages) and the current page, so the frontend can
     # build a pager. 0-activity runners are already excluded (see compute_rating).

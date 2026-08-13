@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlalchemy import Select, case, func, or_, select
@@ -5,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus, ModerationStatus
+from app.models.enums import FinishStatus, Gender, ModerationStatus
 from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
@@ -25,6 +26,22 @@ def counts_toward_rating() -> ColumnElement[bool]:
         AttendanceRecord.self_reported.is_(False),
         Result.status == ModerationStatus.approved,
     )
+
+
+async def gender_filtered_ids(
+    session: AsyncSession, ids: Iterable[int], gender: str
+) -> set[int] | None:
+    """Which of `ids` belong to runners of the requested gender, or None when no
+    gender filter is asked for ("all"/anything but male/female). Runners who
+    never set their gender (e.g. guest accounts) simply don't appear in the
+    male/female rankings — only in the combined "all" view. Shared by the
+    community rating and every leaderboard so they split identically."""
+    if gender not in (Gender.male, Gender.female):
+        return None
+    matching = await session.scalars(
+        select(User.id).where(User.id.in_(ids), User.gender == Gender(gender))
+    )
+    return set(matching)
 
 
 @dataclass
@@ -178,8 +195,14 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
     return result
 
 
-async def compute_rating(session: AsyncSession, period: str = "all") -> list[RatingEntry]:
+async def compute_rating(
+    session: AsyncSession, period: str = "all", gender: str = "all"
+) -> list[RatingEntry]:
     rows = await _bulk_ranking_rows(session)
+
+    allowed = await gender_filtered_ids(session, rows.keys(), gender)
+    if allowed is not None:
+        rows = {rid: r for rid, r in rows.items() if rid in allowed}
 
     # A runner with no activity in the requested window shouldn't be ranked
     # in it at all — the bulk fetch above includes everyone with *any*
