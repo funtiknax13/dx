@@ -11,6 +11,7 @@ from app.api import (
     leaderboard,
     rating,
     results,
+    running_clubs,
     signups,
     staff,
     support,
@@ -34,3 +35,4 @@ api_router.include_router(surveys.router)
 api_router.include_router(support.router)
 api_router.include_router(staff.router)
 api_router.include_router(cities.router)
+api_router.include_router(running_clubs.router)

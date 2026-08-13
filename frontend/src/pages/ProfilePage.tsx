@@ -20,6 +20,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { CityAutocomplete } from '../components/ui/CityAutocomplete'
+import { RunningClubField } from '../components/ui/RunningClubField'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
@@ -556,18 +557,15 @@ function ProfileForm({
           <label className={`field-label ${missing.runningClub ? 'text-signal-600' : ''}`}>
             Беговой клуб
           </label>
-          <input
-            type="text"
-            placeholder="Например, «DАЙ ХАРD Чебоксары»"
+          <RunningClubField
             value={club}
             disabled={noClub}
-            onChange={(e) => {
-              setClub(e.target.value)
+            invalid={missing.runningClub}
+            placeholder="Например, «DАЙ ХАРD Чебоксары»"
+            onChange={(v) => {
+              setClub(v)
               setSaved(false)
             }}
-            className={`field disabled:bg-ink/5 disabled:text-clay ${
-              missing.runningClub ? 'border-signal ring-2 ring-signal/20' : ''
-            }`}
           />
           <label className="mt-2 flex items-center gap-2 text-sm text-ink-600">
             <input

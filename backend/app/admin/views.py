@@ -18,6 +18,7 @@ from app.models.group import Group
 from app.models.guest_claim import GuestClaim
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
+from app.models.running_club import RunningClub
 from app.models.signup import Signup
 from app.models.user import User
 
@@ -322,9 +323,27 @@ class CityAdmin(BaseAdmin, model=City):
             model.id = new_id
 
 
+class RunningClubAdmin(BaseAdmin, model=RunningClub):
+    name = "Беговой клуб"
+    name_plural = "Беговые клубы"
+    icon = "fa-solid fa-people-group"
+    column_list = [RunningClub.id, RunningClub.title, RunningClub.city]
+    column_searchable_list = [RunningClub.title]
+    column_sortable_list = [RunningClub.id, RunningClub.title, RunningClub.city]
+    # search_title is derived from title (see below), not entered by hand.
+    form_columns = [RunningClub.title, RunningClub.city]
+
+    async def on_model_change(
+        self, data: dict[str, Any], model: Any, is_created: bool, request: Request
+    ) -> None:
+        # Keep the lowercased match column in sync with the title on add/edit.
+        data["search_title"] = (data.get("title") or "").strip().lower()
+
+
 ALL_VIEWS = [
     UserAdmin,
     CityAdmin,
+    RunningClubAdmin,
     EventAdmin,
     EventPhotoAdmin,
     GroupAdmin,

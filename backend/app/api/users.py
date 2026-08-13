@@ -36,6 +36,7 @@ from app.services.media_service import (
 )
 from app.services.profile_completeness_service import stats_access_lock
 from app.services.rating_service import runner_finished_count
+from app.services.running_club_service import ensure_running_club
 from app.services.stats_service import compute_profile_stats
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -71,6 +72,13 @@ async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep)
     if "city_id" in updates:
         city = await session.get(City, user.city_id) if user.city_id is not None else None
         user.city = city.name if city is not None else None
+    # A running club typed by the runner is added to the dictionary if new (with
+    # an empty city) and stored under its canonical spelling. "" ("not in a club")
+    # and None are left as-is — they're answers, not clubs.
+    if updates.get("running_club"):
+        club = await ensure_running_club(session, user.running_club)
+        if club is not None:
+            user.running_club = club.title
     await session.commit()
     await session.refresh(user)
     return user
