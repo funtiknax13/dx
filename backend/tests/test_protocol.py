@@ -2,11 +2,17 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_access_token
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.group import Group
 from app.services.guest_service import create_guest, merge_guest_into
 from tests.factories import make_attendance_with_result, make_event_group, make_user
+
+
+def _auth(user_id: int) -> dict[str, str]:
+    """The protocol is visible to any logged-in user, so tests pass a token."""
+    return {"Authorization": f"Bearer {create_access_token(user_id)}"}
 
 
 @pytest.mark.asyncio
@@ -37,7 +43,7 @@ async def test_protocol_shows_current_account_name_after_guest_merge(
     await merge_guest_into(session, guest, real_user)
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     entries = body["finishers"] + body["pending"] + body["dnf"]
@@ -104,7 +110,7 @@ async def test_protocol_merges_groups_sharing_distance_code(
     )
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group1.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group1.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert sorted(body["group_ids"]) == sorted([group1.id, group2.id])
@@ -112,7 +118,7 @@ async def test_protocol_merges_groups_sharing_distance_code(
     assert {e["runner_id"] for e in entries} == {runner1.id, runner2.id}
 
     # A group without a distance_code (or a different one) is unaffected.
-    resp2 = await client.get(f"/api/v1/groups/{other_group.id}/protocol")
+    resp2 = await client.get(f"/api/v1/groups/{other_group.id}/protocol", headers=_auth(org.id))
     body2 = resp2.json()
     assert body2["group_ids"] == [other_group.id]
 
@@ -138,7 +144,7 @@ async def test_protocol_entry_includes_latest_achievement(
     )
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     entries = body["finishers"] + body["pending"] + body["dnf"]
@@ -164,7 +170,7 @@ async def test_protocol_entry_includes_runners_avatar(
     )
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     entries = body["finishers"] + body["pending"] + body["dnf"]
@@ -195,7 +201,7 @@ async def test_protocol_finishers_with_equal_time_break_tie_by_name(
     )
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert [e["runner_id"] for e in body["finishers"]] == [runner_a.id, runner_b.id]
@@ -224,7 +230,7 @@ async def test_protocol_pending_entries_sorted_by_name(
         )
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert [e["runner_id"] for e in body["pending"]] == [runner_a.id, runner_z.id]
@@ -252,7 +258,20 @@ async def test_protocol_dnf_entries_sorted_by_name(
         )
     await session.commit()
 
-    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol", headers=_auth(org.id))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert [e["runner_id"] for e in body["dnf"]] == [runner_a.id, runner_z.id]
+
+
+@pytest.mark.asyncio
+async def test_protocol_requires_authentication(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Protocols are for the community only — anonymous visitors get 401."""
+    org = await make_user(session, "org-anon@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    await session.commit()
+
+    resp = await client.get(f"/api/v1/groups/{group.id}/protocol")
+    assert resp.status_code == 401

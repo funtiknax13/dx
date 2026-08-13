@@ -145,9 +145,15 @@ export function GroupDetailPage() {
             <h2 className="font-display text-2xl sm:text-3xl">Протокол забега</h2>
             {protocol && (
               <span className="font-mono text-xs text-clay">
-                {protocol.finishers.length}{' '}
-                {plural(protocol.finishers.length, 'финишёр', 'финишёра', 'финишёров')}
-                {protocol.pending.length > 0 && ` · ${protocol.pending.length} в пути`}
+                {/* Everyone in the protocol who isn't DNF is a finisher — those
+                    still without an uploaded time count too (see ProtocolTable). */}
+                {protocol.finishers.length + protocol.pending.length}{' '}
+                {plural(
+                  protocol.finishers.length + protocol.pending.length,
+                  'финишёр',
+                  'финишёра',
+                  'финишёров',
+                )}
                 {protocol.dnf.length > 0 && ` · ${protocol.dnf.length} DNF`}
               </span>
             )}
@@ -159,11 +165,27 @@ export function GroupDetailPage() {
           )}
           {protocol ? (
             <ProtocolTable protocol={protocol} />
-          ) : (
+          ) : isAuthenticated ? (
             <StatePanel
               title="Протокол недоступен"
               description="Результаты появятся после импорта списка участников администратором."
               icon={<IconFlag />}
+            />
+          ) : (
+            <StatePanel
+              title="Протокол — для участников сообщества"
+              description="Войдите или зарегистрируйтесь, чтобы увидеть протокол забега."
+              icon={<IconFlag />}
+              action={
+                <div className="flex gap-3">
+                  <Link to="/login" state={{ from: `/groups/${group.id}` }} className="btn-primary">
+                    Войти
+                  </Link>
+                  <Link to="/register" className="btn-ghost">
+                    Регистрация
+                  </Link>
+                </div>
+              }
             />
           )}
         </section>

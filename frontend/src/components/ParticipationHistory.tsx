@@ -98,12 +98,20 @@ function HistoryRow({
             </button>
           </div>
         ) : (
-          <div className="hidden shrink-0 text-right sm:block">
-            <div className="font-mono text-sm font-semibold tabular text-ink">
-              {formatDuration(h.duration_seconds)}
-            </div>
-            <div className="font-mono text-[0.65rem] tabular text-clay">
-              {formatPace(h.pace_seconds_per_km)} · {formatDistance(h.distance_km)}
+          <div className="hidden shrink-0 items-center gap-2.5 sm:flex">
+            {editable && h.moderation_status === 'approved' && (
+              <span className="chip bg-volt/25 text-ink">Подтверждён</span>
+            )}
+            {editable && h.moderation_status === 'pending' && (
+              <span className="chip bg-ink/10 text-ink-600">На проверке</span>
+            )}
+            <div className="text-right">
+              <div className="font-mono text-sm font-semibold tabular text-ink">
+                {formatDuration(h.duration_seconds)}
+              </div>
+              <div className="font-mono text-[0.65rem] tabular text-clay">
+                {formatPace(h.pace_seconds_per_km)} · {formatDistance(h.distance_km)}
+              </div>
             </div>
           </div>
         )}

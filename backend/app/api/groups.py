@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import OrganizerUser, SessionDep
+from app.api.deps import CurrentUser, OrganizerUser, SessionDep
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.event import Event
@@ -201,7 +201,8 @@ async def route_map(group_id: int, session: SessionDep) -> RouteMap:
 
 
 @router.get("/groups/{group_id}/protocol", response_model=Protocol)
-async def protocol(group_id: int, session: SessionDep) -> Protocol:
+async def protocol(group_id: int, session: SessionDep, _viewer: CurrentUser) -> Protocol:
+    # Protocols are community-only — any logged-in user may view, anonymous 401s.
     group = await _get_group_or_404(session, group_id)
 
     group_ids = [group_id]
