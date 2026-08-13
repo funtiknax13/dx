@@ -45,6 +45,12 @@ export default defineConfig({
       },
     }),
   ],
+  optimizeDeps: {
+    // MapLibre ships a bundled web worker that Vite's dependency pre-bundler
+    // mishandles (it looks for a non-existent maplibre-gl-worker.mjs and breaks
+    // the whole app in dev). Serving it as native ESM instead avoids that.
+    exclude: ['maplibre-gl'],
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
