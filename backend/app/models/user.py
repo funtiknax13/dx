@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import Gender, PriorExperience, UserRole
+from app.models.enums import AvatarReview, Gender, PriorExperience, UserRole
 
 
 class User(Base, TimestampMixin):
@@ -36,6 +36,19 @@ class User(Base, TimestampMixin):
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Post-moderation state of the current avatar (see AvatarReview). A fresh
+    # upload sets this to `pending`; a moderator keeps (`approved`) or removes it.
+    avatar_review: Mapped[AvatarReview] = mapped_column(
+        Enum(AvatarReview, native_enum=False, length=20),
+        default=AvatarReview.approved,
+        nullable=False,
+    )
+
+    # Parent/guardian contacts — required only for runners under 14 (see
+    # profile_completeness_service). Private, like phone: never shown publicly.
+    parent_first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    parent_last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    parent_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     # Nullable = never answered. Empty string ("") is a distinct, deliberate
     # answer — "I checked the 'not in a club' box" — vs None ("never touched

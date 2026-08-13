@@ -31,6 +31,16 @@ class ModerationStatus(enum.StrEnum):
     rejected = "rejected"
 
 
+class AvatarReview(enum.StrEnum):
+    """Post-moderation of profile photos: an uploaded avatar applies immediately
+    (`pending`) but sits in a queue where a moderator can keep it (`approved`) or
+    remove it. Existing avatars are grandfathered to `approved` by the migration
+    so they don't flood the queue."""
+
+    pending = "pending"
+    approved = "approved"
+
+
 class ClaimStatus(enum.StrEnum):
     pending = "pending"
     approved = "approved"

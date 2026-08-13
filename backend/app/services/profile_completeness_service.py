@@ -1,9 +1,23 @@
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.survey_service import stats_locked_pending_survey
+
+# Runners younger than this must supply guardian contacts (см. задача 8).
+MINOR_AGE = 14
+PARENT_FIELDS = ["parent_first_name", "parent_last_name", "parent_phone"]
+
+
+def age_years(birthday: date, today: date | None = None) -> int:
+    today = today or date.today()
+    return (
+        today.year
+        - birthday.year
+        - ((today.month, today.day) < (birthday.month, birthday.day))
+    )
 
 # Fields that gate access to community stats/rating (see CLAUDE.md discussion
 # on the "100% profile" motivation mechanic) — first/last name and email are
@@ -33,6 +47,10 @@ def check(user: User) -> ProfileCompleteness:
     field but gates the same way, so it's folded into the same missing list
     under the "email_verified" key."""
     missing = [f for f in GATED_FIELDS if getattr(user, f) is None]
+    # Under-14 runners additionally need a parent's name and phone. Only checked
+    # once the birthday is known (birthday itself is already gated above).
+    if user.birthday is not None and age_years(user.birthday) < MINOR_AGE:
+        missing += [f for f in PARENT_FIELDS if getattr(user, f) is None]
     if not user.email_verified:
         missing.append("email_verified")
     return ProfileCompleteness(is_complete=not missing, missing_fields=missing)

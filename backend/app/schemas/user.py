@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.models.enums import Gender, PriorExperience, UserRole
+from app.models.enums import AvatarReview, Gender, PriorExperience, UserRole
 
 
 def normalize_ru_phone(value: str | None) -> str | None:
@@ -50,6 +50,11 @@ class UserMe(BaseModel):
     # see profile_completeness_service.
     running_club: str | None = None
     prior_experience: PriorExperience | None = None
+    avatar_review: AvatarReview = AvatarReview.approved
+    # Guardian contacts — required only for under-14 runners (private).
+    parent_first_name: str | None = None
+    parent_last_name: str | None = None
+    parent_phone: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -64,8 +69,11 @@ class UserUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     running_club: str | None = Field(default=None, max_length=150)
     prior_experience: PriorExperience | None = None
+    parent_first_name: str | None = Field(default=None, max_length=100)
+    parent_last_name: str | None = Field(default=None, max_length=100)
+    parent_phone: str | None = Field(default=None, max_length=40)
 
-    @field_validator("phone")
+    @field_validator("phone", "parent_phone")
     @classmethod
     def _norm_phone(cls, v: str | None) -> str | None:
         return normalize_ru_phone(v)

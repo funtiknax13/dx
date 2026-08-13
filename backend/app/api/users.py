@@ -6,6 +6,7 @@ from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.security import hash_password, verify_password
 from app.models.attendance import AttendanceRecord
 from app.models.city import City
+from app.models.enums import AvatarReview
 from app.models.event import Event
 from app.models.group import Group
 from app.models.signup import Signup
@@ -94,6 +95,8 @@ async def upload_avatar(user: CurrentUser, session: SessionDep, file: UploadFile
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     delete_media(user.avatar)
     user.avatar = path
+    # Post-moderation: the new photo shows immediately but enters the review queue.
+    user.avatar_review = AvatarReview.pending
     await session.commit()
     await session.refresh(user)
     return user

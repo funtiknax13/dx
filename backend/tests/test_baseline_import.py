@@ -243,3 +243,45 @@ async def test_import_re_run_overwrites_this_year_columns(session: AsyncSession)
     assert baseline.dx_count_this_year == 26
     assert baseline.km_this_year == 260.0
     assert baseline.baseline_year == 2026
+
+
+@pytest.mark.asyncio
+async def test_import_links_city_from_dictionary(session: AsyncSession) -> None:
+    from app.models.city import City
+    from app.models.user import User
+
+    session.add(
+        City(
+            id=1,
+            name="Чебоксары",
+            name_ascii="Cheboksary",
+            search_name="чебоксары",
+            search_ascii="cheboksary",
+            country_code="RU",
+            lat=56.1,
+            lng=47.2,
+            population=497000,
+        )
+    )
+    await session.flush()
+
+    csv = (
+        "first_name;last_name;dx_count;city\n"
+        "Иван;Петров;5;Чебоксары\n"
+        "Пётр;Сидоров;3;Нострадамусбург\n"
+    )
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.city_linked == 1
+    assert result.city_unmatched == 1
+    assert "Нострадамусбург" in result.unmatched_cities
+
+    linked = await session.scalar(select(User).where(User.first_name == "Иван"))
+    assert linked is not None
+    assert linked.city_id == 1
+    assert linked.city == "Чебоксары"
+
+    unmatched = await session.scalar(select(User).where(User.first_name == "Пётр"))
+    assert unmatched is not None
+    assert unmatched.city_id is None

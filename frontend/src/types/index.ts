@@ -38,6 +38,10 @@ export interface User {
   /** "" = explicitly "not in a club" (still counts as answered), null/undefined = never answered. */
   running_club?: string | null
   prior_experience?: PriorExperience | null
+  // Guardian contacts — required only for under-14 runners (private).
+  parent_first_name?: string | null
+  parent_last_name?: string | null
+  parent_phone?: string | null
   rating?: number | null
   created_at?: string
 }
@@ -304,6 +308,9 @@ export interface UpdateProfilePayload {
   phone?: string | null
   running_club?: string | null
   prior_experience?: PriorExperience | null
+  parent_first_name?: string | null
+  parent_last_name?: string | null
+  parent_phone?: string | null
 }
 
 export interface ChangePasswordPayload {

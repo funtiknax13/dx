@@ -8,7 +8,14 @@ import { attendanceApi } from '../api/attendance'
 import { ApiError } from '../api/client'
 import { ManualResultForm } from '../components/ManualResultForm'
 import { useAsync } from '../lib/useAsync'
-import { formatDate, formatRuPhone, formatTime, fullName, ruPhoneDigits } from '../lib/format'
+import {
+  ageFromISO,
+  formatDate,
+  formatRuPhone,
+  formatTime,
+  fullName,
+  ruPhoneDigits,
+} from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
@@ -350,6 +357,9 @@ function ProfileForm({
     birthday: user?.birthday ?? '',
     phone: user?.phone ?? '',
     prior_experience: (user?.prior_experience ?? '') as PriorExperience | '',
+    parent_first_name: user?.parent_first_name ?? '',
+    parent_last_name: user?.parent_last_name ?? '',
+    parent_phone: user?.parent_phone ?? '',
   })
   // Running club gets its own tri-state: text vs "not in a club" checkbox vs
   // untouched — see profile_completeness_service on the backend for why "" and
@@ -380,6 +390,10 @@ function ProfileForm({
       setError('Введите телефон полностью: +7 и 10 цифр')
       return
     }
+    if (form.parent_phone.trim() && ruPhoneDigits(form.parent_phone).length !== 10) {
+      setError('Телефон родителя укажите полностью: +7 и 10 цифр')
+      return
+    }
     setLoading(true)
     // City: a canonical pick sends city_id (server mirrors the name); a legacy
     // free-text value with no id is kept as text; empty clears both.
@@ -399,6 +413,9 @@ function ProfileForm({
         phone: form.phone.trim() || null,
         running_club: noClub ? '' : club.trim() || null,
         prior_experience: form.prior_experience || null,
+        parent_first_name: form.parent_first_name.trim() || null,
+        parent_last_name: form.parent_last_name.trim() || null,
+        parent_phone: form.parent_phone.trim() || null,
       })
       onSaved(updated)
       setSaved(true)
@@ -422,6 +439,9 @@ function ProfileForm({
   // live off the current form state, so the field clears the moment it's
   // filled in, before the user even hits "Сохранить".
   const REQUIRED_HINT = 'Нужно для открытия рейтинга и статистики'
+  // Under-14 runners must add a guardian's contacts (mirrors the backend gate).
+  const age = ageFromISO(form.birthday)
+  const isMinor = age != null && age < 14
   const missing = {
     city: !form.city.trim(),
     gender: !form.gender,
@@ -430,6 +450,9 @@ function ProfileForm({
     runningClub: !noClub && !club.trim(),
     priorExperience: !form.prior_experience,
     avatar: !user?.avatar_url,
+    parentFirstName: isMinor && !form.parent_first_name.trim(),
+    parentLastName: isMinor && !form.parent_last_name.trim(),
+    parentPhone: isMinor && !form.parent_phone.trim(),
   }
 
   return (
@@ -491,6 +514,44 @@ function ProfileForm({
             error={missing.phone ? REQUIRED_HINT : undefined}
           />
         </div>
+
+        {isMinor && (
+          <div className="space-y-4 rounded-xl2 border border-signal/25 bg-signal-wash/30 p-4">
+            <p className="text-sm font-semibold text-ink">
+              Данные родителя — для участников младше 14 лет
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Имя родителя"
+                name="parent_first_name"
+                value={form.parent_first_name}
+                onChange={set('parent_first_name')}
+                error={missing.parentFirstName ? REQUIRED_HINT : undefined}
+              />
+              <Field
+                label="Фамилия родителя"
+                name="parent_last_name"
+                value={form.parent_last_name}
+                onChange={set('parent_last_name')}
+                error={missing.parentLastName ? REQUIRED_HINT : undefined}
+              />
+            </div>
+            <Field
+              label="Телефон родителя"
+              name="parent_phone"
+              type="tel"
+              inputMode="tel"
+              placeholder="+7 (___) ___-__-__"
+              value={form.parent_phone}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, parent_phone: formatRuPhone(e.target.value) }))
+                setSaved(false)
+              }}
+              error={missing.parentPhone ? REQUIRED_HINT : undefined}
+            />
+          </div>
+        )}
+
         <div>
           <label className={`field-label ${missing.runningClub ? 'text-signal-600' : ''}`}>
             Беговой клуб

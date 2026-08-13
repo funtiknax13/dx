@@ -1,0 +1,48 @@
+{% extends "_base.html" %}
+{% block title %}Аватары на проверке — DH Admin Tools{% endblock %}
+{% block content %}
+<style>
+  .av-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:16px; margin-top:16px; }
+  .av-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;
+             box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  .av-photo { width:100%; height:220px; object-fit:cover; background:#f3f4f6; display:block; }
+  .av-body { padding:12px 14px; }
+  .av-name { font-weight:700; font-size:15px; color:#111827; }
+  .av-sub { font-size:12px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .av-actions { display:flex; gap:8px; padding:12px 14px; border-top:1px solid #f1f5f9; background:#fafafa; }
+  .av-actions form { flex:1; margin:0; }
+  .av-actions button { width:100%; }
+</style>
+<h1>Аватары на проверке ({{ users|length }})</h1>
+<p class="hint">
+  Фото применяется сразу — здесь можно оставить его или удалить. При удалении пользователь
+  получит закрытый тикет с уведомлением.
+</p>
+
+{% if users %}
+<div class="av-grid">
+  {% for u in users %}
+  <div class="av-card">
+    <img class="av-photo" src="{{ u.avatar }}" alt="Аватар {{ u.first_name }} {{ u.last_name }}">
+    <div class="av-body">
+      <div class="av-name">
+        {{ u.first_name }} {{ u.last_name }}{% if u.is_guest %} <span class="hint">(гость)</span>{% endif %}
+      </div>
+      <div class="av-sub">{{ u.city or '—' }} · {{ u.email }}</div>
+    </div>
+    <div class="av-actions">
+      <form method="post" action="/admin-tools/avatars/{{ u.id }}/approve">
+        <button type="submit" class="secondary">Оставить</button>
+      </form>
+      <form method="post" action="/admin-tools/avatars/{{ u.id }}/remove"
+            onsubmit="return confirm('Удалить фото и уведомить пользователя?');">
+        <button type="submit" class="danger">Удалить</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">Нет аватаров на проверке. 🎉</div>
+{% endif %}
+{% endblock %}

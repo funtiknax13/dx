@@ -8,7 +8,11 @@ from app.core.db import SessionLocal
 from app.models.enums import TicketStatus, UserRole
 from app.models.support import SupportTicket
 from app.models.user import User
-from app.services.staff_attention_service import pending_claims_count, pending_moderation_count
+from app.services.staff_attention_service import (
+    pending_avatar_count,
+    pending_claims_count,
+    pending_moderation_count,
+)
 from app.services.support_service import (
     add_message,
     mark_read_by_staff,
@@ -158,14 +162,21 @@ async def support_toggle_status(request: Request, ticket_id: int) -> RedirectRes
 async def badge_counts(request: Request) -> dict[str, int]:
     user = await _require_staff(request)
     if user is None:
-        return {"tickets": 0, "surveys": 0, "claims": 0, "moderation": 0}
+        return {"tickets": 0, "surveys": 0, "claims": 0, "moderation": 0, "avatars": 0}
     async with SessionLocal() as session:
         tickets = await unread_ticket_count_for_staff(session)
         if user.role != UserRole.admin:
-            # Surveys/claims/moderation are Admin-only queues (see CLAUDE.md) —
-            # an organizer has no nav link for them, so no badge either.
-            return {"tickets": tickets, "surveys": 0, "claims": 0, "moderation": 0}
+            # Surveys/claims/moderation/avatars are Admin-only queues (see
+            # CLAUDE.md) — an organizer has no nav link for them, so no badge.
+            return {"tickets": tickets, "surveys": 0, "claims": 0, "moderation": 0, "avatars": 0}
         surveys = await unread_response_count(session)
         claims = await pending_claims_count(session)
         moderation = await pending_moderation_count(session)
-    return {"tickets": tickets, "surveys": surveys, "claims": claims, "moderation": moderation}
+        avatars = await pending_avatar_count(session)
+    return {
+        "tickets": tickets,
+        "surveys": surveys,
+        "claims": claims,
+        "moderation": moderation,
+        "avatars": avatars,
+    }

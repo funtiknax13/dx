@@ -5,9 +5,10 @@ support tickets which Organizer also handles — see app.api.staff."""
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import ClaimStatus, ModerationStatus
+from app.models.enums import AvatarReview, ClaimStatus, ModerationStatus
 from app.models.guest_claim import GuestClaim
 from app.models.result import Result
+from app.models.user import User
 
 
 async def pending_claims_count(session: AsyncSession) -> int:
@@ -20,5 +21,15 @@ async def pending_claims_count(session: AsyncSession) -> int:
 async def pending_moderation_count(session: AsyncSession) -> int:
     result = await session.scalar(
         select(func.count(Result.id)).where(Result.status == ModerationStatus.pending)
+    )
+    return result or 0
+
+
+async def pending_avatar_count(session: AsyncSession) -> int:
+    result = await session.scalar(
+        select(func.count(User.id)).where(
+            User.avatar_review == AvatarReview.pending,
+            User.avatar.is_not(None),
+        )
     )
     return result or 0

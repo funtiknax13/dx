@@ -20,6 +20,9 @@ const FIELD_LABELS: Record<string, string> = {
   running_club: 'беговой клуб',
   prior_experience: 'бегали ли вы раньше с DАЙ ХАРD',
   email_verified: 'подтверждение почты',
+  parent_first_name: 'имя родителя',
+  parent_last_name: 'фамилия родителя',
+  parent_phone: 'телефон родителя',
 }
 
 type View = 'rating' | 'streak' | 'km'

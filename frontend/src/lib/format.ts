@@ -82,6 +82,19 @@ export function plural(n: number, one: string, few: string, many: string): strin
   return many
 }
 
+/** Whole years from an ISO date (YYYY-MM-DD) to today, or null if unparseable. */
+export function ageFromISO(iso?: string | null): number | null {
+  if (!iso) return null
+  const b = new Date(iso)
+  if (Number.isNaN(b.getTime())) return null
+  const t = new Date()
+  let age = t.getFullYear() - b.getFullYear()
+  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) {
+    age--
+  }
+  return age
+}
+
 /** The 10 national digits of a RU phone, dropping any leading 7/8 country/trunk
  * code the mask prefixes. Empty string when nothing meaningful was entered. */
 export function ruPhoneDigits(input: string): string {

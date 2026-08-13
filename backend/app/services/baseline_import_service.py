@@ -1,11 +1,12 @@
 import csv
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.city import City
 from app.models.runner_baseline import RunnerBaseline
 from app.services.guest_service import resolve_runner_for_csv_row
 
@@ -21,6 +22,24 @@ class BaselineImportResult:
     guests_created: int
     guests_reused: int
     merged_redirects: int
+    city_linked: int = 0
+    city_unmatched: int = 0
+    unmatched_cities: list[str] = field(default_factory=list)
+
+
+async def _match_city(session: AsyncSession, raw: str) -> City | None:
+    """Find a City by exact (case-insensitive) name — Russian or Latin. When a
+    name resolves to several places (GeoNames has many namesakes), take the most
+    populous, which is almost always the intended one for our runners."""
+    norm = raw.strip().lower()
+    if not norm:
+        return None
+    city: City | None = await session.scalar(
+        select(City)
+        .where((City.search_name == norm) | (City.search_ascii == norm))
+        .order_by(City.population.desc())
+    )
+    return city
 
 
 def _parse_int(raw: str | None) -> int | None:
@@ -112,6 +131,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     km_this_year_col = header_map.get("km_this_year")
     baseline_year_col = header_map.get("baseline_year")
     email_col = header_map.get("email")
+    city_col = header_map.get("city")
 
     created = 0
     updated = 0
@@ -122,6 +142,9 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     guests_created = 0
     guests_reused = 0
     merged_redirects = 0
+    city_linked = 0
+    city_unmatched = 0
+    unmatched_cities: list[str] = []
 
     for row in reader:
         first_name = (row.get(first_name_col) or "").strip()
@@ -172,6 +195,22 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         else:
             guests_created += 1
 
+        # Optional city column: match to the canonical dictionary and link it,
+        # without clobbering a city the runner already chose themselves.
+        if city_col:
+            city_raw = (row.get(city_col) or "").strip()
+            if city_raw:
+                city = await _match_city(session, city_raw)
+                if city is not None:
+                    if runner.city_id is None:
+                        runner.city_id = city.id
+                        runner.city = city.name
+                    city_linked += 1
+                else:
+                    city_unmatched += 1
+                    if city_raw not in unmatched_cities:
+                        unmatched_cities.append(city_raw)
+
         baseline = await session.scalar(
             select(RunnerBaseline).where(RunnerBaseline.runner_id == runner.id)
         )
@@ -210,4 +249,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         guests_created=guests_created,
         guests_reused=guests_reused,
         merged_redirects=merged_redirects,
+        city_linked=city_linked,
+        city_unmatched=city_unmatched,
+        unmatched_cities=unmatched_cities,
     )
