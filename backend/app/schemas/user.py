@@ -1,8 +1,34 @@
+import re
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import Gender, PriorExperience, UserRole
+
+
+def normalize_ru_phone(value: str | None) -> str | None:
+    """Reduce any RU phone input to canonical +7XXXXXXXXXX, or None if empty.
+    Accepts 8XXXXXXXXXX, +7XXXXXXXXXX, or a bare 10-digit national number."""
+    if value is None:
+        return None
+    digits = re.sub(r"\D", "", value)
+    if not digits:
+        return None
+    if len(digits) == 11 and digits[0] in "78":
+        digits = digits[1:]
+    if len(digits) != 10:
+        raise ValueError("Телефон должен быть российским: +7 и 10 цифр")
+    return f"+7{digits}"
+
+
+def validate_birthday(value: date | None) -> date | None:
+    if value is None:
+        return None
+    if value > date.today():
+        raise ValueError("Дата рождения не может быть в будущем")
+    if value.year < 1900:
+        raise ValueError("Проверьте год рождения")
+    return value
 
 
 class UserMe(BaseModel):
@@ -38,6 +64,16 @@ class UserUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     running_club: str | None = Field(default=None, max_length=150)
     prior_experience: PriorExperience | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def _norm_phone(cls, v: str | None) -> str | None:
+        return normalize_ru_phone(v)
+
+    @field_validator("birthday")
+    @classmethod
+    def _check_birthday(cls, v: date | None) -> date | None:
+        return validate_birthday(v)
 
 
 class PasswordChangeRequest(BaseModel):

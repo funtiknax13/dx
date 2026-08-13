@@ -8,7 +8,7 @@ import { attendanceApi } from '../api/attendance'
 import { ApiError } from '../api/client'
 import { ManualResultForm } from '../components/ManualResultForm'
 import { useAsync } from '../lib/useAsync'
-import { formatDate, formatTime, fullName } from '../lib/format'
+import { formatDate, formatRuPhone, formatTime, fullName, ruPhoneDigits } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
@@ -374,6 +374,12 @@ function ProfileForm({
       setError('Имя и фамилия обязательны')
       return
     }
+    // Phone is optional, but if given it must be a full RU number.
+    const phoneDigits = ruPhoneDigits(form.phone)
+    if (form.phone.trim() && phoneDigits.length !== 10) {
+      setError('Введите телефон полностью: +7 и 10 цифр')
+      return
+    }
     setLoading(true)
     // City: a canonical pick sends city_id (server mirrors the name); a legacy
     // free-text value with no id is kept as text; empty clears both.
@@ -466,6 +472,7 @@ function ProfileForm({
             label="Дата рождения"
             name="birthday"
             type="date"
+            max={new Date().toISOString().slice(0, 10)}
             value={form.birthday ?? ''}
             onChange={set('birthday')}
             error={missing.birthday ? REQUIRED_HINT : undefined}
@@ -474,9 +481,13 @@ function ProfileForm({
             label="Телефон"
             name="phone"
             type="tel"
-            placeholder="+7 900 000-00-00"
+            inputMode="tel"
+            placeholder="+7 (___) ___-__-__"
             value={form.phone}
-            onChange={set('phone')}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, phone: formatRuPhone(e.target.value) }))
+              setSaved(false)
+            }}
             error={missing.phone ? REQUIRED_HINT : undefined}
           />
         </div>

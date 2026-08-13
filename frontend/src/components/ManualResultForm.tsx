@@ -17,6 +17,15 @@ function parseDuration(input: string): number {
   return 0
 }
 
+/** Progressive Ч:ММ:СС mask: 1 digit hours, then auto ":", 2 digits minutes,
+ * auto ":", 2 digits seconds. Colons appear on their own as you type. */
+function formatTimeMask(input: string): string {
+  const d = input.replace(/\D/g, '').slice(0, 5) // H MM SS
+  if (d.length <= 1) return d
+  if (d.length <= 3) return `${d[0]}:${d.slice(1)}`
+  return `${d[0]}:${d.slice(1, 3)}:${d.slice(3)}`
+}
+
 /** Manual result entry: distance + time + at least one required screenshot.
  * GPX/URL upload is gone for runners — the screenshots (with the fields listed
  * below visible across one or more of them) are the evidence an admin moderates.
@@ -55,7 +64,12 @@ export function ManualResultForm({
     const distanceKm = Number(distance.replace(',', '.'))
     const durationSeconds = parseDuration(duration)
     if (!distanceKm || !durationSeconds) {
-      setError('Укажите дистанцию (км) и время (чч:мм:сс)')
+      setError('Укажите дистанцию (км) и время (ч:мм:сс)')
+      return
+    }
+    const tp = duration.split(':').map(Number)
+    if ((tp.length >= 2 && tp[1] >= 60) || (tp.length >= 3 && tp[2] >= 60)) {
+      setError('Минуты и секунды должны быть меньше 60')
       return
     }
     if (images.length === 0) {
@@ -87,11 +101,12 @@ export function ManualResultForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-ink-600">Время, чч:мм:сс</label>
+          <label className="mb-1 block text-xs font-semibold text-ink-600">Время, ч:мм:сс</label>
           <input
             value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            placeholder="3:10:00"
+            onChange={(e) => setDuration(formatTimeMask(e.target.value))}
+            placeholder="0:00:00"
+            inputMode="numeric"
             className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
           />
         </div>

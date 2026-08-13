@@ -81,3 +81,23 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
   return many
 }
+
+/** The 10 national digits of a RU phone, dropping any leading 7/8 country/trunk
+ * code the mask prefixes. Empty string when nothing meaningful was entered. */
+export function ruPhoneDigits(input: string): string {
+  let d = input.replace(/\D/g, '')
+  if (d[0] === '7' || d[0] === '8') d = d.slice(1)
+  return d.slice(0, 10)
+}
+
+/** Progressive mask: turns raw input into +7 (XXX) XXX-XX-XX as you type. */
+export function formatRuPhone(input: string): string {
+  const d = ruPhoneDigits(input)
+  if (!d) return ''
+  let out = `+7 (${d.slice(0, 3)}`
+  if (d.length >= 3) out += ')'
+  if (d.length > 3) out += ` ${d.slice(3, 6)}`
+  if (d.length > 6) out += `-${d.slice(6, 8)}`
+  if (d.length > 8) out += `-${d.slice(8, 10)}`
+  return out
+}
