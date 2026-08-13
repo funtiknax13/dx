@@ -27,7 +27,30 @@ function ScrollToTop() {
   return null
 }
 
+/** Warm the heavy, lazily-loaded map chunk (MapLibre GL) in the background once
+ * the app is idle, so it's already cached by the time a user opens a page with a
+ * map — without adding its weight to the initial load. Skipped on data-saver. */
+function usePrefetchMaps() {
+  useEffect(() => {
+    const conn = (navigator as { connection?: { saveData?: boolean } }).connection
+    if (conn?.saveData) return
+    const warm = () => {
+      void import('./components/RouteMap')
+      void import('./components/LocationMap')
+    }
+    const ric = (window as typeof window & { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback
+    if (ric) {
+      ric(warm)
+    } else {
+      const t = setTimeout(warm, 2500)
+      return () => clearTimeout(t)
+    }
+  }, [])
+}
+
 export default function App() {
+  usePrefetchMaps()
   return (
     <>
       <ScrollToTop />
