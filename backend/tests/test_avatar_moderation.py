@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.models.enums import AvatarReview, UserRole
-from app.models.support import SupportTicket
+from app.models.support import SupportMessage, SupportTicket
 from app.models.user import User
 from app.services.staff_attention_service import pending_avatar_count
 from tests.factories import make_user
@@ -65,7 +65,11 @@ async def test_remove_clears_avatar_and_notifies(
     await session.commit()
     await _login(client, admin.id)
 
-    resp = await client.post(f"/admin-tools/avatars/{rid}/remove", follow_redirects=False)
+    resp = await client.post(
+        f"/admin-tools/avatars/{rid}/remove",
+        data={"reason": "На фото не видно лица."},
+        follow_redirects=False,
+    )
     assert resp.status_code == 303
     session.expire_all()
     u = await session.get(User, rid)
@@ -76,6 +80,8 @@ async def test_remove_clears_avatar_and_notifies(
         select(SupportTicket).where(SupportTicket.created_by_user_id == rid)
     )
     assert ticket is not None  # runner was notified via a closed ticket
+    msg = await session.scalar(select(SupportMessage).where(SupportMessage.ticket_id == ticket.id))
+    assert msg is not None and "не видно лица" in msg.body
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,20 @@
   .av-actions { display:flex; gap:8px; padding:12px 14px; border-top:1px solid #f1f5f9; background:#fafafa; }
   .av-actions form { flex:1; margin:0; }
   .av-actions button { width:100%; }
+
+  .rj-overlay { position:fixed; inset:0; background:rgba(17,24,39,.7); display:none; place-items:center;
+                z-index:1100; padding:20px; }
+  .rj-overlay.open { display:grid; }
+  .rj-box { background:#fff; border-radius:12px; width:100%; max-width:520px; padding:20px;
+            box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .rj-box h3 { margin:0 0 4px; font-size:17px; }
+  .rj-box .rj-hint { color:#6b7280; font-size:13px; margin:0 0 12px; }
+  .rj-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .rj-preset { background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; border-radius:999px;
+               padding:5px 11px; font-size:12px; cursor:pointer; }
+  .rj-preset:hover { background:#e5e7eb; }
+  .rj-box textarea { width:100%; min-height:88px; resize:vertical; }
+  .rj-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
 </style>
 <h1>Аватары на проверке ({{ users|length }})</h1>
 <p class="hint">
@@ -34,10 +48,7 @@
       <form method="post" action="/admin-tools/avatars/{{ u.id }}/approve">
         <button type="submit" class="secondary">Оставить</button>
       </form>
-      <form method="post" action="/admin-tools/avatars/{{ u.id }}/remove"
-            onsubmit="return confirm('Удалить фото и уведомить пользователя?');">
-        <button type="submit" class="danger">Удалить</button>
-      </form>
+      <button type="button" class="danger" onclick="openRemove({{ u.id }})">Удалить</button>
     </div>
   </div>
   {% endfor %}
@@ -45,4 +56,38 @@
 {% else %}
 <div class="empty">Нет аватаров на проверке. 🎉</div>
 {% endif %}
+
+<div id="remove-modal" class="rj-overlay">
+  <form class="rj-box" method="post" id="remove-form">
+    <h3>Удалить фото</h3>
+    <p class="rj-hint">Пользователь получит закрытый тикет с этим текстом и письмо на почту.</p>
+    <div class="rj-presets">
+      <button type="button" class="rj-preset" data-text="На фото не видно лица.">Не видно лица</button>
+      <button type="button" class="rj-preset" data-text="На фото не вы (чужое изображение).">Не ваше фото</button>
+      <button type="button" class="rj-preset" data-text="Изображение неуместно для профиля.">Неуместное изображение</button>
+      <button type="button" class="rj-preset" data-text="Низкое качество: фото нечёткое или нечитаемое.">Низкое качество</button>
+    </div>
+    <textarea name="reason" id="remove-reason" placeholder="Причина — выберите шаблон выше или напишите свой текст…" required></textarea>
+    <div class="rj-actions">
+      <button type="button" class="secondary" onclick="closeRemove()">Отмена</button>
+      <button type="submit" class="danger">Удалить и уведомить</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function openRemove(id){
+    var form = document.getElementById('remove-form');
+    form.action = '/admin-tools/avatars/' + id + '/remove';
+    document.getElementById('remove-reason').value = '';
+    document.getElementById('remove-modal').classList.add('open');
+  }
+  function closeRemove(){ document.getElementById('remove-modal').classList.remove('open'); }
+  document.querySelectorAll('.rj-preset').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.getElementById('remove-reason').value = btn.getAttribute('data-text');
+    });
+  });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeRemove(); });
+</script>
 {% endblock %}

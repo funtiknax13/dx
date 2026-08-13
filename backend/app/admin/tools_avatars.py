@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
@@ -56,11 +56,22 @@ async def approve_avatar(request: Request, user_id: int) -> RedirectResponse:
     return RedirectResponse("/admin-tools/avatars?flash=Аватар оставлен", status_code=303)
 
 
+def _removal_message(reason: str) -> str:
+    lines = ["Ваше фото профиля снято модератором."]
+    reason = reason.strip()
+    if reason:
+        lines += ["", f"Причина: {reason}"]
+    lines += ["", "При желании загрузите другое фото."]
+    return "\n".join(lines)
+
+
 @router.post("/avatars/{user_id}/remove", response_model=None)
-async def remove_avatar(request: Request, user_id: int) -> RedirectResponse:
+async def remove_avatar(
+    request: Request, user_id: int, reason: str = Form("")
+) -> RedirectResponse:
     """Remove an unsuitable photo: clears it (runner reverts to initials) and
-    tells them why via a closed support ticket, same channel as a rejected
-    result. The record leaves the queue either way."""
+    tells them why (the moderator's reason) via a closed support ticket, same
+    channel as a rejected result. The record leaves the queue either way."""
     user = await get_tools_user(request)
     if user is None:
         return login_redirect()
@@ -77,10 +88,7 @@ async def remove_avatar(request: Request, user_id: int) -> RedirectResponse:
                     session,
                     recipient=target,
                     admin=user,
-                    body=(
-                        "Ваше фото профиля снято модератором — оно не подошло по правилам "
-                        "сообщества. При желании загрузите другое."
-                    ),
+                    body=_removal_message(reason),
                 )
             await session.commit()
     return RedirectResponse(
