@@ -2,9 +2,11 @@
 {% block title %}Стартовые данные — DH Admin{% endblock %}
 {% block content %}
   <style>
-    /* Auto layout + nowrap so the 11 columns size to their content and the
-       table scrolls horizontally inside .table-scroll instead of overlapping. */
-    .bl-example { table-layout:auto; width:auto; min-width:100%; }
+    /* Make the example table its own horizontal scroll box: display:block +
+       overflow-x:auto keeps its 11 nowrap columns from either overlapping (old
+       fixed layout) or stretching the whole page (it's inside a flex form, where
+       a wrapper's overflow wasn't containing it). */
+    .bl-example { display:block; overflow-x:auto; max-width:100%; }
     .bl-example th, .bl-example td { white-space:nowrap; }
   </style>
   <h1>Импорт стартовых данных</h1>
