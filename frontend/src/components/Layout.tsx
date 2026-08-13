@@ -101,8 +101,8 @@ function Brand({ onClick, light = false }: { onClick?: () => void; light?: boole
       />
       <img
         src={light ? logoFullLight : logoFullDark}
-        alt="DАЙ ХАРD"
-        className="h-5 w-auto"
+        alt="DАЙ ХАРD Чебоксары"
+        className="h-9 w-auto"
       />
     </Link>
   )
