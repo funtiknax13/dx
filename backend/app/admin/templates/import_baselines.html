@@ -56,49 +56,53 @@
         </p>
       </div>
 
-      <div style="min-width: 0;">
-        <strong>Пример файла</strong>
-        <div class="table-scroll" style="margin-top:6px;">
-        <table class="bl-example">
-          <thead>
-            <tr>
-              <th>first_name</th>
-              <th>last_name</th>
-              <th>dx_count</th>
-              <th>total_runs</th>
-              <th>total_km</th>
-              <th>first_run_date</th>
-              <th>dx_count_this_year</th>
-              <th>km_this_year</th>
-              <th>baseline_year</th>
-              <th>email</th>
-              <th>city</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Иван</td>
-              <td>Петров</td>
-              <td>47</td>
-              <td>50</td>
-              <td>623.5</td>
-              <td>2023-05-14</td>
-              <td>12</td>
-              <td>150.2</td>
-              <td>2026</td>
-              <td>ivan@example.com</td>
-              <td>Чебоксары</td>
-            </tr>
-          </tbody>
-        </table>
-        </div>
-        <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email;city
-Иван;Петров;47;50;623.5;2023-05-14;12;150.2;2026;ivan@example.com;Чебоксары</pre>
-      </div>
       <div>
         <button type="submit">Импортировать</button>
       </div>
     </form>
+  </div>
+
+  {# Example lives in its own block card (not inside the flex form) so the wide
+     table/CSV scroll horizontally within .table-scroll instead of stretching
+     the page. #}
+  <div class="card">
+    <strong>Пример файла</strong>
+    <div class="table-scroll" style="margin-top:6px;">
+      <table class="bl-example">
+        <thead>
+          <tr>
+            <th>first_name</th>
+            <th>last_name</th>
+            <th>dx_count</th>
+            <th>total_runs</th>
+            <th>total_km</th>
+            <th>first_run_date</th>
+            <th>dx_count_this_year</th>
+            <th>km_this_year</th>
+            <th>baseline_year</th>
+            <th>email</th>
+            <th>city</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Иван</td>
+            <td>Петров</td>
+            <td>47</td>
+            <td>50</td>
+            <td>623.5</td>
+            <td>2023-05-14</td>
+            <td>12</td>
+            <td>150.2</td>
+            <td>2026</td>
+            <td>ivan@example.com</td>
+            <td>Чебоксары</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email;city
+Иван;Петров;47;50;623.5;2023-05-14;12;150.2;2026;ivan@example.com;Чебоксары</pre>
   </div>
 
   {% if flash_error %}
