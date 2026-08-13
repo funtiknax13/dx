@@ -289,7 +289,7 @@ function AvatarUploader() {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="group relative rounded-full"
+        className="group relative inline-flex rounded-full"
         aria-label="Сменить аватар"
       >
         <Avatar
