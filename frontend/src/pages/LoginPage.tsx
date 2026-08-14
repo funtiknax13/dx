@@ -7,6 +7,7 @@ import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
 import { Altcha } from '../components/ui/Altcha'
 import { Spinner } from '../components/ui/Spinner'
+import { emailError } from '../lib/validation'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -36,6 +37,15 @@ export function LoginPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    const emailErr = emailError(email)
+    if (emailErr) {
+      setError(emailErr)
+      return
+    }
+    if (!password) {
+      setError('Введите пароль')
+      return
+    }
     setLoading(true)
     try {
       await login({ email, password, captcha_token: captchaToken || undefined })

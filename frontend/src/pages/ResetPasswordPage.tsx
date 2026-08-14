@@ -5,6 +5,7 @@ import { ApiError } from '../api/client'
 import { AuthShell, FormError, FormSuccess } from '../components/AuthShell'
 import { PasswordField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
+import { passwordError } from '../lib/validation'
 
 export function ResetPasswordPage() {
   const [params] = useSearchParams()
@@ -20,8 +21,9 @@ export function ResetPasswordPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (password.length < 8) {
-      setError('Пароль должен содержать минимум 8 символов')
+    const passErr = passwordError(password)
+    if (passErr) {
+      setError(passErr)
       return
     }
     if (password !== confirm) {
@@ -68,7 +70,7 @@ export function ResetPasswordPage() {
           label="Новый пароль"
           name="password"
           autoComplete="new-password"
-          placeholder="Минимум 8 символов"
+          placeholder="Латиница, цифры, 8+ символов"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required

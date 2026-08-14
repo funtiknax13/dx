@@ -7,6 +7,7 @@ import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
 import { Altcha } from '../components/ui/Altcha'
 import { Spinner } from '../components/ui/Spinner'
+import { capitalizeFirst, emailError, nameError, passwordError } from '../lib/validation'
 
 export function RegisterPage() {
   const navigate = useNavigate()
@@ -36,12 +37,20 @@ export function RegisterPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  // Names are capitalised as you type (first letter auto-uppercased).
+  const setName = (k: 'first_name' | 'last_name') => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: capitalizeFirst(e.target.value) }))
+
   const validate = () => {
     const errs: Record<string, string> = {}
-    if (!form.first_name.trim()) errs.first_name = 'Укажите имя'
-    if (!form.last_name.trim()) errs.last_name = 'Укажите фамилию'
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) errs.email = 'Некорректный email'
-    if (form.password.length < 8) errs.password = 'Минимум 8 символов'
+    const firstErr = nameError(form.first_name, 'Укажите имя')
+    if (firstErr) errs.first_name = firstErr
+    const lastErr = nameError(form.last_name, 'Укажите фамилию')
+    if (lastErr) errs.last_name = lastErr
+    const emailErr = emailError(form.email)
+    if (emailErr) errs.email = emailErr
+    const passErr = passwordError(form.password)
+    if (passErr) errs.password = passErr
     if (form.password !== form.confirm) errs.confirm = 'Пароли не совпадают'
     if (!consent) errs.consent = 'Необходимо согласие на обработку персональных данных'
     setFieldErrors(errs)
@@ -102,7 +111,7 @@ export function RegisterPage() {
             autoComplete="given-name"
             placeholder="Иван"
             value={form.first_name}
-            onChange={set('first_name')}
+            onChange={setName('first_name')}
             error={fieldErrors.first_name}
             required
           />
@@ -112,7 +121,7 @@ export function RegisterPage() {
             autoComplete="family-name"
             placeholder="Петров"
             value={form.last_name}
-            onChange={set('last_name')}
+            onChange={setName('last_name')}
             error={fieldErrors.last_name}
             required
           />
@@ -132,7 +141,7 @@ export function RegisterPage() {
           label="Пароль"
           name="password"
           autoComplete="new-password"
-          placeholder="Минимум 8 символов"
+          placeholder="Латиница, цифры, 8+ символов"
           value={form.password}
           onChange={set('password')}
           error={fieldErrors.password}

@@ -128,6 +128,40 @@ async def test_registration_requires_privacy_policy_consent(client: AsyncClient)
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("first_name", "Ivan2"),  # digit in name
+        ("last_name", "Petrov9"),
+        ("password", "supersecret"),  # no digit
+        ("password", "12345678"),  # no letter
+        ("password", "парольпароль1"),  # Cyrillic
+        ("password", "short1"),  # < 8 chars
+    ],
+)
+async def test_registration_rejects_invalid_fields(
+    client: AsyncClient, field: str, value: str
+) -> None:
+    payload = {**REGISTER, field: value}
+    r = await client.post("/api/v1/auth/register", json=payload)
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_registration_capitalizes_names(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    payload = {**REGISTER, "first_name": "  анна", "last_name": "смирнова"}
+    r = await client.post("/api/v1/auth/register", json=payload)
+    assert r.status_code == 201, r.text
+
+    user = await session.scalar(select(User).where(User.email == REGISTER["email"]))
+    assert user is not None
+    assert user.first_name == "Анна"
+    assert user.last_name == "Смирнова"
+
+
+@pytest.mark.asyncio
 async def test_registration_records_consent_timestamp(
     client: AsyncClient, session: AsyncSession
 ) -> None:
