@@ -55,8 +55,9 @@ export function GroupCard({ group, index = 0 }: { group: Group; index?: number }
           )}
         </div>
         {showSegments && segs && (
-          <div className="mt-2">
-            <PaceSegments segments={segs} />
+          <div className="mt-1.5 flex items-start gap-1.5">
+            <IconRoute width={14} height={14} className="mt-0.5 shrink-0 text-signal" />
+            <PaceSegments segments={segs} className="min-w-0 flex-1" />
           </div>
         )}
         {(group.signup_count != null || group.finisher_count != null) && (

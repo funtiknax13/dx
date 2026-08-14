@@ -1,39 +1,37 @@
 import type { PaceSegment } from '../../types'
 import { formatDistance, segmentPace } from '../../lib/format'
-import { IconRoute } from './icons'
 
 /** A group's structured pace plan (warm-up / target / cool-down, progression, …)
- * rendered as a compact stacked list. Used on the group card ("sm") and the
- * group detail page ("md"). A plain single-range plan is handled inline by the
- * callers, so this only ever renders multi-part plans. */
+ * rendered as one flowing line of text — reads like the plain single-range
+ * pace it replaces instead of a boxed table. Plain <span>s (not flex), so the
+ * browser wraps at word boundaries and can never force horizontal overflow,
+ * even on a narrow phone screen. "sm" (the card) drops the per-segment km to
+ * stay short at a glance; "md" (the group page) shows it. A plain single-range
+ * plan is rendered inline by the callers instead of through this component. */
 export function PaceSegments({
   segments,
   size = 'sm',
+  className = '',
 }: {
   segments: PaceSegment[]
   size?: 'sm' | 'md'
+  className?: string
 }) {
-  const text = size === 'md' ? 'text-sm' : 'text-xs'
+  const textSize = size === 'md' ? 'text-sm' : 'text-xs'
   return (
-    <div className="min-w-0">
-      <div className="mb-1 inline-flex items-center gap-1.5 font-mono text-[0.65rem] uppercase tracking-wide text-clay">
-        <IconRoute width={13} height={13} className="text-signal" />
-        Темп, мин/км
-      </div>
-      <ul className={`space-y-0.5 ${text}`}>
-        {segments.map((s, i) => {
-          const pace = segmentPace(s)
-          return (
-            <li key={i} className="flex flex-wrap items-baseline gap-x-2">
-              {s.label && <span className="font-semibold text-ink">{s.label}</span>}
-              {s.distance_km != null && (
-                <span className="font-mono tabular text-clay">{formatDistance(s.distance_km)}</span>
-              )}
-              {pace && <span className="font-mono tabular text-ink-600">{pace}</span>}
-            </li>
-          )
-        })}
-      </ul>
-    </div>
+    <p className={`${textSize} leading-relaxed text-ink-600 ${className}`}>
+      {segments.map((s, i) => {
+        const pace = segmentPace(s)
+        const km = size === 'md' && s.distance_km != null ? formatDistance(s.distance_km) : null
+        return (
+          <span key={i}>
+            {i > 0 && <span className="text-clay"> · </span>}
+            {s.label && <span className="font-semibold text-ink">{s.label} </span>}
+            {km && <span className="font-mono tabular text-clay">{km} </span>}
+            {pace && <span className="font-mono tabular">{pace}</span>}
+          </span>
+        )
+      })}
+    </p>
   )
 }

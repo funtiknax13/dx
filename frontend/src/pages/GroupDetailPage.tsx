@@ -133,8 +133,9 @@ export function GroupDetailPage() {
                   )}
                 </div>
                 {showSegments && segs && (
-                  <div className="mt-4 rounded-xl2 border border-ink/[0.08] bg-white/70 p-4">
-                    <PaceSegments segments={segs} size="md" />
+                  <div className="mt-3 flex items-start gap-2">
+                    <IconRoute width={16} height={16} className="mt-0.5 shrink-0 text-signal" />
+                    <PaceSegments segments={segs} size="md" className="min-w-0 flex-1" />
                   </div>
                 )}
               </div>
