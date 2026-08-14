@@ -5,25 +5,12 @@ import { leaderboardApi } from '../api/leaderboard'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { fullName, plural } from '../lib/format'
+import { FIELD_LABELS } from '../lib/profileFieldLabels'
 import { Avatar } from '../components/ui/Avatar'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconTrophy } from '../components/ui/icons'
 import type { RatingEntry, RatingGender, RatingPeriod, StatsLockReason } from '../types'
-
-const FIELD_LABELS: Record<string, string> = {
-  birthday: 'дата рождения',
-  avatar: 'фото на аватар',
-  city: 'город',
-  gender: 'пол',
-  phone: 'телефон',
-  running_club: 'беговой клуб',
-  prior_experience: 'бегали ли вы раньше с DАЙ ХАРD',
-  email_verified: 'подтверждение почты',
-  parent_first_name: 'имя родителя',
-  parent_last_name: 'фамилия родителя',
-  parent_phone: 'телефон родителя',
-}
 
 type View = 'rating' | 'streak' | 'km'
 

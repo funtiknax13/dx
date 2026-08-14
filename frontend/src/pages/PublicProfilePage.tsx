@@ -18,20 +18,10 @@ import {
   IconSpark,
   IconUser,
 } from '../components/ui/icons'
+import { FIELD_LABELS } from '../lib/profileFieldLabels'
 import type { Achievement, PublicProfile } from '../types'
 
 type Tab = 'history' | 'achievements'
-
-const FIELD_LABELS: Record<string, string> = {
-  birthday: 'дата рождения',
-  avatar: 'фото на аватар',
-  city: 'город',
-  gender: 'пол',
-  phone: 'телефон',
-  running_club: 'беговой клуб',
-  prior_experience: 'бегали ли вы раньше с DАЙ ХАРD',
-  email_verified: 'подтверждение почты',
-}
 
 export function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
