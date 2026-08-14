@@ -21,6 +21,7 @@ import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { CityAutocomplete } from '../components/ui/CityAutocomplete'
 import { RunningClubField } from '../components/ui/RunningClubField'
+import { capitalizeFirst, nameError } from '../lib/validation'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
@@ -378,11 +379,30 @@ function ProfileForm({
       setSaved(false)
     }
 
+  // Name fields (own + guardian) capitalise the first letter as you type.
+  const setName =
+    (k: 'first_name' | 'last_name' | 'parent_first_name' | 'parent_last_name') =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setForm((f) => ({ ...f, [k]: capitalizeFirst(e.target.value) }))
+      setSaved(false)
+    }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!form.first_name.trim() || !form.last_name.trim()) {
-      setError('Имя и фамилия обязательны')
+    const firstErr = nameError(form.first_name, 'Имя и фамилия обязательны')
+    const lastErr = nameError(form.last_name, 'Имя и фамилия обязательны')
+    if (firstErr || lastErr) {
+      setError(firstErr || lastErr)
+      return
+    }
+    // Guardian names are optional, but if filled they can't contain digits.
+    if (form.parent_first_name.trim() && /\d/.test(form.parent_first_name)) {
+      setError('Имя родителя не должно содержать цифр')
+      return
+    }
+    if (form.parent_last_name.trim() && /\d/.test(form.parent_last_name)) {
+      setError('Фамилия родителя не должна содержать цифр')
       return
     }
     // Phone is optional, but if given it must be a full RU number.
@@ -467,8 +487,8 @@ function ProfileForm({
         <FormSuccess message={saved ? 'Изменения сохранены' : null} />
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Имя *" name="first_name" value={form.first_name} onChange={set('first_name')} required />
-          <Field label="Фамилия *" name="last_name" value={form.last_name} onChange={set('last_name')} required />
+          <Field label="Имя *" name="first_name" value={form.first_name} onChange={setName('first_name')} required />
+          <Field label="Фамилия *" name="last_name" value={form.last_name} onChange={setName('last_name')} required />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <CityAutocomplete
@@ -526,14 +546,14 @@ function ProfileForm({
                 label="Имя родителя"
                 name="parent_first_name"
                 value={form.parent_first_name}
-                onChange={set('parent_first_name')}
+                onChange={setName('parent_first_name')}
                 error={missing.parentFirstName ? REQUIRED_HINT : undefined}
               />
               <Field
                 label="Фамилия родителя"
                 name="parent_last_name"
                 value={form.parent_last_name}
-                onChange={set('parent_last_name')}
+                onChange={setName('parent_last_name')}
                 error={missing.parentLastName ? REQUIRED_HINT : undefined}
               />
             </div>

@@ -7,6 +7,31 @@ from tests.factories import make_user
 
 
 @pytest.mark.asyncio
+async def test_profile_update_capitalizes_and_rejects_digit_names(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    user = await make_user(session, "namecheck@example.com")
+    await session.commit()
+    token = create_access_token(user.id)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Lowercase name is capitalised server-side.
+    ok = await client.patch(
+        "/api/v1/users/me", headers=headers, json={"first_name": "пётр", "last_name": "иванов"}
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["first_name"] == "Пётр"
+    assert ok.json()["last_name"] == "Иванов"
+
+    # A digit in a name (own or guardian) is rejected.
+    for field in ("first_name", "last_name", "parent_first_name", "parent_last_name"):
+        bad = await client.patch(
+            "/api/v1/users/me", headers=headers, json={field: "Иван3"}
+        )
+        assert bad.status_code == 422, f"{field}: {bad.text}"
+
+
+@pytest.mark.asyncio
 async def test_prior_experience_can_be_set_once(session: AsyncSession, client: AsyncClient) -> None:
     user = await make_user(session, "prior-exp1@example.com", complete_profile=False)
     await session.commit()

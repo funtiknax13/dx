@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import AvatarReview, Gender, PriorExperience, UserRole
+from app.schemas.validators import normalize_optional_name
 
 
 def normalize_ru_phone(value: str | None) -> str | None:
@@ -72,6 +73,10 @@ class UserUpdate(BaseModel):
     parent_first_name: str | None = Field(default=None, max_length=100)
     parent_last_name: str | None = Field(default=None, max_length=100)
     parent_phone: str | None = Field(default=None, max_length=40)
+
+    _normalize_names = field_validator(
+        "first_name", "last_name", "parent_first_name", "parent_last_name"
+    )(normalize_optional_name)
 
     @field_validator("phone", "parent_phone")
     @classmethod
