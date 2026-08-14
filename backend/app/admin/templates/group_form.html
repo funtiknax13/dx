@@ -129,22 +129,30 @@
     var preset = document.getElementById('pace-preset');
     var targetEl = document.getElementById('target_distance_km');
 
+    // Pace mask: type digits, get "m:ss" — 1 minute digit, auto ":", 2 seconds.
+    function paceMask(v){
+      var d = (v || '').replace(/\D/g, '').slice(0, 3);
+      return d.length <= 1 ? d : d[0] + ':' + d.slice(1);
+    }
+
     function makeRow(seg){
       seg = seg || {};
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td><input class="seg-label" list="seg-labels" placeholder="Разминка"></td>' +
         '<td><input class="seg-km" type="number" step="0.1" min="0" placeholder="10"></td>' +
-        '<td><input class="seg-from" placeholder="6:00"></td>' +
-        '<td><input class="seg-to" placeholder="5:40"></td>' +
+        '<td><input class="seg-from" inputmode="numeric" placeholder="6:00"></td>' +
+        '<td><input class="seg-to" inputmode="numeric" placeholder="5:40"></td>' +
         '<td><button type="button" class="btn secondary seg-del" title="Убрать">✕</button></td>';
       tr.querySelector('.seg-label').value = seg.label || '';
       tr.querySelector('.seg-km').value = (seg.distance_km != null ? seg.distance_km : '');
       tr.querySelector('.seg-from').value = seg.pace_from || '';
       tr.querySelector('.seg-to').value = seg.pace_to || '';
       tr.querySelector('.seg-del').addEventListener('click', function(){ tr.remove(); sync(); });
-      Array.prototype.forEach.call(tr.querySelectorAll('input'), function(i){
-        i.addEventListener('input', sync);
+      tr.querySelector('.seg-label').addEventListener('input', sync);
+      tr.querySelector('.seg-km').addEventListener('input', sync);
+      Array.prototype.forEach.call(tr.querySelectorAll('.seg-from, .seg-to'), function(i){
+        i.addEventListener('input', function(){ i.value = paceMask(i.value); sync(); });
       });
       return tr;
     }
