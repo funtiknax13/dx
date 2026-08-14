@@ -167,7 +167,7 @@ export function AvatarCropModal({ file, busy = false, error, onCancel, onConfirm
             </div>
           )}
           {loadError && (
-            <div className="absolute inset-0 grid place-items-center p-4 text-center text-xs text-signal-600">
+            <div className="absolute inset-0 grid place-items-center p-4 text-center text-xs text-danger-600">
               Не удалось открыть изображение
             </div>
           )}
@@ -192,7 +192,7 @@ export function AvatarCropModal({ file, busy = false, error, onCancel, onConfirm
           />
         </div>
 
-        {error && <p className="mt-3 text-xs text-signal-600">{error}</p>}
+        {error && <p className="mt-3 text-xs text-danger-600">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className="btn-ghost btn-sm">

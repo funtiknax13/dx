@@ -160,7 +160,7 @@ export function ManualResultForm({
         </div>
       </div>
 
-      {error && <p className="text-xs text-signal-600">{error}</p>}
+      {error && <p className="text-xs text-danger-600">{error}</p>}
 
       <button type="submit" disabled={busy} className="btn-primary btn-sm">
         {busy ? <Spinner className="h-4 w-4" /> : 'Отправить на проверку'}

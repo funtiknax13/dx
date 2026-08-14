@@ -20,11 +20,11 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
       <input
         id={fieldId}
         ref={ref}
-        className={`field ${error ? 'border-signal ring-2 ring-signal/20' : ''} ${className}`}
+        className={`field ${error ? 'border-danger ring-2 ring-danger/25' : ''} ${className}`}
         {...rest}
       />
       {error ? (
-        <p className="mt-1.5 text-xs text-signal-600">{error}</p>
+        <p className="mt-1.5 text-xs text-danger-600">{error}</p>
       ) : hint ? (
         <p className="mt-1.5 text-xs text-clay">{hint}</p>
       ) : null}
@@ -48,7 +48,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
             id={fieldId}
             ref={ref}
             type={visible ? 'text' : 'password'}
-            className={`field pr-11 ${error ? 'border-signal ring-2 ring-signal/20' : ''} ${className}`}
+            className={`field pr-11 ${error ? 'border-danger ring-2 ring-danger/25' : ''} ${className}`}
             {...rest}
           />
           <button
@@ -61,7 +61,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
           </button>
         </div>
         {error ? (
-          <p className="mt-1.5 text-xs text-signal-600">{error}</p>
+          <p className="mt-1.5 text-xs text-danger-600">{error}</p>
         ) : hint ? (
           <p className="mt-1.5 text-xs text-clay">{hint}</p>
         ) : null}
@@ -85,13 +85,13 @@ export function SelectField({ label, hint, error, id, children, ...rest }: Selec
       </label>
       <select
         id={fieldId}
-        className={`field appearance-none ${error ? 'border-signal ring-2 ring-signal/20' : ''}`}
+        className={`field appearance-none ${error ? 'border-danger ring-2 ring-danger/25' : ''}`}
         {...rest}
       >
         {children}
       </select>
       {error ? (
-        <p className="mt-1.5 text-xs text-signal-600">{error}</p>
+        <p className="mt-1.5 text-xs text-danger-600">{error}</p>
       ) : hint ? (
         <p className="mt-1.5 text-xs text-clay">{hint}</p>
       ) : null}

@@ -69,8 +69,8 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
 export function FormError({ message }: { message?: string | null }) {
   if (!message) return null
   return (
-    <div className="flex items-start gap-2.5 rounded-xl border border-ink/20 bg-ink/[0.04] px-4 py-3 text-sm text-ink">
-      <IconX className="mt-0.5 shrink-0 text-ink-600" width={15} height={15} />
+    <div className="flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-wash px-4 py-3 text-sm text-danger-600">
+      <IconX className="mt-0.5 shrink-0 text-danger" width={15} height={15} />
       <span>{message}</span>
     </div>
   )

@@ -299,7 +299,7 @@ function AvatarUploader() {
           last={user?.last_name}
           src={user?.avatar_url}
           size="xl"
-          className={missing ? 'ring-2 ring-signal ring-offset-2' : ''}
+          className={missing ? 'ring-2 ring-danger ring-offset-2' : ''}
         />
         <span className="absolute inset-0 grid place-items-center rounded-full bg-ink/50 text-xs font-semibold text-paper opacity-0 transition-opacity group-hover:opacity-100">
           {busy ? <Spinner className="h-5 w-5" /> : 'Сменить'}
@@ -320,7 +320,7 @@ function AvatarUploader() {
         }}
       />
       {missing && (
-        <p className="mt-1.5 max-w-[6rem] text-center text-[0.65rem] text-signal-600">
+        <p className="mt-1.5 max-w-[6rem] text-center text-[0.65rem] text-danger-600">
           Нужно для рейтинга
         </p>
       )}
@@ -574,7 +574,7 @@ function ProfileForm({
         )}
 
         <div>
-          <label className={`field-label ${missing.runningClub ? 'text-signal-600' : ''}`}>
+          <label className={`field-label ${missing.runningClub ? 'text-danger-600' : ''}`}>
             Беговой клуб
           </label>
           <RunningClubField
@@ -598,7 +598,7 @@ function ProfileForm({
             />
             Не состою в беговом клубе
           </label>
-          {missing.runningClub && <p className="mt-1.5 text-xs text-signal-600">{REQUIRED_HINT}</p>}
+          {missing.runningClub && <p className="mt-1.5 text-xs text-danger-600">{REQUIRED_HINT}</p>}
         </div>
         {!hasApprovedClaim && (
           <div>

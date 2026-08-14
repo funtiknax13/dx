@@ -68,7 +68,7 @@ export function RunningClubField({ value, onChange, disabled, invalid, placehold
         placeholder={placeholder ?? 'Начните вводить или выберите из списка'}
         autoComplete="off"
         className={`field disabled:bg-ink/5 disabled:text-clay ${
-          invalid ? 'border-signal ring-2 ring-signal/20' : ''
+          invalid ? 'border-danger ring-2 ring-danger/25' : ''
         }`}
         onFocus={() => setOpen(true)}
         onChange={(e) => {

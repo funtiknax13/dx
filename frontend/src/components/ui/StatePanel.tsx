@@ -12,7 +12,7 @@ export function StatePanel({ title, description, icon, action, tone = 'neutral' 
   return (
     <div
       className={`flex flex-col items-center justify-center gap-3 rounded-xl2 border border-dashed px-6 py-16 text-center ${
-        tone === 'error' ? 'border-signal/40 bg-signal-wash/40' : 'border-ink/15 bg-white/40'
+        tone === 'error' ? 'border-danger/40 bg-danger-wash/60' : 'border-ink/15 bg-white/40'
       }`}
     >
       {icon && (

@@ -416,7 +416,7 @@ function SignupControl({
           <>Записаться в группу</>
         )}
       </button>
-      {msg && <p className="mt-2 text-right text-xs text-signal-600">{msg}</p>}
+      {msg && <p className="mt-2 text-right text-xs text-danger-600">{msg}</p>}
     </div>
   )
 }

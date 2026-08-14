@@ -34,6 +34,14 @@ export default {
           deep: '#C4C4C0',
         },
         clay: '#87857F',
+        // "danger" — the one hue allowed to break the monochrome palette:
+        // reserved strictly for errors and invalid/required fields, so a real
+        // problem reads instantly instead of blending into the grays.
+        danger: {
+          DEFAULT: '#DC2626',
+          600: '#B91C1C',
+          wash: '#FDECEC',
+        },
       },
       fontFamily: {
         // Trying Montserrat (the community's own house font) in place of

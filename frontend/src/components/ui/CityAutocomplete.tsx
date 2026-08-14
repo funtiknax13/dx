@@ -90,7 +90,7 @@ export function CityAutocomplete({ value, onSelect, label = 'Город', error,
           value={query}
           placeholder={placeholder ?? 'Начните вводить город'}
           autoComplete="off"
-          className="field pr-9"
+          className={`field pr-9 ${error ? 'border-danger ring-2 ring-danger/25' : ''}`}
           onFocus={() => setOpen(true)}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -142,7 +142,7 @@ export function CityAutocomplete({ value, onSelect, label = 'Город', error,
         </ul>
       )}
 
-      {error && <p className="mt-1.5 text-xs text-signal-600">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-danger-600">{error}</p>}
     </div>
   )
 }

@@ -181,7 +181,7 @@ export function RegisterPage() {
             </span>
           </label>
           {fieldErrors.consent && (
-            <p className="mt-1.5 text-xs text-signal-600">{fieldErrors.consent}</p>
+            <p className="mt-1.5 text-xs text-danger-600">{fieldErrors.consent}</p>
           )}
         </div>
         {captchaRequired && captcha?.enabled && (
