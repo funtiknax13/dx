@@ -72,6 +72,38 @@ async def test_manual_requires_screenshot(session: AsyncSession, client: AsyncCl
 
 
 @pytest.mark.asyncio
+async def test_manual_result_stores_optional_comment(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    runner, _group, rec = await _matched_record(session, "org-cmt@e.com", "run-cmt@e.com")
+    r = await client.post(
+        f"/api/v1/attendance/{rec.id}/result",
+        headers=_auth(runner.id),
+        data={
+            "distance_km": "10",
+            "duration_seconds": "3000",
+            "comment": "  Отвалился GPS на 5-м км, добежал по памяти  ",
+        },
+        files=_IMG,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["comment"] == "Отвалился GPS на 5-м км, добежал по памяти"
+
+    # A blank comment on a different record is normalised to null.
+    _, _g2, rec2 = await _matched_record(session, "org-cmt2@e.com", "run-cmt2@e.com")
+    runner2 = rec2.runner_id
+    assert runner2 is not None
+    r2 = await client.post(
+        f"/api/v1/attendance/{rec2.id}/result",
+        headers=_auth(runner2),
+        data={"distance_km": "10", "duration_seconds": "3000", "comment": "   "},
+        files=_IMG,
+    )
+    assert r2.status_code == 201, r2.text
+    assert r2.json()["comment"] is None
+
+
+@pytest.mark.asyncio
 async def test_self_submit_before_protocol_creates_self_reported(
     session: AsyncSession, client: AsyncClient
 ) -> None:

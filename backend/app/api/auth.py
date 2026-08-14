@@ -93,7 +93,7 @@ async def register(
             try:
                 await send_email(
                     existing.email,
-                    "Подтвердите почту — DАЙ ХАРD",
+                    "Подтвердите почту — DАЙ ХАРD Чебоксары",
                     f"Похоже, вы уже начинали регистрацию в DАЙ ХАРD.\n\n"
                     f"Подтвердите почту, чтобы войти: {link}\n\n"
                     "Если это были не вы — просто проигнорируйте письмо.",
@@ -124,7 +124,7 @@ async def register(
     try:
         await send_email(
             user.email,
-            "Подтвердите почту — DАЙ ХАРD",
+            "Подтвердите почту — DАЙ ХАРD Чебоксары",
             f"Добро пожаловать в DАЙ ХАРD, {user.first_name}!\n\n"
             f"Подтвердите почту, чтобы начать бегать с сообществом: {link}\n\n"
             "Если вы не регистрировались — просто проигнорируйте это письмо.",
@@ -209,7 +209,7 @@ async def forgot_password(payload: ForgotPasswordRequest, session: SessionDep) -
         try:
             await send_email(
                 user.email,
-                "Восстановление пароля — DАЙ ХАРD",
+                "Восстановление пароля — DАЙ ХАРD Чебоксары",
                 f"Ссылка для сброса пароля (действует 2 часа): {link}\n\n"
                 "Если вы не запрашивали сброс — просто проигнорируйте это письмо.",
                 render_email_html("reset_password.html", link=link),

@@ -81,6 +81,12 @@ def _real_images(images: list[UploadFile]) -> list[UploadFile]:
     return [img for img in images if img.filename]
 
 
+def _clean_comment(comment: str | None) -> str | None:
+    """Trim, drop if empty, and cap at the column length (1000)."""
+    cleaned = (comment or "").strip()
+    return cleaned[:1000] or None
+
+
 def _require_manual_screenshot(user: CurrentUser, images: list[UploadFile]) -> None:
     """A runner's manual entry has no track, so a screenshot (date/time of start,
     distance, run time, track visible) is the only evidence — at least one is
@@ -139,6 +145,7 @@ async def _save_result(
     source_file_path: str | None,
     screenshots: list[str] | None = None,
     update_screenshots: bool = False,
+    comment: str | None = None,
 ) -> Result:
     """Shared by file upload, manual entry, and URL import: validate the parsed
     track, auto-check it against the group's target, and upsert the 1:1 Result.
@@ -176,6 +183,7 @@ async def _save_result(
                 delete_media(old)
         result.screenshots = new or None
 
+    result.comment = comment
     result.distance_km = outcome.distance_km
     # Keep the file's own measured distance so moderation can see what was
     # distrusted when distance_km falls back to the group target. Manual entries
@@ -222,6 +230,9 @@ async def submit_result(
     distance_km: Annotated[float | None, Form()] = None,
     duration_seconds: Annotated[int | None, Form()] = None,
     start_time: Annotated[datetime | None, Form()] = None,
+    # Optional note explaining a mismatch with the group (GPS dropped, ran to the
+    # start from home, …) — carried into the Result for the moderator to see.
+    comment: Annotated[str | None, Form()] = None,
 ) -> Result:
     record = await _load_record(session, attendance_id)
     _check_can_submit(user, record)
@@ -280,6 +291,7 @@ async def submit_result(
         source_file_path,
         screenshots=screenshots,
         update_screenshots=update_screenshots,
+        comment=_clean_comment(comment),
     )
 
 
@@ -351,6 +363,7 @@ async def submit_group_result(
     distance_km: Annotated[float | None, Form()] = None,
     duration_seconds: Annotated[int | None, Form()] = None,
     start_time: Annotated[datetime | None, Form()] = None,
+    comment: Annotated[str | None, Form()] = None,
 ) -> Result:
     """Self-report a result for a group you're signed up to, *before* the
     protocol (CSV) exists. Manual entry only, screenshot required. Creates a
@@ -419,6 +432,7 @@ async def submit_group_result(
         None,
         screenshots=screenshots,
         update_screenshots=screenshots is not None,
+        comment=_clean_comment(comment),
     )
 
 

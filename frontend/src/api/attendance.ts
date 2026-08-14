@@ -113,6 +113,7 @@ export const attendanceApi = {
       duration_seconds: number
       start_time?: string
       images?: File[]
+      comment?: string
     },
   ) => {
     const form = new FormData()
@@ -120,6 +121,7 @@ export const attendanceApi = {
     form.append('duration_seconds', String(Math.round(payload.duration_seconds)))
     if (payload.start_time) form.append('start_time', payload.start_time)
     for (const img of payload.images ?? []) form.append('images', img)
+    if (payload.comment) form.append('comment', payload.comment)
     return mapResult(await api.post<RawResult>(`/attendance/${attendanceId}/result`, form))
   },
 
@@ -136,12 +138,13 @@ export const attendanceApi = {
   // screenshot; see backend/app/api/results.py::submit_group_result.
   submitGroupResult: async (
     groupId: number | string,
-    payload: { distance_km: number; duration_seconds: number; images: File[] },
+    payload: { distance_km: number; duration_seconds: number; images: File[]; comment?: string },
   ) => {
     const form = new FormData()
     form.append('distance_km', String(payload.distance_km))
     form.append('duration_seconds', String(Math.round(payload.duration_seconds)))
     for (const img of payload.images) form.append('images', img)
+    if (payload.comment) form.append('comment', payload.comment)
     return mapResult(await api.post<RawResult>(`/groups/${groupId}/result`, form))
   },
 }

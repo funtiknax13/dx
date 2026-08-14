@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
-    smtp_from: str = "DАЙ ХАРD <no-reply@yandex.ru>"
+    smtp_from: str = "DАЙ ХАРD Чебоксары <no-reply@yandex.ru>"
 
     # Fallback SMTP — used only if the primary send fails (e.g. the free
     # provider's daily limit is hit, or it's down). Leave host empty for no

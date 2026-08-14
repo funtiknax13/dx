@@ -86,7 +86,7 @@ async def add_message(
             link = f"{settings.frontend_origin}/support/tickets/{ticket.id}"
             await send_email(
                 recipient.email,
-                "Ответ в поддержке — DАЙ ХАРD",
+                "Ответ в поддержке — DАЙ ХАРD Чебоксары",
                 f"Здравствуйте, {recipient.first_name}!\n\n"
                 f"На ваше обращение в поддержку DАЙ ХАРD пришёл ответ:\n\n{body}\n\n"
                 f"Посмотреть и ответить: {link}",

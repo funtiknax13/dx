@@ -29,6 +29,7 @@ class ResultOut(BaseModel):
     source: str
     source_file: str | None
     screenshots: list[str] | None
+    comment: str | None
     track_points: list[Any] | None
     elevation_profile: list[Any] | None
     telemetry: dict[str, Any] | None

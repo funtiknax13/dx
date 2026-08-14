@@ -44,6 +44,11 @@ class Result(Base, TimestampMixin):
     # (e.g. one frame with the date, another with the route/track).
     screenshots: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
+    # Optional free-text note from the runner explaining a mismatch between their
+    # run and the group (GPS dropped out, ran to the start from home, etc.) — the
+    # moderator sees it when deciding whether to trust an off-target result.
+    comment: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
     # Extracted from file when possible (JSON): track points, elevation profile, FIT telemetry.
     track_points: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
     elevation_profile: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)

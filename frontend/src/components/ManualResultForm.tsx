@@ -6,6 +6,7 @@ export interface ManualResultData {
   distance_km: number
   duration_seconds: number
   images: File[]
+  comment?: string
 }
 
 function parseDuration(input: string): number {
@@ -41,6 +42,7 @@ export function ManualResultForm({
   const [distance, setDistance] = useState('')
   const [duration, setDuration] = useState('')
   const [images, setImages] = useState<File[]>([])
+  const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -78,7 +80,12 @@ export function ManualResultForm({
     }
     setBusy(true)
     try {
-      await onSubmit({ distance_km: distanceKm, duration_seconds: durationSeconds, images })
+      await onSubmit({
+        distance_km: distanceKm,
+        duration_seconds: durationSeconds,
+        images,
+        comment: comment.trim() || undefined,
+      })
       onDone?.()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось сохранить результат')
@@ -158,6 +165,19 @@ export function ManualResultForm({
             результат не примут на модерации.
           </span>
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-ink-600">
+          Комментарий <span className="font-normal text-clay">(необязательно)</span>
+        </label>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value.slice(0, 1000))}
+          rows={2}
+          placeholder="Если пробежка не совпадает с группой — поясните: отвалился GPS, бежал на старт от дома и т.п."
+          className="w-full resize-y rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
+        />
       </div>
 
       {error && <p className="text-xs text-danger-600">{error}</p>}
