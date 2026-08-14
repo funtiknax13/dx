@@ -1,6 +1,14 @@
 {% extends "_base.html" %}
 {% block title %}{{ 'Группа' if group else 'Новая группа' }} — DH Admin Tools{% endblock %}
 {% block content %}
+  <style>
+    .pace-table { width:100%; border-collapse:collapse; }
+    .pace-table th { text-align:left; font-size:12px; color:#6b7280; font-weight:600; padding:2px 6px; }
+    .pace-table td { padding:2px 6px; vertical-align:middle; }
+    .pace-table input { width:100%; box-sizing:border-box; }
+    .pace-table td:last-child { text-align:center; }
+    .seg-del { padding:2px 9px; line-height:1.2; }
+  </style>
   <p><a href="/admin-tools/events/{{ event.id }}/edit">← {{ event.title }}</a></p>
   <div class="row-between">
     <h1 style="margin:0;">{{ group.name if group else 'Новая группа' }}</h1>
@@ -50,12 +58,39 @@
         <p class="hint">Выключи для групп, финиши которых не будут попадать в общий рейтинг бегунов.</p>
       </div>
       <div class="field">
-        <label for="pace_min">Темп от</label>
-        <input id="pace_min" type="text" name="pace_min" placeholder="5:40" value="{{ group.pace_min or '' if group else '' }}" />
-      </div>
-      <div class="field">
-        <label for="pace_max">Темп до</label>
-        <input id="pace_max" type="text" name="pace_max" placeholder="5:30" value="{{ group.pace_max or '' if group else '' }}" />
+        <label>Темп по отрезкам</label>
+        <p class="hint">
+          Ровный темп — один отрезок. Структурная тренировка (разминка / целевой / заминка,
+          прогрессия) — несколько. «Темп до» пусто = один темп на отрезок. Км у отрезка
+          необязательны, но помогают бегуну.
+        </p>
+        <div style="margin-bottom:10px;">
+          <label style="display:inline; font-weight:normal; margin-right:6px;">Шаблон:</label>
+          <select id="pace-preset" style="width:auto; display:inline-block;">
+            <option value="">— выбрать —</option>
+            <option value="even">Ровный темп</option>
+            <option value="wtc">Разминка / Целевой / Заминка</option>
+            <option value="prog">Разминка / Прогрессия / Заминка</option>
+          </select>
+        </div>
+        <table class="pace-table">
+          <thead>
+            <tr><th>Отрезок</th><th style="width:90px;">Км</th><th style="width:90px;">Темп от</th><th style="width:90px;">Темп до</th><th style="width:36px;"></th></tr>
+          </thead>
+          <tbody id="pace-rows"></tbody>
+        </table>
+        <datalist id="seg-labels">
+          <option value="Разминка"></option>
+          <option value="Целевой"></option>
+          <option value="Заминка"></option>
+          <option value="Прогрессия"></option>
+          <option value="Ровный"></option>
+        </datalist>
+        <div class="row-between" style="margin-top:8px;">
+          <button type="button" id="pace-add" class="btn secondary">+ добавить отрезок</button>
+          <span class="hint" id="pace-sum" style="margin:0;"></span>
+        </div>
+        <input type="hidden" name="pace_segments" id="pace_segments" />
       </div>
       <div class="field">
         <label for="start_time">Время старта</label>
@@ -80,4 +115,101 @@
     </form>
   </div>
   {% endif %}
+
+  <script>
+  (function(){
+    var INITIAL = {{ (group.pace_segments if group and group.pace_segments else None) | tojson }};
+    var LEGACY_FROM = {{ (group.pace_min if group else None) | tojson }};
+    var LEGACY_TO = {{ (group.pace_max if group else None) | tojson }};
+
+    var rows = document.getElementById('pace-rows');
+    var hidden = document.getElementById('pace_segments');
+    var sumEl = document.getElementById('pace-sum');
+    var addBtn = document.getElementById('pace-add');
+    var preset = document.getElementById('pace-preset');
+    var targetEl = document.getElementById('target_distance_km');
+
+    function makeRow(seg){
+      seg = seg || {};
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><input class="seg-label" list="seg-labels" placeholder="Разминка"></td>' +
+        '<td><input class="seg-km" type="number" step="0.1" min="0" placeholder="10"></td>' +
+        '<td><input class="seg-from" placeholder="6:00"></td>' +
+        '<td><input class="seg-to" placeholder="5:40"></td>' +
+        '<td><button type="button" class="btn secondary seg-del" title="Убрать">✕</button></td>';
+      tr.querySelector('.seg-label').value = seg.label || '';
+      tr.querySelector('.seg-km').value = (seg.distance_km != null ? seg.distance_km : '');
+      tr.querySelector('.seg-from').value = seg.pace_from || '';
+      tr.querySelector('.seg-to').value = seg.pace_to || '';
+      tr.querySelector('.seg-del').addEventListener('click', function(){ tr.remove(); sync(); });
+      Array.prototype.forEach.call(tr.querySelectorAll('input'), function(i){
+        i.addEventListener('input', sync);
+      });
+      return tr;
+    }
+    function addRow(seg){ rows.appendChild(makeRow(seg)); }
+
+    function collect(){
+      var out = [];
+      Array.prototype.forEach.call(rows.querySelectorAll('tr'), function(tr){
+        var label = tr.querySelector('.seg-label').value.trim();
+        var kmRaw = tr.querySelector('.seg-km').value.trim();
+        var from = tr.querySelector('.seg-from').value.trim();
+        var to = tr.querySelector('.seg-to').value.trim();
+        if (!label && !kmRaw && !from && !to) return;
+        var km = kmRaw === '' ? null : parseFloat(kmRaw.replace(',', '.'));
+        out.push({
+          label: label,
+          distance_km: (km != null && !isNaN(km)) ? km : null,
+          pace_from: from || null,
+          pace_to: to || null
+        });
+      });
+      return out;
+    }
+
+    function renderSum(segs){
+      var total = 0, any = false;
+      segs.forEach(function(s){ if (s.distance_km != null) { total += s.distance_km; any = true; } });
+      if (!any) { sumEl.textContent = ''; return; }
+      var target = parseFloat(((targetEl && targetEl.value) || '').replace(',', '.'));
+      var txt = 'Σ ' + (Math.round(total * 100) / 100) + ' км';
+      if (!isNaN(target)) txt += ' из ' + target + (Math.abs(total - target) < 0.05 ? ' ✓' : '');
+      sumEl.textContent = txt;
+    }
+
+    function sync(){
+      var segs = collect();
+      hidden.value = JSON.stringify(segs);
+      renderSum(segs);
+    }
+
+    var PRESETS = {
+      even: [ {label:'Ровный'} ],
+      wtc:  [ {label:'Разминка'}, {label:'Целевой'}, {label:'Заминка'} ],
+      prog: [ {label:'Разминка'}, {label:'Прогрессия'}, {label:'Заминка'} ]
+    };
+    preset.addEventListener('change', function(){
+      var p = PRESETS[preset.value];
+      if (!p) return;
+      rows.innerHTML = '';
+      p.forEach(addRow);
+      sync();
+      preset.value = '';
+    });
+    addBtn.addEventListener('click', function(){ addRow({}); sync(); });
+    if (targetEl) targetEl.addEventListener('input', function(){ renderSum(collect()); });
+    if (hidden.form) hidden.form.addEventListener('submit', sync);
+
+    if (INITIAL && INITIAL.length) {
+      INITIAL.forEach(addRow);
+    } else if (LEGACY_FROM || LEGACY_TO) {
+      addRow({ label: 'Ровный', pace_from: LEGACY_FROM, pace_to: LEGACY_TO });
+    } else {
+      addRow({ label: 'Ровный' });
+    }
+    sync();
+  })();
+  </script>
 {% endblock %}

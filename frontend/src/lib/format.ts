@@ -10,6 +10,22 @@ export function formatDuration(seconds?: number | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
 }
 
+/** One pace segment's pace text: "6:00–5:40" (range), "5:10" (single), or null.
+ * A progression/build label uses an arrow so it reads as start→end. */
+export function segmentPace(seg: {
+  label?: string | null
+  pace_from?: string | null
+  pace_to?: string | null
+}): string | null {
+  const from = seg.pace_from?.trim()
+  const to = seg.pace_to?.trim()
+  if (from && to) {
+    const arrow = /прогресс|разгон|build/i.test(seg.label ?? '') ? '→' : '–'
+    return `${from}${arrow}${to}`
+  }
+  return from || to || null
+}
+
 /** Pace in seconds per km -> "m:ss" (caller appends the "мин/км" unit) */
 export function formatPace(secPerKm?: number | null): string {
   if (secPerKm == null || Number.isNaN(secPerKm) || secPerKm <= 0) return '—'

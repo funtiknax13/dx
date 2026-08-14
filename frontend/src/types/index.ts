@@ -136,14 +136,25 @@ export interface EventDetail extends EventSummary {
   groups: Group[]
 }
 
+/** One leg of a group's pace plan (see Group.pace_segments). `pace_to` null =
+ * a single target pace; both set = a range / progression start→end. */
+export interface PaceSegment {
+  label: string
+  distance_km?: number | null
+  pace_from?: string | null
+  pace_to?: string | null
+}
+
 export interface Group {
   id: number
   event_id: number
   name: string
   location?: string | null
   distance_code?: string | null
-  pace_min?: string | null // e.g. "5:40"
+  pace_min?: string | null // e.g. "5:40" (legacy flat range; fallback)
   pace_max?: string | null // e.g. "5:30"
+  /** Structured pace plan; when present it supersedes pace_min/pace_max. */
+  pace_segments?: PaceSegment[] | null
   target_distance_km?: number | null
   start_time?: string | null // ISO
   start_lat?: number | null

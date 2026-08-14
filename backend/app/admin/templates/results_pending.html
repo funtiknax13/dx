@@ -140,7 +140,16 @@
           <dt>Группа</dt><dd>{{ grp.name if grp else '—' }}</dd>
           <dt>Локация</dt><dd>{{ grp.location if grp else '—' }}</dd>
           <dt>Дистанция</dt><dd>{{ grp.target_distance_km if grp else '—' }} км</dd>
-          <dt>Темп группы</dt><dd>{% if grp and grp.pace_min %}{{ grp.pace_min }}–{{ grp.pace_max }}{% else %}—{% endif %}</dd>
+          <dt>Темп группы</dt>
+          <dd>
+            {%- if grp and grp.pace_segments -%}
+              {%- for s in grp.pace_segments -%}
+                {{ s.label }}{% if s.distance_km %} {{ s.distance_km }}км{% endif %}{% if s.pace_from %} {{ s.pace_from }}{% if s.pace_to %}–{{ s.pace_to }}{% endif %}{% endif %}{% if not loop.last %}; {% endif %}
+              {%- endfor -%}
+            {%- elif grp and grp.pace_min -%}
+              {{ grp.pace_min }}–{{ grp.pace_max }}
+            {%- else -%}—{%- endif -%}
+          </dd>
           <dt>Старт (дата)</dt><dd>{{ grp.start_time|local_date if grp and grp.start_time else '—' }}</dd>
           <dt>Старт (время)</dt><dd>{{ grp.start_time|local_time if grp and grp.start_time else '—' }}</dd>
         </dl>

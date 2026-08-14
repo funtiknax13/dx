@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -302,6 +303,85 @@ async def test_new_group_unchecked_box_excludes_it_from_rating(
     )
     assert group is not None
     assert group.counts_toward_rating is False
+
+
+@pytest.mark.asyncio
+async def test_new_group_saves_pace_segments_and_exposes_them(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """The structured pace plan is parsed from the hidden JSON field, blank rows
+    dropped, and surfaced on the group API for the frontend to render."""
+    org = await make_user(session, "org-pace@example.com", UserRole.organizer)
+    event, _ = await make_event_group(session, org)
+    await session.commit()
+    await _login(client, org.id)
+
+    segments = [
+        {"label": "Разминка", "distance_km": 10, "pace_from": "6:00", "pace_to": "5:40"},
+        {"label": "Целевой", "distance_km": 12, "pace_from": "5:10", "pace_to": None},
+        {"label": "", "distance_km": None, "pace_from": None, "pace_to": None},  # dropped
+    ]
+    resp = await client.post(
+        f"/admin-tools/events/{event.id}/groups/new",
+        data={
+            "name": "X-27 группа #9",
+            "location": "Парк",
+            "target_distance_km": "27.3",
+            "pace_segments": json.dumps(segments),
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    group = await session.scalar(
+        select(Group).where(Group.event_id == event.id, Group.name == "X-27 группа #9")
+    )
+    assert group is not None
+    assert group.pace_segments == [
+        {"label": "Разминка", "distance_km": 10.0, "pace_from": "6:00", "pace_to": "5:40"},
+        {"label": "Целевой", "distance_km": 12.0, "pace_from": "5:10", "pace_to": None},
+    ]
+
+    api = await client.get(f"/api/v1/events/{event.id}/groups")
+    assert api.status_code == 200, api.text
+    row = next(g for g in api.json() if g["name"] == "X-27 группа #9")
+    assert row["pace_segments"][0]["label"] == "Разминка"
+    assert row["pace_segments"][1]["pace_to"] is None
+
+
+@pytest.mark.asyncio
+async def test_editing_group_migrates_legacy_range_to_segments(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Saving the segment-based form clears the legacy flat range so it can't
+    linger and override the plan."""
+    org = await make_user(session, "org-pace2@example.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)
+    group.pace_min = "5:40"
+    group.pace_max = "5:30"
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/groups/{group.id}/edit",
+        data={
+            "name": group.name,
+            "location": group.location,
+            "target_distance_km": str(group.target_distance_km),
+            "pace_segments": json.dumps(
+                [{"label": "Ровный", "pace_from": "5:40", "pace_to": "5:30"}]
+            ),
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    await session.refresh(group)
+    assert group.pace_min is None
+    assert group.pace_max is None
+    assert group.pace_segments == [
+        {"label": "Ровный", "distance_km": None, "pace_from": "5:40", "pace_to": "5:30"}
+    ]
 
 
 @pytest.mark.asyncio

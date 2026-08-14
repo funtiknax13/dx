@@ -1,4 +1,6 @@
+import json
 import re
+from typing import Any
 
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -30,6 +32,54 @@ _TRAILING_GROUP_NUMBER = re.compile(r"^(.*#)(\d+)$")
 def _parse_optional_float(value: str) -> float | None:
     value = value.strip()
     return float(value) if value else None
+
+
+def _clean_pace(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return value.strip()[:20] or None
+
+
+def _parse_pace_segments(raw: str) -> list[dict[str, Any]] | None:
+    """Turn the group form's hidden JSON field into a clean segment list,
+    dropping rows with nothing in them. Returns None when there's nothing
+    usable, so a group with no plan just falls back to the legacy range."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list):
+        return None
+    out: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip()[:40]
+        pace_from = _clean_pace(item.get("pace_from"))
+        pace_to = _clean_pace(item.get("pace_to"))
+        distance_km: float | None = None
+        dk = item.get("distance_km")
+        if isinstance(dk, int | float):
+            distance_km = float(dk)
+        elif isinstance(dk, str) and dk.strip():
+            try:
+                distance_km = float(dk.replace(",", "."))
+            except ValueError:
+                distance_km = None
+        if not (label or pace_from or pace_to or distance_km):
+            continue
+        out.append(
+            {
+                "label": label,
+                "distance_km": distance_km,
+                "pace_from": pace_from,
+                "pace_to": pace_to,
+            }
+        )
+    return out or None
 
 
 def _next_group_name(name: str) -> str:
@@ -67,8 +117,7 @@ async def group_new_submit(
     location: str = Form(...),
     distance_code: str = Form(""),
     target_distance_km: float = Form(...),
-    pace_min: str = Form(""),
-    pace_max: str = Form(""),
+    pace_segments: str = Form(""),
     start_time: str = Form(""),
     start_lat: str = Form(""),
     start_lng: str = Form(""),
@@ -87,8 +136,7 @@ async def group_new_submit(
             location=location,
             distance_code=distance_code or None,
             target_distance_km=target_distance_km,
-            pace_min=pace_min or None,
-            pace_max=pace_max or None,
+            pace_segments=_parse_pace_segments(pace_segments),
             start_time=combine_event_date_and_time(event.date, start_time),
             start_lat=_parse_optional_float(start_lat),
             start_lng=_parse_optional_float(start_lng),
@@ -134,8 +182,7 @@ async def group_edit_submit(
     location: str = Form(...),
     distance_code: str = Form(""),
     target_distance_km: float = Form(...),
-    pace_min: str = Form(""),
-    pace_max: str = Form(""),
+    pace_segments: str = Form(""),
     start_time: str = Form(""),
     start_lat: str = Form(""),
     start_lng: str = Form(""),
@@ -155,8 +202,12 @@ async def group_edit_submit(
         group.location = location
         group.distance_code = distance_code or None
         group.target_distance_km = target_distance_km
-        group.pace_min = pace_min or None
-        group.pace_max = pace_max or None
+        group.pace_segments = _parse_pace_segments(pace_segments)
+        # The form is now segment-based; drop the legacy flat range once saved so
+        # it can't linger and override the plan (the editor seeds a segment from
+        # it on load, so nothing is lost).
+        group.pace_min = None
+        group.pace_max = None
         group.start_time = combine_event_date_and_time(event.date, start_time)
         group.start_lat = _parse_optional_float(start_lat)
         group.start_lng = _parse_optional_float(start_lng)
@@ -185,6 +236,7 @@ async def group_duplicate(request: Request, group_id: int) -> RedirectResponse:
             target_distance_km=group.target_distance_km,
             pace_min=group.pace_min,
             pace_max=group.pace_max,
+            pace_segments=group.pace_segments,
             start_time=group.start_time,
             start_lat=group.start_lat,
             start_lng=group.start_lng,

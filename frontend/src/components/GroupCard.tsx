@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom'
 import type { Group } from '../types'
-import { formatTime, paceRange, plural } from '../lib/format'
+import { formatTime, paceRange, plural, segmentPace } from '../lib/format'
+import { PaceSegments } from './ui/PaceSegments'
 import { IconArrow, IconClock, IconPin, IconRoute } from './ui/icons'
 
 export function GroupCard({ group, index = 0 }: { group: Group; index?: number }) {
-  const pace = paceRange(group.pace_min, group.pace_max)
+  const segs = group.pace_segments ?? null
+  // A single distance-less segment is just a flat range — render it inline like
+  // the legacy pace; only genuinely multi-part plans get the stacked block.
+  const simplePace = segs && segs.length === 1 && segs[0].distance_km == null ? segmentPace(segs[0]) : null
+  const showSegments = Boolean(segs && segs.length > 0 && !simplePace)
+  const pace = simplePace ?? (segs && segs.length ? null : paceRange(group.pace_min, group.pace_max))
 
   return (
     <Link
@@ -48,6 +54,11 @@ export function GroupCard({ group, index = 0 }: { group: Group; index?: number }
             </span>
           )}
         </div>
+        {showSegments && segs && (
+          <div className="mt-2">
+            <PaceSegments segments={segs} />
+          </div>
+        )}
         {(group.signup_count != null || group.finisher_count != null) && (
           <div className="mt-2 flex flex-wrap gap-2">
             {group.signup_count != null && (

@@ -5,7 +5,8 @@ import { signupsApi } from '../api/signups'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { formatDistance, formatTime, isPast, paceRange, plural } from '../lib/format'
+import { formatDistance, formatTime, isPast, paceRange, plural, segmentPace } from '../lib/format'
+import { PaceSegments } from '../components/ui/PaceSegments'
 import { ProtocolTable } from '../components/ProtocolTable'
 import { ElevationProfile } from '../components/ElevationProfile'
 import { yandexMapsUrl } from '../lib/maps'
@@ -74,7 +75,10 @@ export function GroupDetailPage() {
   }
 
   const { group, protocol, route, roster } = data
-  const pace = paceRange(group.pace_min, group.pace_max)
+  const segs = group.pace_segments ?? null
+  const simplePace = segs && segs.length === 1 && segs[0].distance_km == null ? segmentPace(segs[0]) : null
+  const showSegments = Boolean(segs && segs.length > 0 && !simplePace)
+  const pace = simplePace ?? (segs && segs.length ? null : paceRange(group.pace_min, group.pace_max))
   const hasRoute = Boolean(route && route.points.length)
   // The roster is who *plans* to come — once the event has happened, the
   // protocol (who actually ran) is what matters, so the intent list is
@@ -128,6 +132,11 @@ export function GroupDetailPage() {
                     </span>
                   )}
                 </div>
+                {showSegments && segs && (
+                  <div className="mt-4 rounded-xl2 border border-ink/[0.08] bg-white/70 p-4">
+                    <PaceSegments segments={segs} size="md" />
+                  </div>
+                )}
               </div>
             </div>
 

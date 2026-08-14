@@ -5,6 +5,18 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class PaceSegment(BaseModel):
+    """One leg of a group's pace plan (see Group.pace_segments). `pace_to` is
+    None for a single target pace; both set means a range (or a progression
+    start→end). Distance is optional — a segment can name a pace without a fixed
+    length."""
+
+    label: str = Field(default="", max_length=40)
+    distance_km: float | None = Field(default=None, ge=0)
+    pace_from: str | None = Field(default=None, max_length=20)
+    pace_to: str | None = Field(default=None, max_length=20)
+
+
 class GroupCreate(BaseModel):
     location: str = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
@@ -12,6 +24,7 @@ class GroupCreate(BaseModel):
     target_distance_km: float = Field(gt=0)
     pace_min: str | None = Field(default=None, max_length=20)
     pace_max: str | None = Field(default=None, max_length=20)
+    pace_segments: list[PaceSegment] | None = None
     start_time: datetime | None = None
     start_lat: float | None = Field(default=None, ge=-90, le=90)
     start_lng: float | None = Field(default=None, ge=-180, le=180)
@@ -24,6 +37,7 @@ class GroupUpdate(BaseModel):
     target_distance_km: float | None = Field(default=None, gt=0)
     pace_min: str | None = Field(default=None, max_length=20)
     pace_max: str | None = Field(default=None, max_length=20)
+    pace_segments: list[PaceSegment] | None = None
     start_time: datetime | None = None
     start_lat: float | None = Field(default=None, ge=-90, le=90)
     start_lng: float | None = Field(default=None, ge=-180, le=180)
@@ -40,6 +54,7 @@ class GroupOut(BaseModel):
     target_distance_km: float
     pace_min: str | None
     pace_max: str | None
+    pace_segments: list[PaceSegment] | None
     start_time: datetime | None
     start_lat: float | None
     start_lng: float | None

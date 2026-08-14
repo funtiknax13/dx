@@ -20,6 +20,12 @@ interface RawGroup {
   target_distance_km: number
   pace_min?: string | null
   pace_max?: string | null
+  pace_segments?: {
+    label: string
+    distance_km?: number | null
+    pace_from?: string | null
+    pace_to?: string | null
+  }[] | null
   start_time?: string | null
   start_lat?: number | null
   start_lng?: number | null
@@ -71,6 +77,7 @@ function mapGroup(raw: RawGroup): Group {
     distance_code: raw.distance_code ?? null,
     pace_min: raw.pace_min ?? null,
     pace_max: raw.pace_max ?? null,
+    pace_segments: raw.pace_segments ?? null,
     target_distance_km: raw.target_distance_km,
     start_time: raw.start_time ?? null,
     start_lat: raw.start_lat ?? null,
