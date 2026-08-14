@@ -18,6 +18,9 @@ export function PaceSegments({
   className?: string
 }) {
   const textSize = size === 'md' ? 'text-sm' : 'text-xs'
+  // Unit shown once, attached to the first segment that actually has a pace
+  // (normally the first one) — implied for the rest of the line.
+  const firstPaceIndex = segments.findIndex((s) => segmentPace(s))
   return (
     <p className={`${textSize} leading-relaxed text-ink-600 ${className}`}>
       {segments.map((s, i) => {
@@ -28,7 +31,12 @@ export function PaceSegments({
             {i > 0 && <span className="text-clay"> · </span>}
             {s.label && <span className="font-semibold text-ink">{s.label} </span>}
             {km && <span className="font-mono tabular text-clay">{km} </span>}
-            {pace && <span className="font-mono tabular">{pace}</span>}
+            {pace && (
+              <span className="font-mono tabular">
+                {pace}
+                {i === firstPaceIndex && <span className="text-clay"> мин/км</span>}
+              </span>
+            )}
           </span>
         )
       })}
