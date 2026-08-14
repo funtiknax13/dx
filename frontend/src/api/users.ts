@@ -26,6 +26,7 @@ interface RawUser {
   birthday?: string | null
   phone?: string | null
   avatar?: string | null
+  avatar_review?: 'pending' | 'approved'
   running_club?: string | null
   prior_experience?: PriorExperience | null
 }

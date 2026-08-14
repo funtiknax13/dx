@@ -11,6 +11,7 @@ from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
 from app.models.user import User
+from app.services.avatar_service import visible_avatar
 from app.services.baseline_service import get_all_baselines
 from app.services.date_windows import calendar_window, current_year
 from app.services.rating_service import gender_filtered_ids
@@ -147,7 +148,11 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
 
 
 async def compute_leaderboard(
-    session: AsyncSession, metric: Metric, period: str = "all", gender: str = "all"
+    session: AsyncSession,
+    metric: Metric,
+    period: str = "all",
+    gender: str = "all",
+    viewer_id: int | None = None,
 ) -> list[LeaderboardEntry]:
     """Top runners by "dx" (count of finished attendances in groups that count
     toward the rating — i.e. "full DX") or "km" (sum of those groups'
@@ -187,7 +192,7 @@ async def compute_leaderboard(
             runner_id=u.id,
             first_name=u.first_name,
             last_name=u.last_name,
-            avatar=u.avatar,
+            avatar=visible_avatar(u, viewer_id),
             value=float(getattr(rows[u.id], value_attr)),
         )
         for u in users
@@ -199,7 +204,7 @@ async def compute_leaderboard(
 
 
 async def compute_streak_leaderboard(
-    session: AsyncSession, gender: str = "all"
+    session: AsyncSession, gender: str = "all", viewer_id: int | None = None
 ) -> list[LeaderboardEntry]:
     """Top runners by *current* streak of consecutive attended past events —
     any group counts, including "P" (see app.services.stats_service for the
@@ -269,7 +274,7 @@ async def compute_streak_leaderboard(
             runner_id=u.id,
             first_name=u.first_name,
             last_name=u.last_name,
-            avatar=u.avatar,
+            avatar=visible_avatar(u, viewer_id),
             value=float(streak_map[u.id]),
         )
         for u in users

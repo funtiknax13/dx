@@ -35,7 +35,9 @@ async def rating(
 
     # compute_rating already drops anyone with 0 activity in the window, so the
     # ranking never lists someone sitting at 0 for the selected period.
-    entries = await compute_rating(session, period, gender)
+    entries = await compute_rating(
+        session, period, gender, viewer_id=user.id if user else None
+    )
     items = [
         RatingItem(
             rank=i,

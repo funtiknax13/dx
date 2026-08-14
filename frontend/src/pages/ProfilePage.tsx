@@ -324,6 +324,11 @@ function AvatarUploader() {
           Нужно для рейтинга
         </p>
       )}
+      {!missing && user?.avatar_review === 'pending' && (
+        <p className="mt-1.5 max-w-[7rem] text-center text-[0.65rem] text-clay">
+          Фото на проверке — пока видно только вам
+        </p>
+      )}
       {pending && (
         <AvatarCropModal
           file={pending}

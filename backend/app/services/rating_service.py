@@ -11,6 +11,7 @@ from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
 from app.models.user import User
+from app.services.avatar_service import visible_avatar
 from app.services.baseline_service import get_all_baselines, get_baseline
 from app.services.date_windows import calendar_window, current_year
 
@@ -196,7 +197,10 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
 
 
 async def compute_rating(
-    session: AsyncSession, period: str = "all", gender: str = "all"
+    session: AsyncSession,
+    period: str = "all",
+    gender: str = "all",
+    viewer_id: int | None = None,
 ) -> list[RatingEntry]:
     rows = await _bulk_ranking_rows(session)
 
@@ -231,7 +235,7 @@ async def compute_rating(
             runner_id=u.id,
             first_name=u.first_name,
             last_name=u.last_name,
-            avatar=u.avatar,
+            avatar=visible_avatar(u, viewer_id),
             finished_count=getattr(rows[u.id], finished_count_attr),
         )
         for u in users

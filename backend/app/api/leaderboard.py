@@ -31,11 +31,12 @@ async def leaderboard(
             missing_fields=missing_fields,
         )
 
+    viewer_id = user.id if user else None
     if metric == "streak":
-        entries = await compute_streak_leaderboard(session, gender)
+        entries = await compute_streak_leaderboard(session, gender, viewer_id=viewer_id)
         period = "all"  # streak is inherently period-agnostic
     else:
-        entries = await compute_leaderboard(session, metric, period, gender)
+        entries = await compute_leaderboard(session, metric, period, gender, viewer_id=viewer_id)
 
     items = [
         LeaderboardItem(

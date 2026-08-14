@@ -21,6 +21,7 @@ from app.schemas.group import (
     RouteMap,
 )
 from app.services.achievement_service import get_latest_thresholds
+from app.services.avatar_service import visible_avatar
 from app.services.gpx_service import TrackParseError, parse_gpx
 from app.services.group_service import set_group_route_gpx
 from app.services.media_service import (
@@ -201,7 +202,7 @@ async def route_map(group_id: int, session: SessionDep) -> RouteMap:
 
 
 @router.get("/groups/{group_id}/protocol", response_model=Protocol)
-async def protocol(group_id: int, session: SessionDep, _viewer: CurrentUser) -> Protocol:
+async def protocol(group_id: int, session: SessionDep, viewer: CurrentUser) -> Protocol:
     # Protocols are community-only — any logged-in user may view, anonymous 401s.
     group = await _get_group_or_404(session, group_id)
 
@@ -261,7 +262,7 @@ async def protocol(group_id: int, session: SessionDep, _viewer: CurrentUser) -> 
             attendance_id=rec.id,
             runner_id=rec.runner_id,
             display_name=display_name,
-            avatar=rec.runner.avatar if rec.runner else None,
+            avatar=visible_avatar(rec.runner, viewer.id),
             latest_achievement=(
                 latest_thresholds.get(rec.runner_id) if rec.runner_id is not None else None
             ),

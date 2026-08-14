@@ -35,6 +35,9 @@ export interface User {
   birthday?: string | null // ISO date
   phone?: string | null
   avatar_url?: string | null
+  /** Post-moderation state of the avatar. While "pending" it's visible only to
+   * the owner — everyone else sees the placeholder until a moderator approves. */
+  avatar_review?: 'pending' | 'approved'
   /** "" = explicitly "not in a club" (still counts as answered), null/undefined = never answered. */
   running_club?: string | null
   prior_experience?: PriorExperience | null

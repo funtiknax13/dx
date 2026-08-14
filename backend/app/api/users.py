@@ -27,6 +27,7 @@ from app.schemas.user import (
     UserUpdate,
 )
 from app.services.achievement_service import compute_achievements
+from app.services.avatar_service import visible_avatar
 from app.services.guest_service import move_baseline_to_guest
 from app.services.media_service import (
     FileTooLargeError,
@@ -266,6 +267,7 @@ async def public_profile(user_id: int, session: SessionDep, viewer: OptionalUser
     # Looking at your own profile is never locked — the gate is about seeing
     # *other* runners' stats (see profile_completeness_service).
     is_own_profile = viewer is not None and viewer.id == user_id
+    avatar = visible_avatar(user, viewer.id if viewer else None)
     lock_reason, missing_fields = (
         (None, []) if is_own_profile else await stats_access_lock(session, viewer)
     )
@@ -274,7 +276,7 @@ async def public_profile(user_id: int, session: SessionDep, viewer: OptionalUser
             id=user.id,
             first_name=user.first_name,
             last_name=user.last_name,
-            avatar=user.avatar,
+            avatar=avatar,
             is_guest=user.is_guest,
             registered_at=None if user.is_guest else user.created_at,
             lock_reason=lock_reason,
@@ -288,7 +290,7 @@ async def public_profile(user_id: int, session: SessionDep, viewer: OptionalUser
         id=user.id,
         first_name=user.first_name,
         last_name=user.last_name,
-        avatar=user.avatar,
+        avatar=avatar,
         is_guest=user.is_guest,
         registered_at=None if user.is_guest else user.created_at,
         rating=rating,

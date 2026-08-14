@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.timezone import EVENT_TZ
 from app.models.attendance import AttendanceRecord
 from app.models.event import Event
@@ -21,6 +21,7 @@ from app.schemas.signup import (
     SignupRoster,
     SignupRosterEntry,
 )
+from app.services.avatar_service import visible_avatar
 
 router = APIRouter(tags=["signups"])
 
@@ -167,7 +168,9 @@ async def my_awaiting_results(
 
 
 @router.get("/groups/{group_id}/signups", response_model=SignupRoster)
-async def group_signup_roster(group_id: int, session: SessionDep) -> SignupRoster:
+async def group_signup_roster(
+    group_id: int, session: SessionDep, viewer: OptionalUser
+) -> SignupRoster:
     """Who's signed up (intent, not the post-event protocol) — the frontend
     only shows this for groups whose event hasn't happened yet."""
     group = await session.get(Group, group_id)
@@ -184,7 +187,7 @@ async def group_signup_roster(group_id: int, session: SessionDep) -> SignupRoste
             signup_id=s.id,
             runner_id=s.runner_id,
             display_name=f"{s.runner.first_name} {s.runner.last_name}",
-            avatar=s.runner.avatar,
+            avatar=visible_avatar(s.runner, viewer.id if viewer else None),
         )
         for s in rows
     ]
