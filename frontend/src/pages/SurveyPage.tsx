@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { surveysApi } from '../api/surveys'
 import { ApiError } from '../api/client'
 import { useAsync } from '../lib/useAsync'
@@ -11,10 +11,10 @@ import { IconSpark } from '../components/ui/icons'
 export function SurveyPage() {
   const { data: survey, loading, error } = useAsync(() => surveysApi.active(), [])
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState(false)
 
   const returnTo = searchParams.get('from') || '/rating'
 
@@ -28,7 +28,7 @@ export function SurveyPage() {
         survey.id,
         survey.questions.map((q) => ({ question_id: q.id, value: answers[q.id] ?? '' })),
       )
-      navigate(returnTo, { replace: true })
+      setDone(true)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Не удалось отправить анкету')
     } finally {
@@ -37,6 +37,23 @@ export function SurveyPage() {
   }
 
   if (loading) return <PageLoader />
+
+  if (done) {
+    return (
+      <div className="container-page py-16">
+        <StatePanel
+          title="Анкета отправлена"
+          description="Спасибо за Ваши ответы и обратную связь — Вместе мы становимся сильнее!"
+          icon={<IconSpark />}
+          action={
+            <Link to={returnTo} className="btn-primary" replace>
+              К рейтингу
+            </Link>
+          }
+        />
+      </div>
+    )
+  }
 
   if (error || !survey) {
     // This page is only ever reached while locked for a survey reason (see
