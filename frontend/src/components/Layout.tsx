@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { adminToolsUrl } from '../api/client'
 import { supportApi } from '../api/support'
 import { staffApi } from '../api/staff'
+import { surveysApi } from '../api/surveys'
 import { Avatar } from './ui/Avatar'
 import { IconMail, IconMenu, IconX } from './ui/icons'
 import { plural } from '../lib/format'
@@ -51,6 +52,38 @@ function useUnreadSupportCount(isAuthenticated: boolean): number {
   return count
 }
 
+/** Whether the newbie survey is currently blocking this runner's stats — the
+ * gate itself only ever surfaces on the rating/profile pages, so without
+ * this a runner has no reason to go looking for it. Same polling pattern as
+ * the other nav badges above. */
+function useSurveyPending(isAuthenticated: boolean): boolean {
+  const [pending, setPending] = useState(false)
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setPending(false)
+      return
+    }
+    let active = true
+    const check = () => {
+      surveysApi
+        .active()
+        .then((survey) => {
+          if (active) setPending(Boolean(survey))
+        })
+        .catch(() => {})
+    }
+    check()
+    const interval = setInterval(check, 60_000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [isAuthenticated])
+
+  return pending
+}
+
 /** Polls the same "needs a look" counts admin-tools shows as nav badges —
  * tickets/claims/moderation — so staff notice from the main site without
  * having to open admin-tools first (they might not visit it every day). */
@@ -91,6 +124,18 @@ function useStaffAttentionCounts(isStaff: boolean): { total: number; tooltip: st
   }
 }
 
+/** "!" badge flagging that the newbie survey is waiting — see useSurveyPending. */
+function SurveyBadge() {
+  return (
+    <span
+      title="Заполните анкету новичка, чтобы открыть рейтинг"
+      className="ml-1.5 inline-grid h-4 w-4 place-items-center rounded-full bg-signal align-middle text-[10px] font-bold text-white"
+    >
+      !
+    </span>
+  )
+}
+
 function Brand({ onClick, light = false }: { onClick?: () => void; light?: boolean }) {
   return (
     <Link to="/events" onClick={onClick} className="group flex items-center gap-3">
@@ -114,6 +159,7 @@ export function Layout() {
   const location = useLocation()
   const unreadSupport = useUnreadSupportCount(isAuthenticated)
   const attention = useStaffAttentionCounts(isStaff(user?.role))
+  const surveyPending = useSurveyPending(isAuthenticated)
 
   useEffect(() => setOpen(false), [location.pathname])
 
@@ -142,6 +188,7 @@ export function Layout() {
                   }
                 >
                   {item.label}
+                  {item.to === '/rating' && surveyPending && <SurveyBadge />}
                 </NavLink>
               ))}
             </nav>
@@ -229,6 +276,7 @@ export function Layout() {
                   }
                 >
                   {item.label}
+                  {item.to === '/rating' && surveyPending && <SurveyBadge />}
                 </NavLink>
               ))}
               <div className="my-2 h-px bg-ink/10" />
