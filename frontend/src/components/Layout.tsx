@@ -6,7 +6,7 @@ import { supportApi } from '../api/support'
 import { staffApi } from '../api/staff'
 import { surveysApi } from '../api/surveys'
 import { Avatar } from './ui/Avatar'
-import { IconMail, IconMenu, IconX } from './ui/icons'
+import { IconClipboard, IconMail, IconMenu, IconX } from './ui/icons'
 import { plural } from '../lib/format'
 import logoMarkSquare from '../assets/brand/logo-mark-square.png'
 import logoFullDark from '../assets/brand/logo-full-dark.png'
@@ -124,15 +124,38 @@ function useStaffAttentionCounts(isStaff: boolean): { total: number; tooltip: st
   }
 }
 
-/** "!" badge flagging that the newbie survey is waiting — see useSurveyPending. */
-function SurveyBadge() {
+/** Floating reminder that the newbie survey is waiting — fixed to the
+ * viewport (not tucked inside the nav), so it's the same on mobile and
+ * desktop without opening a menu first. Dismissible for the current
+ * browsing session (Layout stays mounted across in-app navigation; a full
+ * reload — or the survey still being pending next visit — brings it back). */
+function SurveyReminder({ pending }: { pending: boolean }) {
+  const [dismissed, setDismissed] = useState(false)
+  if (!pending || dismissed) return null
   return (
-    <span
-      title="Заполните анкету новичка, чтобы открыть рейтинг"
-      className="ml-1.5 inline-grid h-4 w-4 place-items-center rounded-full bg-signal align-middle text-[10px] font-bold text-white"
-    >
-      !
-    </span>
+    <div className="fixed inset-x-4 bottom-4 z-50 animate-fade-up sm:inset-x-auto sm:right-5 sm:max-w-sm">
+      <div className="flex items-start gap-3 rounded-xl2 border border-ink/10 bg-white p-4 shadow-lift">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-danger-wash text-danger">
+          <IconClipboard width={18} height={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink">Есть анкета новичка</p>
+          <p className="mt-0.5 text-xs text-ink-600">
+            Заполните, чтобы открыть рейтинг и статистику сообщества.
+          </p>
+          <Link to="/survey" className="btn-primary btn-sm mt-3 inline-flex" onClick={() => setDismissed(true)}>
+            Заполнить анкету
+          </Link>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          aria-label="Скрыть"
+          className="shrink-0 rounded-full p-1 text-clay transition hover:bg-ink/5 hover:text-ink"
+        >
+          <IconX width={14} height={14} />
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -188,7 +211,6 @@ export function Layout() {
                   }
                 >
                   {item.label}
-                  {item.to === '/rating' && surveyPending && <SurveyBadge />}
                 </NavLink>
               ))}
             </nav>
@@ -276,7 +298,6 @@ export function Layout() {
                   }
                 >
                   {item.label}
-                  {item.to === '/rating' && surveyPending && <SurveyBadge />}
                 </NavLink>
               ))}
               <div className="my-2 h-px bg-ink/10" />
@@ -340,6 +361,7 @@ export function Layout() {
       </main>
 
       <SiteFooter />
+      <SurveyReminder pending={surveyPending} />
     </div>
   )
 }
