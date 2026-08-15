@@ -32,7 +32,12 @@ export function PaceSegments({
           <span key={i}>
             {i > 0 && <span className="text-clay"> · </span>}
             {s.label && <span className="font-semibold text-ink">{s.label} </span>}
-            {km && <span className="font-mono tabular text-clay">{km} </span>}
+            {km && (
+              <span className="font-mono tabular text-clay">
+                {km}
+                <span> — </span>
+              </span>
+            )}
             {pace && (
               <span className="font-mono tabular">
                 {pace}
