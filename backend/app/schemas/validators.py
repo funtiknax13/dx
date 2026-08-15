@@ -8,19 +8,25 @@ import re
 # enforced by the field's min/max, not here.
 _PASSWORD_CHARSET = re.compile(r"^[!-~]+$")
 
+# Cyrillic letters plus the punctuation real names actually use: space
+# (multi-word names), hyphen (Анна-Мария), apostrophe (О'Коннор). Mirrored on
+# the frontend in src/lib/validation.ts (NAME_RE) — keep both in sync.
+_NAME_RE = re.compile(r"^[А-ЯЁа-яё]+(?:[ '\-][А-ЯЁа-яё]+)*$")
 
-def _reject_digits_and_capitalize(value: str) -> str:
-    if any(ch.isdigit() for ch in value):
-        raise ValueError("Name must not contain digits")
+
+def _validate_charset_and_capitalize(value: str) -> str:
+    if not _NAME_RE.match(value):
+        raise ValueError("Name must contain only Cyrillic letters, spaces, hyphens and apostrophes")
     return value[:1].upper() + value[1:]
 
 
 def normalize_required_name(value: str) -> str:
-    """Trim, reject digits, capitalise the first letter. Blank is an error."""
+    """Trim, validate the charset, capitalise the first letter. Blank is an
+    error."""
     v = value.strip()
     if not v:
         raise ValueError("Name is required")
-    return _reject_digits_and_capitalize(v)
+    return _validate_charset_and_capitalize(v)
 
 
 def normalize_optional_name(value: str | None) -> str | None:
@@ -31,7 +37,7 @@ def normalize_optional_name(value: str | None) -> str | None:
     v = value.strip()
     if not v:
         return None
-    return _reject_digits_and_capitalize(v)
+    return _validate_charset_and_capitalize(v)
 
 
 def validate_password(value: str) -> str:

@@ -442,10 +442,10 @@ function Podium({ entries, myId }: { entries: DisplayEntry[]; myId?: number }) {
               className={`ring-2 ${rings[i]}`}
               zoomable
             />
-            <h3 className="mt-3 flex items-center gap-1.5 font-display text-lg leading-tight text-ink group-hover:text-signal">
-              {fullName(e.first_name, e.last_name)}
+            <h3 className="mt-3 flex min-w-0 items-center gap-1.5 font-display text-lg leading-tight text-ink group-hover:text-signal">
+              <span className="min-w-0 truncate">{fullName(e.first_name, e.last_name)}</span>
               {isMe && (
-                <span className="chip bg-signal px-1.5 py-0.5 text-white">
+                <span className="chip shrink-0 bg-signal px-1.5 py-0.5 text-white">
                   Вы
                 </span>
               )}

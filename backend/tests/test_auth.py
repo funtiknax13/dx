@@ -13,8 +13,8 @@ def _enable_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "altcha_hmac_key", "test-altcha-secret")
 
 REGISTER = {
-    "first_name": "Nina",
-    "last_name": "Kova",
+    "first_name": "Нина",
+    "last_name": "Кова",
     "email": "nina@example.com",
     "password": "supersecret1",
     "accept_privacy_policy": True,
@@ -131,8 +131,10 @@ async def test_registration_requires_privacy_policy_consent(client: AsyncClient)
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("first_name", "Ivan2"),  # digit in name
-        ("last_name", "Petrov9"),
+        ("first_name", "Иван2"),  # digit in name
+        ("last_name", "Петров9"),
+        ("first_name", "Ivan"),  # Latin letters
+        ("last_name", "Petrov"),
         ("password", "supersecret"),  # no digit
         ("password", "12345678"),  # no letter
         ("password", "парольпароль1"),  # Cyrillic

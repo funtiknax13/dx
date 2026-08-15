@@ -332,10 +332,10 @@ export function Layout() {
                   )}
                   <Link
                     to="/profile"
-                    className="flex items-center gap-3 rounded-xl px-4 py-3 hover:bg-ink/[0.05]"
+                    className="flex min-w-0 items-center gap-3 rounded-xl px-4 py-3 hover:bg-ink/[0.05]"
                   >
                     <Avatar first={user.first_name} last={user.last_name} src={user.avatar_url} size="sm" />
-                    <span className="font-semibold">{user.first_name} {user.last_name}</span>
+                    <span className="truncate font-semibold">{user.first_name} {user.last_name}</span>
                   </Link>
                   <button onClick={logout} className="btn-ghost mt-1 w-full">
                     Выйти

@@ -4,7 +4,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import AvatarReview, Gender, PriorExperience, UserRole
-from app.schemas.validators import normalize_optional_name
+from app.schemas.validators import normalize_optional_name, validate_password
 
 
 def normalize_ru_phone(value: str | None) -> str | None:
@@ -92,6 +92,8 @@ class UserUpdate(BaseModel):
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
+
+    _check_password = field_validator("new_password")(validate_password)
 
 
 class AccessLockOut(BaseModel):

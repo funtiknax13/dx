@@ -7,7 +7,14 @@ import { AuthShell, FormError } from '../components/AuthShell'
 import { Field, PasswordField } from '../components/ui/Field'
 import { Altcha } from '../components/ui/Altcha'
 import { Spinner } from '../components/ui/Spinner'
-import { capitalizeFirst, emailError, nameError, passwordError } from '../lib/validation'
+import {
+  NAME_MAX_LENGTH,
+  PASSWORD_HINT,
+  capitalizeFirst,
+  emailError,
+  nameError,
+  passwordError,
+} from '../lib/validation'
 
 export function RegisterPage() {
   const navigate = useNavigate()
@@ -110,6 +117,7 @@ export function RegisterPage() {
             name="first_name"
             autoComplete="given-name"
             placeholder="Иван"
+            maxLength={NAME_MAX_LENGTH}
             value={form.first_name}
             onChange={setName('first_name')}
             error={fieldErrors.first_name}
@@ -120,6 +128,7 @@ export function RegisterPage() {
             name="last_name"
             autoComplete="family-name"
             placeholder="Петров"
+            maxLength={NAME_MAX_LENGTH}
             value={form.last_name}
             onChange={setName('last_name')}
             error={fieldErrors.last_name}
@@ -141,7 +150,7 @@ export function RegisterPage() {
           label="Пароль"
           name="password"
           autoComplete="new-password"
-          placeholder="Латиница, цифры, 8+ символов"
+          placeholder={PASSWORD_HINT}
           value={form.password}
           onChange={set('password')}
           error={fieldErrors.password}

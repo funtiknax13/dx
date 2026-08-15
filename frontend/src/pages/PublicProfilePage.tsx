@@ -70,7 +70,7 @@ export function PublicProfilePage() {
         />
         <div className="stripe absolute inset-x-0 top-0 h-1.5" />
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-5">
+          <div className="flex min-w-0 items-center gap-5">
             <Avatar
               first={data.first_name}
               last={data.last_name}
@@ -79,11 +79,11 @@ export function PublicProfilePage() {
               className="ring-2 ring-paper/20"
               zoomable
             />
-            <div>
+            <div className="min-w-0">
               <span className="font-mono text-xs uppercase tracking-[0.2em] text-volt">
                 {data.is_guest ? 'Гостевой профиль бегуна' : 'Профиль бегуна'}
               </span>
-              <h1 className="mt-1 font-display text-3xl leading-tight sm:text-4xl">
+              <h1 className="mt-1 break-words font-display text-3xl leading-tight sm:text-4xl">
                 {fullName(data.first_name, data.last_name)}
               </h1>
               {isSelf && (

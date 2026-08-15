@@ -11,9 +11,9 @@ import { useAsync } from '../lib/useAsync'
 import {
   ageFromISO,
   formatDate,
-  formatRuPhone,
   formatTime,
   fullName,
+  nextRuPhoneValue,
   ruPhoneDigits,
 } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
@@ -21,7 +21,14 @@ import { AvatarCropModal } from '../components/AvatarCropModal'
 import { Field, PasswordField, SelectField } from '../components/ui/Field'
 import { CityAutocomplete } from '../components/ui/CityAutocomplete'
 import { RunningClubField } from '../components/ui/RunningClubField'
-import { capitalizeFirst, nameError } from '../lib/validation'
+import {
+  NAME_MAX_LENGTH,
+  PASSWORD_HINT,
+  capitalizeFirst,
+  nameError,
+  optionalNameError,
+  passwordError,
+} from '../lib/validation'
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
@@ -56,10 +63,10 @@ export function ProfilePage() {
     <div className="container-page py-10 sm:py-14">
       {/* Profile header */}
       <div className="flex flex-col gap-6 rounded-xl2 border border-ink/[0.08] bg-white p-6 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-8">
-        <div className="flex items-center gap-5">
+        <div className="flex min-w-0 items-center gap-5">
           <AvatarUploader />
-          <div>
-            <h1 className="font-display text-2xl sm:text-3xl">
+          <div className="min-w-0">
+            <h1 className="break-words font-display text-2xl sm:text-3xl">
               {fullName(user.first_name, user.last_name)}
             </h1>
             <p className="mt-1 font-mono text-sm text-clay">{user.email}</p>
@@ -374,6 +381,7 @@ function ProfileForm({
   const [noClub, setNoClub] = useState(user?.running_club === '')
   const [club, setClub] = useState(user?.running_club || '')
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -395,21 +403,18 @@ function ProfileForm({
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    const firstErr = nameError(form.first_name, 'Имя и фамилия обязательны')
-    const lastErr = nameError(form.last_name, 'Имя и фамилия обязательны')
-    if (firstErr || lastErr) {
-      setError(firstErr || lastErr)
-      return
-    }
-    // Guardian names are optional, but if filled they can't contain digits.
-    if (form.parent_first_name.trim() && /\d/.test(form.parent_first_name)) {
-      setError('Имя родителя не должно содержать цифр')
-      return
-    }
-    if (form.parent_last_name.trim() && /\d/.test(form.parent_last_name)) {
-      setError('Фамилия родителя не должна содержать цифр')
-      return
-    }
+    const errs: Record<string, string> = {}
+    const firstErr = nameError(form.first_name, 'Укажите имя')
+    if (firstErr) errs.first_name = firstErr
+    const lastErr = nameError(form.last_name, 'Укажите фамилию')
+    if (lastErr) errs.last_name = lastErr
+    // Guardian names are optional, but if filled they must pass the same rule.
+    const parentFirstErr = optionalNameError(form.parent_first_name)
+    if (parentFirstErr) errs.parent_first_name = parentFirstErr
+    const parentLastErr = optionalNameError(form.parent_last_name)
+    if (parentLastErr) errs.parent_last_name = parentLastErr
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) return
     // Phone is optional, but if given it must be a full RU number.
     const phoneDigits = ruPhoneDigits(form.phone)
     if (form.phone.trim() && phoneDigits.length !== 10) {
@@ -489,11 +494,26 @@ function ProfileForm({
           <h3 className="font-display text-lg text-ink">Личные данные</h3>
         </div>
         <FormError message={error} />
-        <FormSuccess message={saved ? 'Изменения сохранены' : null} />
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Имя *" name="first_name" value={form.first_name} onChange={setName('first_name')} required />
-          <Field label="Фамилия *" name="last_name" value={form.last_name} onChange={setName('last_name')} required />
+          <Field
+            label="Имя *"
+            name="first_name"
+            maxLength={NAME_MAX_LENGTH}
+            value={form.first_name}
+            onChange={setName('first_name')}
+            error={fieldErrors.first_name}
+            required
+          />
+          <Field
+            label="Фамилия *"
+            name="last_name"
+            maxLength={NAME_MAX_LENGTH}
+            value={form.last_name}
+            onChange={setName('last_name')}
+            error={fieldErrors.last_name}
+            required
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <CityAutocomplete
@@ -534,7 +554,7 @@ function ProfileForm({
             placeholder="+7 (___) ___-__-__"
             value={form.phone}
             onChange={(e) => {
-              setForm((f) => ({ ...f, phone: formatRuPhone(e.target.value) }))
+              setForm((f) => ({ ...f, phone: nextRuPhoneValue(f.phone, e.target.value) }))
               setSaved(false)
             }}
             error={missing.phone ? REQUIRED_HINT : undefined}
@@ -550,16 +570,18 @@ function ProfileForm({
               <Field
                 label="Имя родителя"
                 name="parent_first_name"
+                maxLength={NAME_MAX_LENGTH}
                 value={form.parent_first_name}
                 onChange={setName('parent_first_name')}
-                error={missing.parentFirstName ? REQUIRED_HINT : undefined}
+                error={fieldErrors.parent_first_name || (missing.parentFirstName ? REQUIRED_HINT : undefined)}
               />
               <Field
                 label="Фамилия родителя"
                 name="parent_last_name"
+                maxLength={NAME_MAX_LENGTH}
                 value={form.parent_last_name}
                 onChange={setName('parent_last_name')}
-                error={missing.parentLastName ? REQUIRED_HINT : undefined}
+                error={fieldErrors.parent_last_name || (missing.parentLastName ? REQUIRED_HINT : undefined)}
               />
             </div>
             <Field
@@ -570,7 +592,10 @@ function ProfileForm({
               placeholder="+7 (___) ___-__-__"
               value={form.parent_phone}
               onChange={(e) => {
-                setForm((f) => ({ ...f, parent_phone: formatRuPhone(e.target.value) }))
+                setForm((f) => ({
+                  ...f,
+                  parent_phone: nextRuPhoneValue(f.parent_phone, e.target.value),
+                }))
                 setSaved(false)
               }}
               error={missing.parentPhone ? REQUIRED_HINT : undefined}
@@ -635,6 +660,7 @@ function ProfileForm({
         <button type="submit" disabled={loading} className="btn-primary">
           {loading ? <Spinner className="h-5 w-5" /> : 'Сохранить'}
         </button>
+        <FormSuccess message={saved ? 'Изменения сохранены' : null} />
       </form>
 
       {showClaimSearch && (
@@ -655,6 +681,7 @@ function ProfileForm({
 function PasswordForm() {
   const [form, setForm] = useState({ current_password: '', new_password: '', confirm: '' })
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -666,14 +693,12 @@ function PasswordForm() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (form.new_password.length < 8) {
-      setError('Новый пароль — минимум 8 символов')
-      return
-    }
-    if (form.new_password !== form.confirm) {
-      setError('Пароли не совпадают')
-      return
-    }
+    const errs: Record<string, string> = {}
+    const passErr = passwordError(form.new_password)
+    if (passErr) errs.new_password = passErr
+    if (!passErr && form.new_password !== form.confirm) errs.confirm = 'Пароли не совпадают'
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) return
     setLoading(true)
     try {
       await usersApi.changePassword({
@@ -712,8 +737,10 @@ function PasswordForm() {
         label="Новый пароль"
         name="new_password"
         autoComplete="new-password"
+        placeholder={PASSWORD_HINT}
         value={form.new_password}
         onChange={set('new_password')}
+        error={fieldErrors.new_password}
         required
       />
       <PasswordField
@@ -722,6 +749,7 @@ function PasswordForm() {
         autoComplete="new-password"
         value={form.confirm}
         onChange={set('confirm')}
+        error={fieldErrors.confirm}
         required
       />
       <button type="submit" disabled={loading} className="btn-ink">
@@ -930,18 +958,18 @@ function GuestClaimSection() {
             return (
               <div
                 key={g.id}
-                className="flex items-center justify-between rounded-xl border border-ink/[0.08] bg-white p-3"
+                className="flex items-center justify-between gap-3 rounded-xl border border-ink/[0.08] bg-white p-3"
               >
-                <span className="flex items-center gap-3">
+                <span className="flex min-w-0 items-center gap-3">
                   <Avatar first={g.first_name} last={g.last_name} src={g.avatar_url} size="sm" zoomable />
-                  <span className="font-semibold text-ink">
+                  <span className="truncate font-semibold text-ink">
                     {g.first_name} {g.last_name}
                   </span>
                 </span>
                 <button
                   onClick={() => claim(g)}
                   disabled={already}
-                  className={already ? 'btn-ghost btn-sm' : 'btn-primary btn-sm'}
+                  className={`shrink-0 ${already ? 'btn-ghost btn-sm' : 'btn-primary btn-sm'}`}
                 >
                   {already ? 'Заявка отправлена' : 'Это я'}
                 </button>
@@ -964,12 +992,12 @@ function GuestClaimSection() {
               return (
                 <li
                   key={c.id}
-                  className="flex items-center justify-between rounded-xl border border-ink/[0.08] bg-white p-3"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-ink/[0.08] bg-white p-3"
                 >
-                  <span className="font-semibold text-ink">
+                  <span className="min-w-0 truncate font-semibold text-ink">
                     {c.guest.first_name} {c.guest.last_name}
                   </span>
-                  <span className={`chip ${label.cls}`}>{label.text}</span>
+                  <span className={`chip shrink-0 ${label.cls}`}>{label.text}</span>
                 </li>
               )
             })}

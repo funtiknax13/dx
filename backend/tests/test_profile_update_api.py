@@ -32,6 +32,30 @@ async def test_profile_update_capitalizes_and_rejects_digit_names(
 
 
 @pytest.mark.asyncio
+async def test_profile_update_name_charset(session: AsyncSession, client: AsyncClient) -> None:
+    """Only Cyrillic letters, space, hyphen and apostrophe — no Latin letters,
+    no other symbols/emoji, no leading/trailing/doubled separators."""
+    user = await make_user(session, "namecharset@example.com")
+    await session.commit()
+    headers = {"Authorization": f"Bearer {create_access_token(user.id)}"}
+
+    ok = await client.patch(
+        "/api/v1/users/me",
+        headers=headers,
+        json={"first_name": "анна-мария", "last_name": "о'коннор"},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["first_name"] == "Анна-мария"
+    assert ok.json()["last_name"] == "О'коннор"
+
+    for value in ("Ivan", "Иван_", "Иван!", "Иван🏃", "-Иван", "Иван--Петров"):
+        bad = await client.patch(
+            "/api/v1/users/me", headers=headers, json={"first_name": value}
+        )
+        assert bad.status_code == 422, f"{value!r}: {bad.text}"
+
+
+@pytest.mark.asyncio
 async def test_prior_experience_can_be_set_once(session: AsyncSession, client: AsyncClient) -> None:
     user = await make_user(session, "prior-exp1@example.com", complete_profile=False)
     await session.commit()
@@ -98,3 +122,27 @@ async def test_other_fields_still_update_once_prior_experience_is_frozen(
     body = resp.json()
     assert body["prior_experience"] == "never"
     assert body["city"] == "Чебоксары"
+
+
+@pytest.mark.asyncio
+async def test_change_password_enforces_same_charset_as_registration(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    user = await make_user(session, "pwcharset@example.com")
+    await session.commit()
+    headers = {"Authorization": f"Bearer {create_access_token(user.id)}"}
+
+    for new_password in ("short1", "onlyletters", "12345678", "пароль1234"):
+        bad = await client.post(
+            "/api/v1/users/me/password",
+            headers=headers,
+            json={"current_password": "password123", "new_password": new_password},
+        )
+        assert bad.status_code == 422, f"{new_password!r}: {bad.text}"
+
+    ok = await client.post(
+        "/api/v1/users/me/password",
+        headers=headers,
+        json={"current_password": "password123", "new_password": "newpass456!"},
+    )
+    assert ok.status_code == 200, ok.text

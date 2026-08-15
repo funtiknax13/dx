@@ -5,7 +5,7 @@ import { ApiError } from '../api/client'
 import { AuthShell, FormError, FormSuccess } from '../components/AuthShell'
 import { PasswordField } from '../components/ui/Field'
 import { Spinner } from '../components/ui/Spinner'
-import { passwordError } from '../lib/validation'
+import { PASSWORD_HINT, passwordError } from '../lib/validation'
 
 export function ResetPasswordPage() {
   const [params] = useSearchParams()
@@ -70,7 +70,7 @@ export function ResetPasswordPage() {
           label="Новый пароль"
           name="password"
           autoComplete="new-password"
-          placeholder="Латиница, цифры, 8+ символов"
+          placeholder={PASSWORD_HINT}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required

@@ -119,9 +119,7 @@ export function ruPhoneDigits(input: string): string {
   return d.slice(0, 10)
 }
 
-/** Progressive mask: turns raw input into +7 (XXX) XXX-XX-XX as you type. */
-export function formatRuPhone(input: string): string {
-  const d = ruPhoneDigits(input)
+function renderRuPhoneMask(d: string): string {
   if (!d) return ''
   let out = `+7 (${d.slice(0, 3)}`
   if (d.length >= 3) out += ')'
@@ -129,4 +127,27 @@ export function formatRuPhone(input: string): string {
   if (d.length > 6) out += `-${d.slice(6, 8)}`
   if (d.length > 8) out += `-${d.slice(8, 10)}`
   return out
+}
+
+/** Progressive mask: turns raw input into +7 (XXX) XXX-XX-XX as you type. */
+export function formatRuPhone(input: string): string {
+  return renderRuPhoneMask(ruPhoneDigits(input))
+}
+
+/** Same mask, but backspace-aware: deleting a mask character (the closing
+ * bracket, a dash, the space) removes a non-digit, so re-deriving digits from
+ * the raw value leaves the digit count unchanged and the mask just redraws
+ * the same bracket right back — backspace visually does nothing. Detects
+ * that (value got shorter but the digit count didn't) and drops the last
+ * digit too, so backspace always removes something regardless of exactly
+ * where the cursor lands relative to a mask character. */
+export function nextRuPhoneValue(oldFormatted: string, rawNewValue: string): string {
+  const digits = ruPhoneDigits(rawNewValue)
+  const oldDigits = ruPhoneDigits(oldFormatted)
+  const isShrinking = rawNewValue.length < oldFormatted.length
+  const finalDigits =
+    isShrinking && digits.length === oldDigits.length && digits.length > 0
+      ? digits.slice(0, -1)
+      : digits
+  return renderRuPhoneMask(finalDigits)
 }

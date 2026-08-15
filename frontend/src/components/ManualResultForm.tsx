@@ -9,6 +9,19 @@ export interface ManualResultData {
   comment?: string
 }
 
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+const ALLOWED_IMAGE_HINT = 'Файл должен быть в формате JPG, JPEG, PNG или WEBP'
+
+/** Digits + a single decimal separator (comma or dot) — strips everything
+ * else and any extra separator as you type, so the field can't hold garbage
+ * that only surfaces as an error on submit. */
+function sanitizeDistanceInput(value: string): string {
+  const cleaned = value.replace(/[^\d.,]/g, '')
+  const firstSep = cleaned.search(/[.,]/)
+  if (firstSep === -1) return cleaned
+  return cleaned.slice(0, firstSep + 1) + cleaned.slice(firstSep + 1).replace(/[.,]/g, '')
+}
+
 function parseDuration(input: string): number {
   const parts = input.split(':').map((p) => Number(p.trim()))
   if (parts.some((p) => Number.isNaN(p))) return 0
@@ -50,10 +63,12 @@ export function ManualResultForm({
   const addFiles = (files: FileList | null) => {
     if (!files) return
     const picked = Array.from(files)
+    const accepted = picked.filter((f) => ALLOWED_IMAGE_TYPES.includes(f.type))
+    setError(picked.length > accepted.length ? ALLOWED_IMAGE_HINT : null)
     setImages((prev) => {
       // Dedupe by name+size so re-picking the same file doesn't double it.
       const seen = new Set(prev.map((f) => `${f.name}:${f.size}`))
-      return [...prev, ...picked.filter((f) => !seen.has(`${f.name}:${f.size}`))]
+      return [...prev, ...accepted.filter((f) => !seen.has(`${f.name}:${f.size}`))]
     })
     if (inputRef.current) inputRef.current.value = '' // allow re-selecting the same file
   }
@@ -65,8 +80,12 @@ export function ManualResultForm({
     setError(null)
     const distanceKm = Number(distance.replace(',', '.'))
     const durationSeconds = parseDuration(duration)
-    if (!distanceKm || !durationSeconds) {
-      setError('Укажите дистанцию (км) и время (ч:мм:сс)')
+    if (!distanceKm) {
+      setError('Укажите дистанцию (км)')
+      return
+    }
+    if (!durationSeconds) {
+      setError('Укажите время (ч:мм:сс)')
       return
     }
     const tp = duration.split(':').map(Number)
@@ -101,7 +120,7 @@ export function ManualResultForm({
           <label className="mb-1 block text-xs font-semibold text-ink-600">Дистанция, км</label>
           <input
             value={distance}
-            onChange={(e) => setDistance(e.target.value)}
+            onChange={(e) => setDistance(sanitizeDistanceInput(e.target.value))}
             placeholder="33.2"
             inputMode="decimal"
             className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"

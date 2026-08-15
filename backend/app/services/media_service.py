@@ -54,7 +54,7 @@ def _save_bytes(content: bytes, subdir: str, ext: str) -> str:
 async def save_image(upload: UploadFile, subdir: str) -> str:
     ext = _ext(upload.filename)
     if ext not in settings.allowed_image_extensions:
-        raise InvalidFileTypeError("Image must be jpg, jpeg, png or webp")
+        raise InvalidFileTypeError("Изображение должно быть в формате JPG, JPEG, PNG или WEBP")
     content = await _read_limited(upload, settings.max_image_size_bytes)
     return _save_bytes(content, subdir, ext)
 
@@ -81,7 +81,7 @@ async def save_avatar(upload: UploadFile, subdir: str) -> str:
     """
     ext = _ext(upload.filename)
     if ext not in settings.allowed_image_extensions:
-        raise InvalidFileTypeError("Image must be jpg, jpeg, png or webp")
+        raise InvalidFileTypeError("Изображение должно быть в формате JPG, JPEG, PNG или WEBP")
     content = await _read_limited(upload, settings.max_image_size_bytes)
 
     image = ImageOps.exif_transpose(Image.open(io.BytesIO(content)))
@@ -102,7 +102,7 @@ async def save_image_with_thumbnail(upload: UploadFile, subdir: str) -> tuple[st
     """
     ext = _ext(upload.filename)
     if ext not in settings.allowed_image_extensions:
-        raise InvalidFileTypeError("Image must be jpg, jpeg, png or webp")
+        raise InvalidFileTypeError("Изображение должно быть в формате JPG, JPEG, PNG или WEBP")
     content = await _read_limited(upload, settings.max_image_size_bytes)
     path = _save_bytes(content, subdir, ext)
     thumb_content = _make_thumbnail(content, ext)
@@ -114,7 +114,7 @@ async def save_track_file(upload: UploadFile, subdir: str) -> tuple[str, bytes, 
     """Save a GPX/FIT file. Returns (media_path, raw_bytes, extension)."""
     ext = _ext(upload.filename)
     if ext not in settings.allowed_track_extensions:
-        raise InvalidFileTypeError("Track file must be .gpx or .fit")
+        raise InvalidFileTypeError("Файл трека должен быть в формате .gpx или .fit")
     content = await _read_limited(upload, settings.max_track_file_size_bytes)
     path = _save_bytes(content, subdir, ext)
     return path, content, ext
@@ -124,7 +124,7 @@ def save_track_bytes(content: bytes, ext: str, subdir: str) -> str:
     """Same validation/storage as save_track_file, for content that didn't
     arrive as an UploadFile (e.g. downloaded from a URL) — see safe_fetch."""
     if ext not in settings.allowed_track_extensions:
-        raise InvalidFileTypeError("Track file must be .gpx or .fit")
+        raise InvalidFileTypeError("Файл трека должен быть в формате .gpx или .fit")
     if len(content) > settings.max_track_file_size_bytes:
         raise FileTooLargeError(_too_large_message(settings.max_track_file_size_bytes))
     return _save_bytes(content, subdir, ext)
