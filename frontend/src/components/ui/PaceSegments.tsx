@@ -33,9 +33,9 @@ export function PaceSegments({
             {i > 0 && <span className="text-clay"> · </span>}
             {s.label && <span className="font-semibold text-ink">{s.label} </span>}
             {km && (
-              <span className="font-mono tabular text-clay">
+              <span className="font-mono tabular font-semibold text-ink">
                 {km}
-                <span> — </span>
+                <span className="font-normal text-clay"> — </span>
               </span>
             )}
             {pace && (
