@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.attendance import AttendanceRecord
 from app.models.enums import PriorExperience
 from app.models.survey import Survey, SurveyAnswer, SurveyQuestion, SurveyResponse
@@ -52,8 +53,10 @@ async def stats_locked_pending_survey(session: AsyncSession, runner: User) -> bo
     the rating before your first DX and survey would skip the whole point of
     the gate. Contrast with survey_required_for, which additionally requires
     a tracked attendance — that one answers "can they fill it out right
-    now", this one answers "should they still be locked"."""
-    if runner.prior_experience != PriorExperience.never:
+    now", this one answers "should they still be locked". See
+    settings.survey_force_for_all for the testing override that bypasses the
+    prior_experience check below."""
+    if not settings.survey_force_for_all and runner.prior_experience != PriorExperience.never:
         return False
     survey = await get_active_required_survey(session)
     if survey is None:
@@ -68,13 +71,16 @@ async def survey_required_for(session: AsyncSession, runner: User) -> Survey | N
     new accounts) *and* who've since logged their first tracked attendance
     ("first DX") — before that there's nothing to survey them about yet
     (they haven't run), so GET /surveys/active has nothing to hand back even
-    though stats_locked_pending_survey is already True."""
-    if runner.prior_experience != PriorExperience.never:
+    though stats_locked_pending_survey is already True.
+    settings.survey_force_for_all (testing only) bypasses both the
+    prior_experience and attendance checks, so any runner can pull up and try
+    the survey regardless of history."""
+    if not settings.survey_force_for_all and runner.prior_experience != PriorExperience.never:
         return None
     survey = await get_active_required_survey(session)
     if survey is None:
         return None
-    if not await _has_any_attendance(session, runner.id):
+    if not settings.survey_force_for_all and not await _has_any_attendance(session, runner.id):
         return None
     if await _has_completed(session, survey.id, runner.id):
         return None

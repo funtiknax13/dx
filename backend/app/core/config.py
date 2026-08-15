@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     initial_admin_email: str = "admin@example.com"
     initial_admin_password: str = "change-me-admin-password"
 
+    # TESTING SWITCH — normally the newbie survey only gates runners who
+    # self-reported never having run with the community before (see
+    # User.prior_experience). Flip to True to force it onto *every* runner
+    # regardless of prior_experience/attendance, so the whole flow can be
+    # tried out without needing a fresh "never ran before" test account.
+    # Rollback is just flipping this back to False (the default) and
+    # restarting — no data/migration involved either way.
+    survey_force_for_all: bool = False
+
     @property
     def captcha_enabled(self) -> bool:
         return bool(self.altcha_hmac_key)

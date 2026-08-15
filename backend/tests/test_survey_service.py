@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.enums import FinishStatus, ModerationStatus, PriorExperience, UserRole
 from app.models.survey import Survey, SurveyAnswer, SurveyQuestion
 from app.services.survey_service import (
@@ -192,6 +193,28 @@ async def test_survey_not_required_once_completed(session: AsyncSession) -> None
     await session.commit()
 
     assert await survey_required_for(session, runner) is None
+
+
+@pytest.mark.asyncio
+async def test_force_for_all_bypasses_prior_experience_and_attendance(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The testing override (settings.survey_force_for_all) hands the survey
+    to any runner, even an experienced one with no tracked attendance —
+    normally both would exclude them (see the two tests above)."""
+    admin = await make_user(session, "admin-survey-force1@example.com", UserRole.admin)
+    runner = await make_user(session, "runner-survey-force1@example.com")
+    runner.prior_experience = PriorExperience.multiple
+    survey = await _make_survey(session, admin)
+    await session.commit()
+
+    assert await survey_required_for(session, runner) is None  # unchanged by default
+    assert await stats_locked_pending_survey(session, runner) is False
+
+    monkeypatch.setattr(settings, "survey_force_for_all", True)
+    required = await survey_required_for(session, runner)
+    assert required is not None and required.id == survey.id
+    assert await stats_locked_pending_survey(session, runner) is True
 
 
 @pytest.mark.asyncio
