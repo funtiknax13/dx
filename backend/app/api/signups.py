@@ -71,8 +71,10 @@ async def my_event_signup_state(
 
 @router.get("/users/me/signups", response_model=list[MySignupEntry])
 async def my_signups(user: CurrentUser, session: SessionDep) -> list[MySignupEntry]:
-    """Upcoming events the runner has signed up for — past ones drop off since
-    the protocol (actual attendance) is what matters once the event happens."""
+    """Upcoming events the runner has signed up for. A same-day event moves to
+    "Загрузить результат" (see my_awaiting_results) the moment its group
+    actually starts, rather than lingering here until midnight — otherwise a
+    today's-event signup shows in both lists at once for the rest of the day."""
     today = datetime.now(EVENT_TZ).date()
     rows = await session.scalars(
         select(Signup)
@@ -93,6 +95,7 @@ async def my_signups(user: CurrentUser, session: SessionDep) -> list[MySignupEnt
             start_time=s.group.start_time,
         )
         for s in rows
+        if not _event_has_started(s.group, s.event)
     ]
 
 

@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
@@ -10,6 +11,8 @@ from app.models.enums import UserRole
 from app.models.group import Group
 from app.models.signup import Signup
 from tests.factories import make_event_group, make_user
+
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 def _auth(user_id: int) -> dict[str, str]:
@@ -104,6 +107,10 @@ async def test_my_signups_only_lists_upcoming_events(
     org = await make_user(session, "org-upcoming@example.com", UserRole.organizer)
     future_event, future_group = await make_event_group(session, org)
     future_event.date = date.today() + timedelta(days=7)
+    # The factory's default start_time is a fixed placeholder, unrelated to
+    # the overridden date — clear it so "has this group started" falls back
+    # to comparing the (now genuinely future) event date instead.
+    future_group.start_time = None
 
     past_event, past_group = await make_event_group(session, org)
     past_event.date = date.today() - timedelta(days=7)
@@ -123,6 +130,46 @@ async def test_my_signups_only_lists_upcoming_events(
     assert len(body) == 1
     assert body[0]["event_id"] == future_event.id
     assert body[0]["group_id"] == future_group.id
+
+
+@pytest.mark.asyncio
+async def test_todays_event_moves_from_upcoming_to_awaiting_once_started(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A signup for today's event must show in exactly one of the two profile
+    lists at a time — "Предстоящие события" before the group's start time,
+    "Загрузить результат" after — never both. Previously both endpoints used
+    an inclusive date-only boundary (Event.date >= / <= today), so a
+    same-day event sat in the overlap for the rest of the day once it
+    started."""
+    org = await make_user(session, "org-today@example.com", UserRole.organizer)
+    now_utc = datetime.now(UTC)
+    event, group = await make_event_group(session, org)
+    event.date = now_utc.astimezone(MOSCOW).date()
+    runner = await make_user(session, "today-signup@example.com", UserRole.runner)
+
+    # Group starts later today — still upcoming, not awaiting a result yet.
+    group.start_time = now_utc + timedelta(hours=1)
+    session.add(Signup(runner_id=runner.id, group_id=group.id, event_id=event.id))
+    await session.commit()
+
+    upcoming = await client.get("/api/v1/users/me/signups", headers=_auth(runner.id))
+    assert [e["event_id"] for e in upcoming.json()] == [event.id]
+    awaiting = await client.get(
+        "/api/v1/users/me/signups/awaiting-result", headers=_auth(runner.id)
+    )
+    assert awaiting.json() == []
+
+    # The group has now started — flips to the other list, not both at once.
+    group.start_time = now_utc - timedelta(hours=1)
+    await session.commit()
+
+    upcoming2 = await client.get("/api/v1/users/me/signups", headers=_auth(runner.id))
+    assert upcoming2.json() == []
+    awaiting2 = await client.get(
+        "/api/v1/users/me/signups/awaiting-result", headers=_auth(runner.id)
+    )
+    assert [e["event_id"] for e in awaiting2.json()] == [event.id]
 
 
 @pytest.mark.asyncio
