@@ -12,12 +12,13 @@ const ITEMS: { to: string; label: string; icon: IconComponent }[] = [
 ]
 
 /** Bottom tab bar, mobile only (md:hidden) — fixed, no scroll-based hide/show.
- * Replaces the hamburger as the primary way to move between the two screens
- * people actually open every day (events, rating); everything else
- * (support, admin tools, logout) stays in the hamburger drawer. The profile
- * tab shows the runner's own avatar once logged in — matches the app's own
- * public-profile-as-"my stats" pattern — or "Войти" otherwise. Safe-area
- * aware so it doesn't collide with the iOS home-indicator gesture zone. */
+ * Replaces the hamburger as the primary way to move between the screens
+ * people actually open every day (events, rating, own stats); everything
+ * else (support, admin tools, logout) stays in the hamburger drawer. The
+ * third tab goes to the same "Моя статистика" destination as the desktop
+ * nav (own public profile — stats/achievements/history), shown as the
+ * runner's avatar once logged in, or "Войти" otherwise. Safe-area aware so
+ * it doesn't collide with the iOS home-indicator gesture zone. */
 export function MobileTabBar({
   user,
   surveyPending,
@@ -55,7 +56,7 @@ export function MobileTabBar({
         {user ? (
           <>
             <Avatar first={user.first_name} last={user.last_name} src={user.avatar_url} size="sm" />
-            Профиль
+            Статистика
           </>
         ) : (
           <>
