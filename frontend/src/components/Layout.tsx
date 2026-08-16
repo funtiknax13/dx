@@ -8,7 +8,7 @@ import { surveysApi } from '../api/surveys'
 import { Avatar } from './ui/Avatar'
 import { MobileTabBar } from './MobileTabBar'
 import { InstallAppButton } from './InstallAppButton'
-import { IconClipboard, IconMail, IconMenu, IconSettings, IconX } from './ui/icons'
+import { IconClipboard, IconMail, IconMenu, IconX } from './ui/icons'
 import { plural } from '../lib/format'
 import logoMarkSquare from '../assets/brand/logo-mark-square.png'
 import logoFullDark from '../assets/brand/logo-full-dark.png'
@@ -324,13 +324,6 @@ export function Layout() {
                       )}
                     </a>
                   )}
-                  <Link
-                    to="/profile"
-                    className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-semibold text-ink hover:bg-ink/[0.05]"
-                  >
-                    <IconSettings width={18} height={18} />
-                    Настройки профиля
-                  </Link>
                   <button onClick={logout} className="btn-ghost mt-1 w-full">
                     Выйти
                   </button>
@@ -356,7 +349,7 @@ export function Layout() {
 
       <SiteFooter />
       <SurveyReminder pending={surveyPending} />
-      <MobileTabBar user={user} surveyPending={surveyPending} />
+      <MobileTabBar user={user} />
     </div>
   )
 }
