@@ -6,7 +6,9 @@ import { supportApi } from '../api/support'
 import { staffApi } from '../api/staff'
 import { surveysApi } from '../api/surveys'
 import { Avatar } from './ui/Avatar'
-import { IconClipboard, IconMail, IconMenu, IconX } from './ui/icons'
+import { MobileTabBar } from './MobileTabBar'
+import { InstallAppButton } from './InstallAppButton'
+import { IconClipboard, IconMail, IconMenu, IconSettings, IconX } from './ui/icons'
 import { plural } from '../lib/format'
 import logoMarkSquare from '../assets/brand/logo-mark-square.png'
 import logoFullDark from '../assets/brand/logo-full-dark.png'
@@ -133,7 +135,11 @@ function SurveyReminder({ pending }: { pending: boolean }) {
   const [dismissed, setDismissed] = useState(false)
   if (!pending || dismissed) return null
   return (
-    <div className="fixed inset-x-4 bottom-4 z-50 animate-fade-up sm:inset-x-auto sm:right-5 sm:max-w-sm">
+    <div
+      // Mobile keeps clear of the fixed bottom tab bar (h-16 + safe area);
+      // desktop has no tab bar, so it sits low-right as before.
+      className="fixed inset-x-4 z-50 animate-fade-up bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:max-w-sm"
+    >
       <div className="flex items-start gap-3 rounded-xl2 border border-ink/10 bg-white p-4 shadow-lift">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-danger-wash text-danger">
           <IconClipboard width={18} height={18} />
@@ -192,7 +198,7 @@ export function Layout() {
       : NAV
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
       <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper/85 backdrop-blur-md">
         <div className="container-page flex h-16 items-center justify-between gap-4">
           <div className="flex items-center gap-8">
@@ -283,24 +289,12 @@ export function Layout() {
           </button>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu — secondary/account actions only. События, Рейтинг and
+            the profile are on the fixed bottom tab bar now (see
+            MobileTabBar); duplicating them here would just be clutter. */}
         {open && (
           <div className="border-t border-ink/10 bg-paper md:hidden">
             <div className="container-page flex flex-col gap-1 py-4">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold ${
-                      isActive ? 'bg-ink text-paper' : 'text-ink hover:bg-ink/[0.05]'
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-              <div className="my-2 h-px bg-ink/10" />
               <Link
                 to="/support"
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-semibold text-ink hover:bg-ink/[0.05]"
@@ -332,10 +326,10 @@ export function Layout() {
                   )}
                   <Link
                     to="/profile"
-                    className="flex min-w-0 items-center gap-3 rounded-xl px-4 py-3 hover:bg-ink/[0.05]"
+                    className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-semibold text-ink hover:bg-ink/[0.05]"
                   >
-                    <Avatar first={user.first_name} last={user.last_name} src={user.avatar_url} size="sm" />
-                    <span className="truncate font-semibold">{user.first_name} {user.last_name}</span>
+                    <IconSettings width={18} height={18} />
+                    Настройки профиля
                   </Link>
                   <button onClick={logout} className="btn-ghost mt-1 w-full">
                     Выйти
@@ -362,6 +356,7 @@ export function Layout() {
 
       <SiteFooter />
       <SurveyReminder pending={surveyPending} />
+      <MobileTabBar user={user} surveyPending={surveyPending} />
     </div>
   )
 }
@@ -424,7 +419,8 @@ function SiteFooter() {
       </div>
       <div className="container-page flex flex-col gap-2 border-t border-paper/10 py-6 text-xs text-paper/45 sm:flex-row sm:items-center sm:justify-between">
         <span>© {new Date().getFullYear()} DАЙ ХАРD — беговое сообщество, Чебоксары</span>
-        <span className="flex items-center gap-4">
+        <span className="flex flex-wrap items-center gap-4">
+          <InstallAppButton className="hover:text-paper" />
           <Link to="/privacy-policy" className="hover:text-paper">
             Политика обработки персональных данных
           </Link>

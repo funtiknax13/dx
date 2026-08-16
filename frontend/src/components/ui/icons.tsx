@@ -153,3 +153,22 @@ export const IconClipboard = (p: P) => (
     <path d="M8.5 12.5l2 2 4-4" />
   </svg>
 )
+// iOS Safari's own "Share" glyph — used only to help the eye match the
+// instruction text to the real button in Safari's toolbar.
+export const IconShare = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3v11" />
+    <path d="M8 7l4-4 4 4" />
+    <path d="M5 12v6a2 2 0 002 2h10a2 2 0 002-2v-6" />
+  </svg>
+)
+export const IconSettings = (p: P) => (
+  <svg {...base(p)}>
+    <line x1="4" y1="6" x2="20" y2="6" />
+    <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
+    <line x1="4" y1="18" x2="20" y2="18" />
+    <circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
+  </svg>
+)
