@@ -14,6 +14,16 @@ import type { EventSummary } from '../types'
 type Tab = 'upcoming' | 'past' | 'all'
 const PAGE_SIZE = 20
 
+/** Community trainings run every Sunday (see Hero copy below) even on weeks
+ * an event hasn't been entered into the system yet — the "no events" empty
+ * state should say so instead of reading as if nothing is planned at all. */
+function nextSundayLabel(): string {
+  const d = new Date()
+  const daysUntilSunday = (7 - d.getDay()) % 7
+  d.setDate(d.getDate() + daysUntilSunday)
+  return formatDate(d.toISOString(), { day: 'numeric', month: 'long' })
+}
+
 export function EventsPage() {
   const [tab, setTab] = useState<Tab>('upcoming')
   const [page, setPage] = useState(1)
@@ -101,8 +111,14 @@ export function EventsPage() {
           />
         ) : !grid.data || grid.data.items.length === 0 ? (
           <StatePanel
-            title={tab === 'upcoming' ? 'Пока нет запланированных событий' : 'Здесь пусто'}
-            description="Загляните позже — организаторы регулярно добавляют новые старты и тренировки."
+            title={
+              tab === 'upcoming' ? `Следующая тренировка — в воскресенье, ${nextSundayLabel()}` : 'Здесь пусто'
+            }
+            description={
+              tab === 'upcoming'
+                ? 'Дистанция, трек и группы появятся позже — организаторы добавляют их ближе к дате.'
+                : 'Загляните позже — организаторы регулярно добавляют новые старты и тренировки.'
+            }
             icon={<IconSpark />}
           />
         ) : (
