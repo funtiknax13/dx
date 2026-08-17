@@ -22,14 +22,21 @@
           <code>first_run_date</code> (формат <code>ГГГГ-ММ-ДД</code>),
           <code>dx_count_this_year</code>, <code>km_this_year</code>,
           <code>baseline_year</code>,
-          <code>email</code>, <code>city</code> (не обязательны — пустая ячейка у чисел
-          считается нулём, у даты и <code>baseline_year</code> — «неизвестно»).
+          <code>email</code>, <code>city</code>, <code>gender</code> (не обязательны — пустая
+          ячейка у чисел считается нулём, у даты и <code>baseline_year</code> — «неизвестно»).
         </p>
         <p class="hint">
           <code>city</code> сверяется со справочником городов и привязывается к бегуну
           (для будущей карты географии). Если название не найдено в справочнике — город
           не проставляется, а строка попадает в отчёт. Уже выбранный самим бегуном город
           не перезаписывается.
+        </p>
+        <p class="hint">
+          <code>gender</code> — принимает <code>male</code>/<code>female</code>,
+          <code>м</code>/<code>ж</code> или <code>мужской</code>/<code>женский</code>
+          (без учёта регистра). Нужен для рейтинга с разбивкой по полу — без него туда
+          попадают только бегуны, заполнившие пол сами в профиле (гостевые профили — никогда).
+          Уже проставленный пол не перезаписывается.
         </p>
         <p class="hint">
           Это разовый перенос истории с «до этой платформы» — сколько полных DX,
@@ -82,6 +89,7 @@
             <th>baseline_year</th>
             <th>email</th>
             <th>city</th>
+            <th>gender</th>
           </tr>
         </thead>
         <tbody>
@@ -97,12 +105,13 @@
             <td>2026</td>
             <td>ivan@example.com</td>
             <td>Чебоксары</td>
+            <td>male</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email;city
-Иван;Петров;47;50;623.5;2023-05-14;12;150.2;2026;ivan@example.com;Чебоксары</pre>
+    <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email;city;gender
+Иван;Петров;47;50;623.5;2023-05-14;12;150.2;2026;ivan@example.com;Чебоксары;male</pre>
   </div>
 
   {% if flash_error %}
@@ -125,6 +134,7 @@
     {% if result.unmatched_cities %}
     <p class="hint">Города не из справочника (проверьте написание): {{ result.unmatched_cities|join(', ') }}</p>
     {% endif %}
+    <p>Проставлено полов: <strong>{{ result.gender_linked }}</strong>{% if result.gender_unmatched %} · не распозналось значение: {{ result.gender_unmatched }}{% endif %}</p>
     <a class="btn" href="/admin-tools/guests">Гостевые профили →</a>
   </div>
   {% endif %}

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.city import City
+from app.models.enums import Gender
 from app.models.runner_baseline import RunnerBaseline
 from app.services.guest_service import resolve_runner_for_csv_row
 
@@ -25,6 +26,8 @@ class BaselineImportResult:
     city_linked: int = 0
     city_unmatched: int = 0
     unmatched_cities: list[str] = field(default_factory=list)
+    gender_linked: int = 0
+    gender_unmatched: int = 0
 
 
 async def _match_city(session: AsyncSession, raw: str) -> City | None:
@@ -40,6 +43,26 @@ async def _match_city(session: AsyncSession, raw: str) -> City | None:
         .order_by(City.population.desc())
     )
     return city
+
+
+_GENDER_ALIASES = {
+    "male": Gender.male,
+    "m": Gender.male,
+    "м": Gender.male,
+    "муж": Gender.male,
+    "мужской": Gender.male,
+    "female": Gender.female,
+    "f": Gender.female,
+    "ж": Gender.female,
+    "жен": Gender.female,
+    "женский": Gender.female,
+}
+
+
+def _parse_gender(raw: str | None) -> Gender | None:
+    """None both for a blank cell and for an unrecognized value — the caller
+    tells the two apart itself (blank isn't counted as unmatched, a typo is)."""
+    return _GENDER_ALIASES.get((raw or "").strip().lower())
 
 
 def _parse_int(raw: str | None) -> int | None:
@@ -97,7 +120,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     """Parse a `;`-delimited CSV of admin-entered carry-over stats (columns:
     first_name, last_name required; dx_count, total_runs, total_km,
     first_run_date (YYYY-MM-DD or DD.MM.YYYY — see _parse_date), dx_count_this_year, km_this_year,
-    baseline_year, email optional, missing/blank numbers default to 0 except
+    baseline_year, email, city, gender optional, missing/blank numbers default to 0 except
     baseline_year which defaults to unset/None) and upsert one RunnerBaseline
     per row. dx_count_this_year/km_this_year are a *subset* of dx_count/
     total_km (see RunnerBaseline), not additive — they only feed the "this
@@ -132,6 +155,7 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     baseline_year_col = header_map.get("baseline_year")
     email_col = header_map.get("email")
     city_col = header_map.get("city")
+    gender_col = header_map.get("gender")
 
     created = 0
     updated = 0
@@ -145,6 +169,8 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
     city_linked = 0
     city_unmatched = 0
     unmatched_cities: list[str] = []
+    gender_linked = 0
+    gender_unmatched = 0
 
     for row in reader:
         first_name = (row.get(first_name_col) or "").strip()
@@ -211,6 +237,21 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
                     if city_raw not in unmatched_cities:
                         unmatched_cities.append(city_raw)
 
+        # Optional gender column: same non-clobbering rule as city — this is
+        # what feeds the gender-split rating for runners who never filled it
+        # in themselves (guest accounts can't, and plenty of registered ones
+        # skip an optional field).
+        if gender_col:
+            gender_raw = (row.get(gender_col) or "").strip()
+            if gender_raw:
+                gender = _parse_gender(gender_raw)
+                if gender is not None:
+                    if runner.gender is None:
+                        runner.gender = gender
+                    gender_linked += 1
+                else:
+                    gender_unmatched += 1
+
         baseline = await session.scalar(
             select(RunnerBaseline).where(RunnerBaseline.runner_id == runner.id)
         )
@@ -252,4 +293,6 @@ async def import_baseline_csv(session: AsyncSession, content: bytes | str) -> Ba
         city_linked=city_linked,
         city_unmatched=city_unmatched,
         unmatched_cities=unmatched_cities,
+        gender_linked=gender_linked,
+        gender_unmatched=gender_unmatched,
     )

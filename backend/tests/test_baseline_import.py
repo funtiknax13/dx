@@ -197,10 +197,7 @@ async def test_import_this_year_columns_are_parsed(session: AsyncSession) -> Non
 async def test_import_blank_this_year_columns_default_sensibly(session: AsyncSession) -> None:
     """dx_count_this_year/km_this_year blank -> 0 (same as the other numeric
     columns), but baseline_year blank -> None (no sensible zero for a year)."""
-    csv = (
-        "first_name;last_name;dx_count_this_year;km_this_year;baseline_year\n"
-        "Bare;Runner;;;\n"
-    )
+    csv = "first_name;last_name;dx_count_this_year;km_this_year;baseline_year\nBare;Runner;;;\n"
     result = await import_baseline_csv(session, csv)
     await session.commit()
 
@@ -285,3 +282,50 @@ async def test_import_links_city_from_dictionary(session: AsyncSession) -> None:
     unmatched = await session.scalar(select(User).where(User.first_name == "Пётр"))
     assert unmatched is not None
     assert unmatched.city_id is None
+
+
+@pytest.mark.asyncio
+async def test_import_links_gender_accepts_ru_aliases(session: AsyncSession) -> None:
+    from app.models.enums import Gender
+    from app.models.user import User
+
+    csv = (
+        "first_name;last_name;dx_count;gender\n"
+        "Иван;Петров;5;М\n"
+        "Мария;Иванова;3;female\n"
+        "Пётр;Сидоров;1;not-a-gender\n"
+    )
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.gender_linked == 2
+    assert result.gender_unmatched == 1
+
+    ivan = await session.scalar(select(User).where(User.first_name == "Иван"))
+    assert ivan is not None
+    assert ivan.gender == Gender.male
+
+    maria = await session.scalar(select(User).where(User.first_name == "Мария"))
+    assert maria is not None
+    assert maria.gender == Gender.female
+
+    petr = await session.scalar(select(User).where(User.first_name == "Пётр"))
+    assert petr is not None
+    assert petr.gender is None
+
+
+@pytest.mark.asyncio
+async def test_import_does_not_overwrite_existing_gender(session: AsyncSession) -> None:
+    from app.models.enums import Gender
+
+    runner = await make_user(session, "known@example.com")
+    runner.gender = Gender.female
+    await session.commit()
+
+    csv = "first_name;last_name;email;gender\nKnown;Runner;known@example.com;male\n"
+    result = await import_baseline_csv(session, csv)
+    await session.commit()
+
+    assert result.gender_linked == 1
+    await session.refresh(runner)
+    assert runner.gender == Gender.female  # not clobbered by the CSV
