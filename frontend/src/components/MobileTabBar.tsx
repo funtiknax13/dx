@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
-import { IconCalendar, IconRunner, IconSettings, IconTrophy, IconUser } from './ui/icons'
+import { IconCalendar, IconRunning, IconSettings, IconTrophy, IconUser } from './ui/icons'
 import type { User } from '../types'
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>
@@ -28,7 +28,7 @@ export function MobileTabBar({ user }: { user: User | null }) {
   const items: TabItem[] = user
     ? [
         ...BASE_ITEMS,
-        { to: `/users/${user.id}`, label: 'Статистика', icon: IconRunner },
+        { to: `/users/${user.id}`, label: 'Статистика', icon: IconRunning },
         { to: '/profile', label: 'Профиль', icon: IconSettings },
       ]
     : [...BASE_ITEMS, { to: '/login', label: 'Войти', icon: IconUser }]

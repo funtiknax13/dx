@@ -165,10 +165,24 @@ export const IconShare = (p: P) => (
 export const IconSettings = (p: P) => (
   <svg {...base(p)}>
     <line x1="4" y1="6" x2="20" y2="6" />
-    <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
+    <circle cx="9" cy="6" r="2" />
     <line x1="4" y1="12" x2="20" y2="12" />
-    <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="12" r="2" />
     <line x1="4" y1="18" x2="20" y2="18" />
-    <circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
+    <circle cx="9" cy="18" r="2" />
+  </svg>
+)
+// A distinct outline "running" glyph for UI rows that sit alongside other
+// thin-stroke icons (e.g. the mobile tab bar) — IconRunner above is a
+// traced, filled brand silhouette used decoratively elsewhere and would
+// look visually heavier/inconsistent next to plain stroke icons.
+export const IconRunning = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="16.5" cy="4.5" r="1.8" />
+    <path d="M15 7.5L11 12.5" />
+    <path d="M15 7.5L18 8.5L19.5 6.5" />
+    <path d="M15 7.5L12 9L10 7.5" />
+    <path d="M11 12.5L14 14.5L12.5 19" />
+    <path d="M11 12.5L7 15L4 14" />
   </svg>
 )
