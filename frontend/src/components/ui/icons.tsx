@@ -172,31 +172,3 @@ export const IconSettings = (p: P) => (
     <circle cx="9" cy="18" r="2" />
   </svg>
 )
-// A distinct outline "running" glyph for UI rows that sit alongside other
-// thin-stroke icons (e.g. the mobile tab bar) — IconRunner above is a
-// traced, filled brand silhouette used decoratively elsewhere and would
-// look visually heavier/inconsistent next to plain stroke icons.
-//
-// Path data is authored on its own 100-unit canvas (a hand-tuned reference
-// SVG), not the shared 24-unit one every other icon here uses — inheriting
-// the usual 1.8/2.2 stroke width verbatim would render as a near-invisible
-// hairline at this scale. SCALE is empirically matched to look the same
-// visual weight as its siblings at real (~22px) tab-bar size, not a literal
-// unit rescale — and the head circle is drawn larger than a literal rescale
-// would give it (r=10), since at this linework density a small ring closes
-// up into a solid dot once the stroke is thick enough to read clearly.
-const RUNNING_SCALE = 5.5 / 1.8
-export const IconRunning = (p: P) => {
-  const { strokeWidth, ...rest } = base(p)
-  const width = typeof strokeWidth === 'number' ? strokeWidth : 1.8
-  return (
-    <svg {...rest} viewBox="0 0 100 100" strokeWidth={width * RUNNING_SCALE}>
-      <circle cx="63" cy="17" r="10" />
-      <path d="M54 30 L48 52" />
-      <path d="M52 33 L43 40 L40 49" />
-      <path d="M55 32 L64 40 L74 34" />
-      <path d="M49 50 L61 57 L56 71" />
-      <path d="M47 52 L38 61 L27 57" />
-    </svg>
-  )
-}
