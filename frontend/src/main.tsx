@@ -16,6 +16,7 @@ import '@fontsource/jetbrains-mono/700.css'
 import { AuthProvider } from './auth/AuthContext'
 import App from './App'
 import './index.css'
+import './pwa'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

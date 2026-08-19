@@ -8,8 +8,20 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // The default auto-injected registerSW.js is a dumb
+      // `navigator.serviceWorker.register(...)` with no update/reload logic —
+      // src/pwa.ts registers through `virtual:pwa-register` instead, so it
+      // can force a stale open tab to reload once a new service worker takes
+      // over (see that file for why). Opting out of the auto-injected script
+      // also opts out of vite-plugin-pwa's registerType-based default of
+      // `workbox.skipWaiting`/`clientsClaim` (it only applies those
+      // defaults when injectRegister is left at 'auto'), so they're set
+      // explicitly below instead.
+      injectRegister: false,
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         // Without this, the service worker's navigation fallback intercepts
         // *every* full-page navigation — including /admin-tools and /admin,
         // which are server-rendered (SQLAdmin/Jinja), not part of this SPA —
