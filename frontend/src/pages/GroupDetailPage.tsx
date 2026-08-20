@@ -206,7 +206,9 @@ export function GroupDetailPage() {
 
         {/* Route sidebar */}
         <aside className="order-1 min-w-0 space-y-5 lg:order-2">
-          {isUpcoming && roster && roster.count > 0 && <SignupRosterCard roster={roster} />}
+          {isUpcoming && roster && roster.count > 0 && (
+            <SignupRosterCard roster={roster} authenticated={isAuthenticated} />
+          )}
 
           {group.start_lat != null && group.start_lng != null && (
             <div className="space-y-2">
@@ -290,7 +292,13 @@ export function GroupDetailPage() {
   )
 }
 
-function SignupRosterCard({ roster }: { roster: SignupRoster }) {
+function SignupRosterCard({
+  roster,
+  authenticated,
+}: {
+  roster: SignupRoster
+  authenticated: boolean
+}) {
   return (
     <div className="rounded-xl2 border border-ink/[0.08] bg-white p-4 shadow-card">
       <div className="flex items-center justify-between">
@@ -299,17 +307,27 @@ function SignupRosterCard({ roster }: { roster: SignupRoster }) {
           {roster.count} {plural(roster.count, 'человек', 'человека', 'человек')}
         </span>
       </div>
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-        {roster.entries.map((entry) => {
-          const [first, ...rest] = entry.display_name.split(' ')
-          return (
-            <li key={entry.signup_id} className="flex items-center gap-2">
-              <Avatar first={first} last={rest.join(' ')} src={entry.avatar_url} size="sm" zoomable />
-              <span className="text-sm text-ink-700">{entry.display_name}</span>
-            </li>
-          )
-        })}
-      </ul>
+      {authenticated ? (
+        <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          {roster.entries.map((entry) => {
+            const [first, ...rest] = entry.display_name.split(' ')
+            return (
+              <li key={entry.signup_id} className="flex items-center gap-2">
+                <Avatar first={first} last={rest.join(' ')} src={entry.avatar_url} size="sm" zoomable />
+                <span className="text-sm text-ink-700">{entry.display_name}</span>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-ink-600">
+          Список участников виден зарегистрированным пользователям —{' '}
+          <Link to="/login" state={{ from: `/groups/${roster.group_id}` }} className="underline">
+            войдите
+          </Link>
+          , чтобы увидеть, кто идёт.
+        </p>
+      )}
     </div>
   )
 }
