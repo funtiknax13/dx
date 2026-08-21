@@ -413,6 +413,12 @@ function ProfileForm({
     if (parentFirstErr) errs.parent_first_name = parentFirstErr
     const parentLastErr = optionalNameError(form.parent_last_name)
     if (parentLastErr) errs.parent_last_name = parentLastErr
+    // Mirrors the backend's own check (see validate_birthday) — caught here
+    // too so it never round-trips to the server, and so the guardian-info
+    // fields never briefly misfire off a future date (see ageFromISO).
+    if (form.birthday && form.birthday > new Date().toISOString().slice(0, 10)) {
+      errs.birthday = 'Дата рождения не может быть в будущем'
+    }
     setFieldErrors(errs)
     if (Object.keys(errs).length > 0) return
     // Phone is optional, but if given it must be a full RU number.
@@ -544,7 +550,7 @@ function ProfileForm({
             max={new Date().toISOString().slice(0, 10)}
             value={form.birthday ?? ''}
             onChange={set('birthday')}
-            error={missing.birthday ? REQUIRED_HINT : undefined}
+            error={fieldErrors.birthday || (missing.birthday ? REQUIRED_HINT : undefined)}
           />
           <Field
             label="Телефон"

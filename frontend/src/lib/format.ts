@@ -98,12 +98,16 @@ export function plural(n: number, one: string, few: string, many: string): strin
   return many
 }
 
-/** Whole years from an ISO date (YYYY-MM-DD) to today, or null if unparseable. */
+/** Whole years from an ISO date (YYYY-MM-DD) to today, or null if unparseable
+ * or in the future — a future date has no sensible age, and letting it come
+ * back negative previously made under-14 guardian-info gates misfire on it
+ * (negative is always < 14). */
 export function ageFromISO(iso?: string | null): number | null {
   if (!iso) return null
   const b = new Date(iso)
   if (Number.isNaN(b.getTime())) return null
   const t = new Date()
+  if (b.getTime() > t.getTime()) return null
   let age = t.getFullYear() - b.getFullYear()
   if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) {
     age--
