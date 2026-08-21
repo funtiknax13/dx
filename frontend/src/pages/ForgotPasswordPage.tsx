@@ -21,12 +21,10 @@ export function ForgotPasswordPage() {
       await authApi.forgotPassword(email.trim())
       setSent(true)
     } catch (err) {
-      // Do not leak whether the account exists — show success-style message unless it's a server error.
-      if (err instanceof ApiError && err.status >= 500) {
-        setError('Сервис временно недоступен. Попробуйте позже.')
-      } else {
-        setSent(true)
-      }
+      // Says plainly whether the address is registered / the send failed —
+      // see backend forgot_password() for why (a truthful "not found" beats
+      // a user waiting forever on an email that was never coming).
+      setError(err instanceof ApiError ? err.message : 'Не удалось отправить письмо')
     } finally {
       setLoading(false)
     }
@@ -47,8 +45,8 @@ export function ForgotPasswordPage() {
             <IconMail width={30} height={30} />
           </div>
           <p className="mt-5 text-ink-700">
-            Если аккаунт с адресом <span className="font-semibold">{email}</span> существует, мы
-            отправили на него ссылку для сброса пароля.
+            Ссылка для сброса пароля отправлена на{' '}
+            <span className="font-semibold">{email}</span>.
           </p>
         </div>
       </AuthShell>

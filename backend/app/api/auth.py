@@ -85,10 +85,14 @@ async def register(
 
     existing = await session.scalar(select(User).where(User.email == payload.email))
     if existing is not None:
-        # Never reveal that an address is already taken (email enumeration):
-        # return the same generic response either way. For the real owner we
-        # still do something useful — re-send verification if they never
-        # confirmed — but a stranger probing addresses learns nothing.
+        # Product decision: tell the truth here rather than the classic
+        # anti-enumeration "same generic response either way" — with it,
+        # someone re-registering an existing address had no way to tell
+        # whether they'd mistyped their email or their earlier signup never
+        # went through, which was the actual, more common source of
+        # confusion. If the address was never verified, resending the
+        # verification email is still the useful thing to do; only a fully
+        # registered address is rejected outright.
         if not existing.email_verified:
             link = build_frontend_link("/verify-email", create_email_token(existing.email, VERIFY))
             try:
@@ -104,7 +108,14 @@ async def register(
                 )
             except Exception:
                 logger.exception("Re-send of verification email failed for %s", payload.email)
-        return GENERIC_REGISTER_OK
+            return MessageResponse(
+                detail="Эта почта уже зарегистрирована, но не подтверждена — "
+                "мы отправили новое письмо со ссылкой для подтверждения."
+            )
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Эта почта уже зарегистрирована. Войдите или восстановите пароль.",
+        )
 
     # first/last name are post-moderated like the rest of the profile (see
     # ProfileEditRequest) — the account needs *some* non-null name to exist,
@@ -212,24 +223,34 @@ async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(payload: ForgotPasswordRequest, session: SessionDep) -> MessageResponse:
+    """Product decision: say plainly whether the address is registered,
+    rather than the classic "if that email exists..." hedge — with it, a
+    runner who mistyped their email (the actually common case) had no way to
+    tell that from a real, if slow, delivery, and just kept waiting. Same
+    reasoning for a send failure below: a false "sent" is exactly the
+    confusing outcome this is meant to avoid, so it's surfaced as a real
+    error instead (mirrors register()'s handling of the same failure)."""
     user = await session.scalar(select(User).where(User.email == payload.email))
-    # Always return the same response to avoid leaking which emails are registered.
-    if user is not None:
-        token = create_email_token(user.email, RESET, hours=2)
-        link = build_frontend_link("/reset-password", token)
-        # Never let an email failure change the response — it would both leak
-        # which addresses are registered (500 vs 200) and crash the request.
-        try:
-            await send_email(
-                user.email,
-                "Восстановление пароля — DАЙ ХАРD Чебоксары",
-                f"Ссылка для сброса пароля (действует 2 часа): {link}\n\n"
-                "Если вы не запрашивали сброс — просто проигнорируйте это письмо.",
-                render_email_html("reset_password.html", link=link),
-            )
-        except Exception:
-            logger.exception("Password-reset email failed for %s", payload.email)
-    return MessageResponse(detail="If that email exists, a reset link has been sent.")
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Такой email не зарегистрирован")
+
+    token = create_email_token(user.email, RESET, hours=2)
+    link = build_frontend_link("/reset-password", token)
+    try:
+        await send_email(
+            user.email,
+            "Восстановление пароля — DАЙ ХАРD Чебоксары",
+            f"Ссылка для сброса пароля (действует 2 часа): {link}\n\n"
+            "Если вы не запрашивали сброс — просто проигнорируйте это письмо.",
+            render_email_html("reset_password.html", link=link),
+        )
+    except Exception:
+        logger.exception("Password-reset email failed for %s", payload.email)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Не удалось отправить письмо для восстановления пароля. Попробуйте позже.",
+        ) from None
+    return MessageResponse(detail="Ссылка для восстановления пароля отправлена на вашу почту.")
 
 
 @router.post("/reset-password", response_model=MessageResponse)

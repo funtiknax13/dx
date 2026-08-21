@@ -64,14 +64,35 @@ async def test_full_auth_flow(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_duplicate_registration_does_not_leak_existing_email(
+async def test_duplicate_registration_of_unverified_email_resends_verification(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    """Re-registering an existing address must not reveal it's taken (email
-    enumeration): same generic 201, and no duplicate account is created."""
+    """Re-registering an address that signed up but never verified resends
+    the verification email (still useful) rather than rejecting outright —
+    no duplicate account either way."""
     await client.post("/api/v1/auth/register", json=REGISTER)
     r = await client.post("/api/v1/auth/register", json=REGISTER)
     assert r.status_code == 201, r.text
+    assert "не подтверждена" in r.json()["detail"]
+
+    users = list(await session.scalars(select(User).where(User.email == REGISTER["email"])))
+    assert len(users) == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_registration_of_verified_email_is_rejected(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Product decision: tell the truth about an already-registered, already
+    -verified address rather than hiding it behind a generic success — see
+    register() for the reasoning. No duplicate account is created."""
+    await client.post("/api/v1/auth/register", json=REGISTER)
+    token = create_email_token(REGISTER["email"], VERIFY)
+    await client.get("/api/v1/auth/verify-email", params={"token": token})
+
+    r = await client.post("/api/v1/auth/register", json=REGISTER)
+    assert r.status_code == 409, r.text
+    assert "уже зарегистрирована" in r.json()["detail"]
 
     users = list(await session.scalars(select(User).where(User.email == REGISTER["email"])))
     assert len(users) == 1
@@ -261,4 +282,39 @@ async def test_login_gate_requires_captcha_after_repeated_failures(
     monkeypatch.setattr("app.api.auth.verify_captcha", _ok)
     r = await client.post("/api/v1/auth/login", json={**bad, "captcha_token": "solved"})
     assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_unknown_email_says_so(client: AsyncClient) -> None:
+    """Product decision: say plainly the address isn't registered, rather
+    than the classic enumeration-safe hedge — see forgot_password()."""
+    r = await client.post("/api/v1/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert r.status_code == 404
+    assert "не зарегистрирован" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_known_email_confirms_sent(client: AsyncClient) -> None:
+    await client.post("/api/v1/auth/register", json=REGISTER)
+
+    r = await client.post("/api/v1/auth/forgot-password", json={"email": REGISTER["email"]})
+    assert r.status_code == 200, r.text
+    assert "отправлена" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_reports_email_failure_instead_of_faking_success(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A false "sent" when delivery actually failed is exactly the confusing
+    outcome this feature is meant to eliminate — surfaced as a real error
+    instead, mirroring register()'s handling of the same failure."""
+    await client.post("/api/v1/auth/register", json=REGISTER)
+
+    async def failing_send_email(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr("app.api.auth.send_email", failing_send_email)
+    r = await client.post("/api/v1/auth/forgot-password", json={"email": REGISTER["email"]})
+    assert r.status_code == 503
     rate_guard.clear_all()
