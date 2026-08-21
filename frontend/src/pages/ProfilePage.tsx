@@ -413,12 +413,9 @@ function ProfileForm({
     if (parentFirstErr) errs.parent_first_name = parentFirstErr
     const parentLastErr = optionalNameError(form.parent_last_name)
     if (parentLastErr) errs.parent_last_name = parentLastErr
-    // Mirrors the backend's own check (see validate_birthday) — caught here
-    // too so it never round-trips to the server, and so the guardian-info
-    // fields never briefly misfire off a future date (see ageFromISO).
-    if (form.birthday && form.birthday > new Date().toISOString().slice(0, 10)) {
-      errs.birthday = 'Дата рождения не может быть в будущем'
-    }
+    // Already shown live next to the field (see futureBirthdayError below) —
+    // re-checked here too so a future date can't slip through to the server.
+    if (futureBirthdayError) errs.birthday = futureBirthdayError
     setFieldErrors(errs)
     if (Object.keys(errs).length > 0) return
     // Phone is optional, but if given it must be a full RU number.
@@ -479,6 +476,12 @@ function ProfileForm({
   // Under-14 runners must add a guardian's contacts (mirrors the backend gate).
   const age = ageFromISO(form.birthday)
   const isMinor = age != null && age < 14
+  // Live, same as the fields above — no need to wait for "Сохранить" (or a
+  // round trip to validate_birthday on the backend) to flag it.
+  const futureBirthdayError =
+    form.birthday && form.birthday > new Date().toISOString().slice(0, 10)
+      ? 'Дата рождения не может быть в будущем'
+      : null
   const missing = {
     city: !form.city.trim(),
     gender: !form.gender,
@@ -550,7 +553,7 @@ function ProfileForm({
             max={new Date().toISOString().slice(0, 10)}
             value={form.birthday ?? ''}
             onChange={set('birthday')}
-            error={fieldErrors.birthday || (missing.birthday ? REQUIRED_HINT : undefined)}
+            error={futureBirthdayError ?? (missing.birthday ? REQUIRED_HINT : undefined)}
           />
           <Field
             label="Телефон"
