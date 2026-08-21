@@ -4,6 +4,8 @@
 // (rating, leaderboard, public profile). Keep in one place: this list already
 // drifted out of sync once when duplicated per-page.
 export const FIELD_LABELS: Record<string, string> = {
+  first_name: 'имя',
+  last_name: 'фамилия',
   birthday: 'дата рождения',
   avatar: 'фото на аватар',
   city: 'город',

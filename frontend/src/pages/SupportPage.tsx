@@ -109,6 +109,19 @@ export function SupportPage() {
             }
           />
         </div>
+      ) : lockReason === 'profile_pending_review' ? (
+        <div className="mt-8">
+          <StatePanel
+            title="Анкета на проверке"
+            description="Данные профиля ожидают подтверждения администратором — обращения в поддержку откроются сразу после проверки."
+            icon={<IconUser />}
+            action={
+              <Link to="/profile" className="btn-primary">
+                В профиль
+              </Link>
+            }
+          />
+        </div>
       ) : (
         <form onSubmit={submit} className="card mt-8 space-y-5 p-6 sm:p-8">
           <FormError message={error} />

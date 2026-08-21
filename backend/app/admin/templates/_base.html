@@ -97,6 +97,7 @@
         <a href="/admin-tools/guests" class="{{ 'active' if active == 'guests' }}">Гости</a>
         <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты <span id="badge-moderation" class="nav-badge nav-badge-purple" style="display:none;" title="Результаты, ожидающие подтверждения"></span></a>
         <a href="/admin-tools/avatars" class="{{ 'active' if active == 'avatars' }}">Аватары <span id="badge-avatars" class="nav-badge nav-badge-amber" style="display:none;" title="Аватары на проверке"></span></a>
+        <a href="/admin-tools/profile-review" class="{{ 'active' if active == 'profile-review' }}">Профили на проверке <span id="badge-profile-review" class="nav-badge nav-badge-amber" style="display:none;" title="Профили, ожидающие подтверждения"></span></a>
         <a href="/admin-tools/moderation" class="{{ 'active' if active == 'moderation' }}">Без сопоставления</a>
         <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты <span id="badge-surveys" class="nav-badge nav-badge-blue" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
         <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
@@ -150,7 +151,8 @@
       var claimsBadge = document.getElementById('badge-claims');
       var moderationBadge = document.getElementById('badge-moderation');
       var avatarsBadge = document.getElementById('badge-avatars');
-      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge || avatarsBadge) {
+      var profileReviewBadge = document.getElementById('badge-profile-review');
+      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge || avatarsBadge || profileReviewBadge) {
         fetch('/admin-tools/badge-counts', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (data) {
@@ -160,6 +162,7 @@
               [claimsBadge, data.claims],
               [moderationBadge, data.moderation],
               [avatarsBadge, data.avatars],
+              [profileReviewBadge, data.profile_review],
             ].forEach(function (pair) {
               var el = pair[0], count = pair[1];
               if (el && count > 0) {

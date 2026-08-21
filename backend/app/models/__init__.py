@@ -15,6 +15,7 @@ from app.models.enums import (
 from app.models.event import Event, EventPhoto
 from app.models.group import Group
 from app.models.guest_claim import GuestClaim
+from app.models.profile_edit_request import ProfileEditRequest
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
 from app.models.signup import Signup
@@ -33,6 +34,7 @@ __all__ = [
     "AttendanceRecord",
     "Result",
     "GuestClaim",
+    "ProfileEditRequest",
     "RunnerBaseline",
     "Survey",
     "SurveyQuestion",

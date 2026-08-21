@@ -524,6 +524,17 @@ function LockedStats({
                 К анкете
               </Link>
             </>
+          ) : lockReason === 'profile_pending_review' ? (
+            <>
+              <h3 className="mt-3 font-display text-lg text-ink">Анкета на проверке</h3>
+              <p className="mt-2 text-sm text-ink-600">
+                Данные профиля ожидают подтверждения администратором — рейтинг и статистика
+                откроются сразу после проверки.
+              </p>
+              <Link to="/profile" className="btn-primary btn-sm mt-4 inline-flex">
+                В профиль
+              </Link>
+            </>
           ) : (
             <>
               <h3 className="mt-3 font-display text-lg text-ink">Заполните профиль на 100%</h3>

@@ -15,19 +15,19 @@ async def test_profile_update_capitalizes_and_rejects_digit_names(
     token = create_access_token(user.id)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Lowercase name is capitalised server-side.
+    # Lowercase name is capitalised server-side. Name is post-moderated (see
+    # ProfileEditRequest) — it lands in pending_review, not applied directly.
     ok = await client.patch(
         "/api/v1/users/me", headers=headers, json={"first_name": "пётр", "last_name": "иванов"}
     )
     assert ok.status_code == 200, ok.text
-    assert ok.json()["first_name"] == "Пётр"
-    assert ok.json()["last_name"] == "Иванов"
+    changes = ok.json()["pending_review"]["changes"]
+    assert changes["first_name"] == "Пётр"
+    assert changes["last_name"] == "Иванов"
 
     # A digit in a name (own or guardian) is rejected.
     for field in ("first_name", "last_name", "parent_first_name", "parent_last_name"):
-        bad = await client.patch(
-            "/api/v1/users/me", headers=headers, json={field: "Иван3"}
-        )
+        bad = await client.patch("/api/v1/users/me", headers=headers, json={field: "Иван3"})
         assert bad.status_code == 422, f"{field}: {bad.text}"
 
 
@@ -45,13 +45,12 @@ async def test_profile_update_name_charset(session: AsyncSession, client: AsyncC
         json={"first_name": "анна-мария", "last_name": "о'коннор"},
     )
     assert ok.status_code == 200, ok.text
-    assert ok.json()["first_name"] == "Анна-мария"
-    assert ok.json()["last_name"] == "О'коннор"
+    changes = ok.json()["pending_review"]["changes"]
+    assert changes["first_name"] == "Анна-мария"
+    assert changes["last_name"] == "О'коннор"
 
     for value in ("Ivan", "Иван_", "Иван!", "Иван🏃", "-Иван", "Иван--Петров"):
-        bad = await client.patch(
-            "/api/v1/users/me", headers=headers, json={"first_name": value}
-        )
+        bad = await client.patch("/api/v1/users/me", headers=headers, json={"first_name": value})
         assert bad.status_code == 422, f"{value!r}: {bad.text}"
 
 
@@ -104,7 +103,8 @@ async def test_other_fields_still_update_once_prior_experience_is_frozen(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     """The freeze only applies to prior_experience — it shouldn't silently
-    drop the rest of the payload in the same request."""
+    drop the rest of the payload in the same request. prior_experience isn't
+    post-moderated (applies immediately); city is (see ProfileEditRequest)."""
     user = await make_user(session, "prior-exp3@example.com", complete_profile=False)
     await session.commit()
     token = create_access_token(user.id)
@@ -121,7 +121,7 @@ async def test_other_fields_still_update_once_prior_experience_is_frozen(
     )
     body = resp.json()
     assert body["prior_experience"] == "never"
-    assert body["city"] == "Чебоксары"
+    assert body["pending_review"]["changes"]["city"] == "Чебоксары"
 
 
 @pytest.mark.asyncio

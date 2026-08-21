@@ -20,6 +20,8 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.models.enums import ModerationStatus
+from app.models.profile_edit_request import ProfileEditRequest
 from app.models.user import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -32,6 +34,7 @@ from app.schemas.auth import (
 )
 from app.services import rate_guard
 from app.services.captcha_service import create_challenge, verify_captcha
+from app.services.profile_review_service import PLACEHOLDER_FIRST_NAME, PLACEHOLDER_LAST_NAME
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
@@ -65,9 +68,7 @@ async def altcha_challenge() -> dict[str, object]:
     return create_challenge()
 
 
-GENERIC_REGISTER_OK = MessageResponse(
-    detail="Registration successful. Check your email to verify."
-)
+GENERIC_REGISTER_OK = MessageResponse(detail="Registration successful. Check your email to verify.")
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -105,14 +106,26 @@ async def register(
                 logger.exception("Re-send of verification email failed for %s", payload.email)
         return GENERIC_REGISTER_OK
 
+    # first/last name are post-moderated like the rest of the profile (see
+    # ProfileEditRequest) — the account needs *some* non-null name to exist,
+    # so it gets the bootstrap placeholder here while the real submitted name
+    # sits in the review queue below.
     user = User(
-        first_name=payload.first_name,
-        last_name=payload.last_name,
+        first_name=PLACEHOLDER_FIRST_NAME,
+        last_name=PLACEHOLDER_LAST_NAME,
         email=payload.email,
         password_hash=hash_password(payload.password),
         privacy_accepted_at=datetime.now(UTC),
     )
     session.add(user)
+    await session.flush()
+    session.add(
+        ProfileEditRequest(
+            user_id=user.id,
+            changes={"first_name": payload.first_name, "last_name": payload.last_name},
+            status=ModerationStatus.pending,
+        )
+    )
     await session.flush()
 
     token = create_email_token(user.email, VERIFY)
@@ -125,10 +138,10 @@ async def register(
         await send_email(
             user.email,
             "Подтвердите почту — DАЙ ХАРD Чебоксары",
-            f"Добро пожаловать в DАЙ ХАРD, {user.first_name}!\n\n"
+            f"Добро пожаловать в DАЙ ХАРD, {payload.first_name}!\n\n"
             f"Подтвердите почту, чтобы начать бегать с сообществом: {link}\n\n"
             "Если вы не регистрировались — просто проигнорируйте это письмо.",
-            render_email_html("verify_email.html", first_name=user.first_name, link=link),
+            render_email_html("verify_email.html", first_name=payload.first_name, link=link),
         )
     except Exception:
         await session.rollback()

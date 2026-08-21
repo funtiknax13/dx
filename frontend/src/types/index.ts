@@ -11,11 +11,19 @@ export type ModerationStatus = 'pending' | 'approved' | 'rejected'
  * pre-existing account defaults to 'multiple'. */
 export type PriorExperience = 'never' | 'once' | 'multiple'
 /** None = unlocked. 'anonymous' (not logged in), 'profile_incomplete'
- * (logged in, profile not 100% filled), or 'survey_required' (profile done,
- * but the newbie feedback survey still needs answering — only applies to
- * runners who self-reported never having run with us before) — see the
- * community stats gate. */
-export type StatsLockReason = 'anonymous' | 'profile_incomplete' | 'survey_required' | null
+ * (logged in, profile not 100% filled), 'profile_pending_review' (profile
+ * complete, but a submitted edit — or the whole account, for a
+ * fresh/backfilled registration — is still awaiting moderation, see
+ * PendingProfileReview), or 'survey_required' (profile done, but the newbie
+ * feedback survey still needs answering — only applies to runners who
+ * self-reported never having run with us before) — see the community stats
+ * gate. */
+export type StatsLockReason =
+  | 'anonymous'
+  | 'profile_incomplete'
+  | 'profile_pending_review'
+  | 'survey_required'
+  | null
 
 export interface Tokens {
   access_token: string
@@ -47,6 +55,16 @@ export interface User {
   parent_phone?: string | null
   rating?: number | null
   created_at?: string
+  /** A staged, not-yet-moderated edit to this profile (see
+   * ProfileEditRequest on the backend) — null when nothing's pending.
+   * `changes` uses the same field names as the profile form, birthday as an
+   * ISO date string. */
+  pending_review?: { changes: Record<string, string | number | null>; created_at: string } | null
+  /** True only for a fresh registration whose first name submission hasn't
+   * been approved yet — first_name/last_name still hold a placeholder, not
+   * real data. Also true again if that submission gets rejected, until the
+   * runner resubmits. */
+  needs_reentry?: boolean
 }
 
 /** Public profile — private fields (email, phone, birthday, city, gender) are omitted server-side. */

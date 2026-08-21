@@ -5,7 +5,6 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.security import hash_password, verify_password
 from app.models.attendance import AttendanceRecord
-from app.models.city import City
 from app.models.enums import AvatarReview
 from app.models.event import Event
 from app.models.group import Group
@@ -22,6 +21,7 @@ from app.schemas.user import (
     AchievementItem,
     ParticipationHistoryItem,
     PasswordChangeRequest,
+    PendingProfileReview,
     PublicProfile,
     UserMe,
     UserUpdate,
@@ -36,16 +36,36 @@ from app.services.media_service import (
     save_avatar,
 )
 from app.services.profile_completeness_service import stats_access_lock
+from app.services.profile_review_service import (
+    is_awaiting_first_review,
+    pending_request_for,
+    submit_for_review,
+)
 from app.services.rating_service import runner_finished_count
-from app.services.running_club_service import ensure_running_club
 from app.services.stats_service import compute_profile_stats
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+async def _build_user_me(session: SessionDep, user: User) -> UserMe:
+    pending = await pending_request_for(session, user)
+    base = {
+        f: getattr(user, f)
+        for f in UserMe.model_fields
+        if f not in ("pending_review", "needs_reentry")
+    }
+    return UserMe(
+        **base,
+        pending_review=PendingProfileReview(changes=pending.changes, created_at=pending.created_at)
+        if pending is not None
+        else None,
+        needs_reentry=is_awaiting_first_review(user),
+    )
+
+
 @router.get("/me", response_model=UserMe)
-async def get_me(user: CurrentUser) -> User:
-    return user
+async def get_me(user: CurrentUser, session: SessionDep) -> UserMe:
+    return await _build_user_me(session, user)
 
 
 @router.get("/me/access", response_model=AccessLockOut)
@@ -57,7 +77,7 @@ async def get_my_access(user: CurrentUser, session: SessionDep) -> AccessLockOut
 
 
 @router.patch("/me", response_model=UserMe)
-async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep) -> User:
+async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep) -> UserMe:
     updates = payload.model_dump(exclude_unset=True)
     # Frozen once answered — otherwise a "never ran before" runner could
     # just switch their answer to dodge the newbie survey requirement (see
@@ -66,23 +86,17 @@ async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep)
     # trying to change it only happens via a direct API call, not normal use.
     if "prior_experience" in updates and user.prior_experience is not None:
         del updates["prior_experience"]
-    for field, value in updates.items():
-        setattr(user, field, value)
-    # Keep the free-text `city` label in sync with the picked canonical city, so
-    # existing displays/exports keep working and completeness still sees a value.
-    if "city_id" in updates:
-        city = await session.get(City, user.city_id) if user.city_id is not None else None
-        user.city = city.name if city is not None else None
-    # A running club typed by the runner is added to the dictionary if new (with
-    # an empty city) and stored under its canonical spelling. "" ("not in a club")
-    # and None are left as-is — they're answers, not clubs.
-    if updates.get("running_club"):
-        club = await ensure_running_club(session, user.running_club)
-        if club is not None:
-            user.running_club = club.title
+    elif "prior_experience" in updates:
+        # Not moderated (see profile_review_service.MODERATED_FIELDS) — a
+        # one-time self-report, not identity data, applies immediately.
+        user.prior_experience = updates.pop("prior_experience")
+    # Everything else in the form is post-moderated — see
+    # profile_review_service.submit_for_review: `user`'s own columns are
+    # untouched here, the diff against them is staged for an admin instead.
+    await submit_for_review(session, user, updates)
     await session.commit()
     await session.refresh(user)
-    return user
+    return await _build_user_me(session, user)
 
 
 @router.post("/me/password", response_model=MessageResponse)
@@ -161,7 +175,7 @@ async def export_me(user: CurrentUser, session: SessionDep) -> AccountExport:
     ]
 
     return AccountExport(
-        profile=UserMe.model_validate(user),
+        profile=await _build_user_me(session, user),
         account_created_at=user.created_at,
         privacy_accepted_at=user.privacy_accepted_at,
         history=history,

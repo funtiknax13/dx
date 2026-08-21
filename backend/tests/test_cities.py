@@ -1,9 +1,12 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.models.city import City
+from app.models.profile_edit_request import ProfileEditRequest
+from app.services.profile_review_service import approve
 from tests.factories import make_user
 
 
@@ -60,6 +63,10 @@ async def test_city_search_matches_cyrillic_and_latin_and_ranks_by_population(
 async def test_update_profile_city_id_mirrors_name(
     session: AsyncSession, client: AsyncClient
 ) -> None:
+    """city_id/city are post-moderated (see ProfileEditRequest) — the PATCH
+    stages the pick without touching the account, and the canonical-name
+    mirroring only happens once an admin approves it (see
+    profile_review_service.approve)."""
     runner = await make_user(session, "city-picker@example.com")
     session.add(_city(10, "Казань", "Kazan", 1200000, "Татарстан"))
     await session.commit()
@@ -72,5 +79,15 @@ async def test_update_profile_city_id_mirrors_name(
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["city_id"] == 10
-    assert body["city"] == "Казань"  # server mirrored the canonical name
+    assert body["city_id"] is None  # not applied yet
+    assert body["pending_review"]["changes"]["city_id"] == 10
+
+    request = await session.scalar(
+        select(ProfileEditRequest).where(ProfileEditRequest.user_id == runner.id)
+    )
+    assert request is not None
+    await approve(session, request)
+    await session.commit()
+    await session.refresh(runner)
+    assert runner.city_id == 10
+    assert runner.city == "Казань"  # server mirrored the canonical name

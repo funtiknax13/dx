@@ -32,6 +32,7 @@ import {
 import { Spinner } from '../components/ui/Spinner'
 import { FormError, FormSuccess } from '../components/AuthShell'
 import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
+import { FIELD_LABELS } from '../lib/profileFieldLabels'
 import type {
   Gender,
   GuestClaim,
@@ -67,7 +68,7 @@ export function ProfilePage() {
           <AvatarUploader />
           <div className="min-w-0">
             <h1 className="break-words font-display text-2xl sm:text-3xl">
-              {fullName(user.first_name, user.last_name)}
+              {user.needs_reentry ? 'Имя ждёт подтверждения' : fullName(user.first_name, user.last_name)}
             </h1>
             <p className="mt-1 font-mono text-sm text-clay">{user.email}</p>
             <span className="mt-2 inline-flex chip bg-ink text-paper">{roleLabel(user.role)}</span>
@@ -267,6 +268,16 @@ function AwaitingResultRow({
 
 function roleLabel(role: string) {
   return role === 'admin' ? 'Администратор' : role === 'organizer' ? 'Организатор' : 'Бегун'
+}
+
+// Values in a pending profile edit come straight from the backend's JSON diff
+// (see ProfileEditRequest) — dates as plain ISO strings, gender as its raw
+// enum value — reformat the ones that would otherwise look raw/unfriendly.
+function formatPendingValue(field: string, value: string | number | null): string {
+  if (value === null || value === '') return '—'
+  if (field === 'birthday' && typeof value === 'string') return formatDate(value)
+  if (field === 'gender') return value === 'male' ? 'Мужской' : value === 'female' ? 'Женский' : String(value)
+  return String(value)
 }
 
 function AvatarUploader() {
@@ -503,6 +514,39 @@ function ProfileForm({
           <h3 className="font-display text-lg text-ink">Личные данные</h3>
         </div>
         <FormError message={error} />
+        {user?.needs_reentry && (
+          <div className="rounded-xl2 border border-signal/30 bg-signal-wash px-4 py-3 text-sm text-ink-700">
+            {user.pending_review ? (
+              <>
+                <strong className="text-signal-600">Имя ждёт подтверждения.</strong>{' '}
+                Администратор проверит его в ближайшее время — до этого оно не показывается
+                остальным участникам.
+              </>
+            ) : (
+              <>
+                <strong className="text-signal-600">Внесите реальные данные.</strong>{' '}
+                Имя, указанное при регистрации, не прошло проверку — заполните заново и
+                сохраните.
+              </>
+            )}
+          </div>
+        )}
+        {!user?.needs_reentry && user?.pending_review && (
+          <div className="rounded-xl2 border border-ink/10 bg-paper-soft px-4 py-3 text-sm text-ink-700">
+            <strong className="text-ink">На модерации.</strong> Изменения ниже применятся после
+            проверки администратором — до этого остальные участники видят прежние значения:
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+              {Object.entries(user.pending_review.changes)
+                .filter(([field]) => field !== 'city_id') // "city" already names it
+                .map(([field, value]) => (
+                  <li key={field}>
+                    {FIELD_LABELS[field] ?? field}:{' '}
+                    <span className="font-medium">{formatPendingValue(field, value)}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field

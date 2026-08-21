@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import VERIFY, create_email_token
+from app.models.profile_edit_request import ProfileEditRequest
 from app.models.user import User
 from app.services import rate_guard
 
 
 def _enable_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "altcha_hmac_key", "test-altcha-secret")
+
 
 REGISTER = {
     "first_name": "Нина",
@@ -71,9 +73,7 @@ async def test_duplicate_registration_does_not_leak_existing_email(
     r = await client.post("/api/v1/auth/register", json=REGISTER)
     assert r.status_code == 201, r.text
 
-    users = list(
-        await session.scalars(select(User).where(User.email == REGISTER["email"]))
-    )
+    users = list(await session.scalars(select(User).where(User.email == REGISTER["email"])))
     assert len(users) == 1
 
 
@@ -150,17 +150,22 @@ async def test_registration_rejects_invalid_fields(
 
 
 @pytest.mark.asyncio
-async def test_registration_capitalizes_names(
-    client: AsyncClient, session: AsyncSession
-) -> None:
+async def test_registration_capitalizes_names(client: AsyncClient, session: AsyncSession) -> None:
+    """The submitted name is post-moderated (see ProfileEditRequest) — it
+    lands capitalised in the pending request, not directly on the account,
+    which still shows the bootstrap placeholder until an admin approves it."""
     payload = {**REGISTER, "first_name": "  анна", "last_name": "смирнова"}
     r = await client.post("/api/v1/auth/register", json=payload)
     assert r.status_code == 201, r.text
 
     user = await session.scalar(select(User).where(User.email == REGISTER["email"]))
     assert user is not None
-    assert user.first_name == "Анна"
-    assert user.last_name == "Смирнова"
+    request = await session.scalar(
+        select(ProfileEditRequest).where(ProfileEditRequest.user_id == user.id)
+    )
+    assert request is not None
+    assert request.changes["first_name"] == "Анна"
+    assert request.changes["last_name"] == "Смирнова"
 
 
 @pytest.mark.asyncio

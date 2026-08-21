@@ -295,7 +295,7 @@ function LockedProfileStats({
   lockReason,
   missingFields,
 }: {
-  lockReason: 'anonymous' | 'profile_incomplete' | 'survey_required'
+  lockReason: 'anonymous' | 'profile_incomplete' | 'profile_pending_review' | 'survey_required'
   missingFields: string[]
 }) {
   return (
@@ -323,6 +323,16 @@ function LockedProfileStats({
           </p>
           <Link to="/survey" className="btn-primary btn-sm mt-4 inline-flex">
             К анкете
+          </Link>
+        </>
+      ) : lockReason === 'profile_pending_review' ? (
+        <>
+          <p className="text-sm text-ink-600">
+            Данные вашего профиля ожидают подтверждения администратором — статистика других
+            участников откроется сразу после проверки.
+          </p>
+          <Link to="/profile" className="btn-primary btn-sm mt-4 inline-flex">
+            В профиль
           </Link>
         </>
       ) : (

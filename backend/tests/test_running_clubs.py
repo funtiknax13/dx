@@ -4,7 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
+from app.models.profile_edit_request import ProfileEditRequest
 from app.models.running_club import RunningClub
+from app.services.profile_review_service import approve
 from app.services.running_club_service import ensure_running_club
 from tests.factories import make_user
 
@@ -41,24 +43,40 @@ async def test_search_running_clubs(session: AsyncSession, client: AsyncClient) 
     assert "Марафонцы Казани" not in titles
 
 
+async def _approve_pending(session: AsyncSession, user_id: int) -> None:
+    request = await session.scalar(
+        select(ProfileEditRequest)
+        .where(ProfileEditRequest.user_id == user_id, ProfileEditRequest.status == "pending")
+        .order_by(ProfileEditRequest.id.desc())
+    )
+    assert request is not None
+    await approve(session, request)
+    await session.commit()
+
+
 @pytest.mark.asyncio
 async def test_profile_update_adds_and_canonicalizes_club(
     session: AsyncSession, client: AsyncClient
 ) -> None:
+    """running_club is post-moderated (see ProfileEditRequest) — the
+    dictionary lookup/creation and canonical-spelling rewrite only happen
+    once an admin approves the staged change (see
+    profile_review_service.approve)."""
     runner = await make_user(session, "clubby@example.com")
     await ensure_running_club(session, "Гончие Псы")  # already listed
     await session.commit()
     headers = {"Authorization": f"Bearer {create_access_token(runner.id)}"}
 
-    # A brand-new club is added to the dictionary (empty city).
+    # A brand-new club is added to the dictionary (empty city) once approved.
     r1 = await client.patch(
         "/api/v1/users/me", headers=headers, json={"running_club": "Новый Клуб"}
     )
     assert r1.status_code == 200
-    assert r1.json()["running_club"] == "Новый Клуб"
-    created = await session.scalar(
-        select(RunningClub).where(RunningClub.title == "Новый Клуб")
-    )
+    assert r1.json()["pending_review"]["changes"]["running_club"] == "Новый Клуб"
+    await _approve_pending(session, runner.id)
+    await session.refresh(runner)
+    assert runner.running_club == "Новый Клуб"
+    created = await session.scalar(select(RunningClub).where(RunningClub.title == "Новый Клуб"))
     assert created is not None and created.city is None
 
     # Typing an existing club in a different case stores it under its canonical spelling.
@@ -66,4 +84,7 @@ async def test_profile_update_adds_and_canonicalizes_club(
         "/api/v1/users/me", headers=headers, json={"running_club": "гончие псы"}
     )
     assert r2.status_code == 200
-    assert r2.json()["running_club"] == "Гончие Псы"
+    assert r2.json()["pending_review"]["changes"]["running_club"] == "гончие псы"
+    await _approve_pending(session, runner.id)
+    await session.refresh(runner)
+    assert runner.running_club == "Гончие Псы"

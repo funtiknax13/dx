@@ -29,6 +29,11 @@ interface RawUser {
   avatar_review?: 'pending' | 'approved'
   running_club?: string | null
   prior_experience?: PriorExperience | null
+  parent_first_name?: string | null
+  parent_last_name?: string | null
+  parent_phone?: string | null
+  pending_review?: { changes: Record<string, string | number | null>; created_at: string } | null
+  needs_reentry?: boolean
 }
 
 interface RawHistoryItem {

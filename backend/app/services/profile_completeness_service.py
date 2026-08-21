@@ -4,6 +4,7 @@ from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.services.profile_review_service import has_pending_review
 from app.services.survey_service import stats_locked_pending_survey
 
 # Runners younger than this must supply guardian contacts (см. задача 8).
@@ -13,11 +14,8 @@ PARENT_FIELDS = ["parent_first_name", "parent_last_name", "parent_phone"]
 
 def age_years(birthday: date, today: date | None = None) -> int:
     today = today or date.today()
-    return (
-        today.year
-        - birthday.year
-        - ((today.month, today.day) < (birthday.month, birthday.day))
-    )
+    return today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
+
 
 # Fields that gate access to community stats/rating (see CLAUDE.md discussion
 # on the "100% profile" motivation mechanic) — first/last name and email are
@@ -69,13 +67,18 @@ async def stats_access_lock(
     survey_service.stats_locked_pending_survey (they stay locked even before
     their first tracked attendance; there's simply nothing to show them on
     the survey page yet — see survey_service.survey_required_for, used by
-    GET /surveys/active). missing_fields is only ever populated for
-    "profile_incomplete"."""
+    GET /surveys/active). "profile_pending_review" for a runner with a
+    profile edit (or the whole account, for a fresh/backfilled registration)
+    still awaiting moderation — see profile_review_service; their *approved*
+    data may well satisfy every field below, this is a separate gate on top.
+    missing_fields is only ever populated for "profile_incomplete"."""
     if viewer is None:
         return "anonymous", []
     completeness = check(viewer)
     if not completeness.is_complete:
         return "profile_incomplete", completeness.missing_fields
+    if await has_pending_review(session, viewer):
+        return "profile_pending_review", []
     if await stats_locked_pending_survey(session, viewer):
         return "survey_required", []
     return None, []

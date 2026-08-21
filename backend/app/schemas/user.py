@@ -32,6 +32,15 @@ def validate_birthday(value: date | None) -> date | None:
     return value
 
 
+class PendingProfileReview(BaseModel):
+    """A staged, not-yet-moderated profile edit (see ProfileEditRequest) —
+    `changes` uses the same field names as UserUpdate, JSON-safe (birthday as
+    an ISO date string)."""
+
+    changes: dict[str, str | int | None]
+    created_at: datetime
+
+
 class UserMe(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,6 +65,16 @@ class UserMe(BaseModel):
     parent_first_name: str | None = None
     parent_last_name: str | None = None
     parent_phone: str | None = None
+    # Whole-form post-moderation (see profile_review_service) — populated
+    # explicitly by the endpoint, not derived from the ORM object directly
+    # (it lives in a separate table). None = nothing currently pending.
+    pending_review: PendingProfileReview | None = None
+    # True only for a fresh registration whose first name submission hasn't
+    # been approved yet — first/last_name still hold the bootstrap
+    # placeholder, not real data (see profile_review_service
+    # .is_awaiting_first_review). Also true again if that first submission
+    # gets rejected, until the runner resubmits.
+    needs_reentry: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -98,7 +117,8 @@ class PasswordChangeRequest(BaseModel):
 
 class AccessLockOut(BaseModel):
     """The current user's completeness gate (see profile_completeness_service).
-    None reason = unlocked; "profile_incomplete" / "survey_required" otherwise."""
+    None reason = unlocked; "profile_incomplete" / "profile_pending_review" /
+    "survey_required" otherwise."""
 
     lock_reason: str | None
     missing_fields: list[str]
