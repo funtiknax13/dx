@@ -1,3 +1,6 @@
+from datetime import date
+from typing import Any
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
@@ -8,7 +11,12 @@ from app.core.db import SessionLocal
 from app.models.enums import ModerationStatus, UserRole
 from app.models.profile_edit_request import ProfileEditRequest
 from app.models.user import User
-from app.services.profile_review_service import approve, is_awaiting_first_review, reject
+from app.services.profile_review_service import (
+    MODERATED_FIELDS,
+    approve,
+    is_awaiting_first_review,
+    reject,
+)
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-profile-review"], include_in_schema=False)
 
@@ -27,6 +35,61 @@ FIELD_LABELS = {
     "parent_last_name": "Фамилия опекуна",
     "parent_phone": "Телефон опекуна",
 }
+
+DISPLAY_FIELDS = [f for f in MODERATED_FIELDS if f != "city_id"]
+
+_GENDER_LABELS = {"male": "Мужской", "female": "Женский"}
+
+
+def _format_value(field: str, value: Any) -> str:
+    if value is None or value == "":
+        return "—"
+    if field == "gender":
+        return _GENDER_LABELS.get(value, str(value))
+    if field == "birthday":
+        d = value if isinstance(value, date) else date.fromisoformat(value)
+        return d.strftime("%d.%m.%Y")
+    return str(value)
+
+
+def _row_fields(request: ProfileEditRequest, is_first_review: bool) -> list[dict[str, Any]]:
+    """One entry per field shown in the queue row. A first-ever registration
+    has no real "before" to compare against (the account didn't exist), so it
+    only lists what's proposed; a later edit shows the *whole* profile for
+    context, with only the fields actually being changed marked (было →
+    стало) — everything else displayed plainly as-is."""
+    if is_first_review:
+        return [
+            {
+                "label": FIELD_LABELS.get(f, f),
+                "changed": True,
+                "current": None,
+                "proposed": _format_value(f, v),
+            }
+            for f, v in request.changes.items()
+            if f != "city_id"
+        ]
+    fields = []
+    for f in DISPLAY_FIELDS:
+        current = _format_value(f, getattr(request.user, f))
+        proposed = _format_value(f, request.changes[f]) if f in request.changes else None
+        # A backfilled request's "changes" is a snapshot of the account as it
+        # stood at migration time (see the introducing migration) rather
+        # than a genuine diff — было/стало collapses to the same value there,
+        # which would otherwise show every field as "changed" to itself.
+        # Only a real difference counts as changed.
+        changed = proposed is not None and proposed != current
+        if not changed and current == "—":
+            continue  # never set, not being touched — nothing worth showing
+        fields.append(
+            {
+                "label": FIELD_LABELS.get(f, f),
+                "changed": changed,
+                "current": current,
+                "proposed": proposed if changed else None,
+            }
+        )
+    return fields
 
 
 async def _require_admin(request: Request) -> User | None:
@@ -53,16 +116,10 @@ async def profile_review_queue(request: Request) -> HTMLResponse | RedirectRespo
                 .order_by(ProfileEditRequest.id)
             )
         )
-    rows = [
-        {
-            "req": r,
-            "is_first_review": is_awaiting_first_review(r.user),
-            "changes": [
-                (FIELD_LABELS.get(f, f), v) for f, v in r.changes.items() if f != "city_id"
-            ],
-        }
-        for r in requests
-    ]
+    rows = []
+    for r in requests:
+        is_first = is_awaiting_first_review(r.user)
+        rows.append({"req": r, "is_first_review": is_first, "fields": _row_fields(r, is_first)})
     return templates.TemplateResponse(
         request,
         "profile_review.html",

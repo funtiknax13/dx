@@ -2,9 +2,16 @@
 {% block title %}Профили на проверке — DH Admin Tools{% endblock %}
 {% block content %}
 <style>
-  .pr-changes { margin:0; padding-left:18px; }
-  .pr-changes li { font-size:13px; }
+  .pr-changes { margin:0; padding-left:0; list-style:none; }
+  .pr-changes li { font-size:13px; padding:2px 0; }
   .pr-changes b { color:#111827; }
+  .pr-changes li.pr-changed { color:#b91c1c; }
+  .pr-changes li.pr-changed b { color:#b91c1c; }
+  .pr-arrow { color:#9ca3af; margin:0 4px; }
+  .pr-badge { display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
+              letter-spacing:.03em; padding:2px 8px; border-radius:999px; margin-bottom:4px; }
+  .pr-badge-register { background:#dbeafe; color:#1e40af; }
+  .pr-badge-edit { background:#f3f4f6; color:#374151; }
 
   .rj-overlay { position:fixed; inset:0; background:rgba(17,24,39,.7); display:none; place-items:center;
                 z-index:1100; padding:20px; }
@@ -31,14 +38,17 @@
 {% if rows %}
 <div class="table-scroll">
 <table>
-  <thead><tr><th>Аккаунт</th><th>Что предложено</th><th></th></tr></thead>
+  <thead><tr><th>Аккаунт</th><th>Данные анкеты (было → стало)</th><th></th></tr></thead>
   <tbody>
     {% for row in rows %}
     {% set u = row.req.user %}
     <tr>
       <td>
+        <span class="pr-badge {{ 'pr-badge-register' if row.is_first_review else 'pr-badge-edit' }}">
+          {{ 'Регистрация' if row.is_first_review else 'Изменения' }}
+        </span><br>
         {% if row.is_first_review %}
-        <strong>Новая регистрация</strong><br>
+        <strong>Новый участник</strong><br>
         {% else %}
         {{ u.first_name }} {{ u.last_name }}<br>
         {% endif %}
@@ -46,8 +56,15 @@
       </td>
       <td>
         <ul class="pr-changes">
-          {% for label, value in row.changes %}
-          <li><b>{{ label }}:</b> {{ value if value not in (none, '') else '—' }}</li>
+          {% for f in row.fields %}
+          <li class="{{ 'pr-changed' if f.changed else '' }}">
+            <b>{{ f.label }}:</b>
+            {% if f.changed and f.current is not none %}
+              {{ f.current }}<span class="pr-arrow">→</span>{{ f.proposed }}
+            {% else %}
+              {{ f.proposed if f.changed else f.current }}
+            {% endif %}
+          </li>
           {% endfor %}
         </ul>
       </td>
