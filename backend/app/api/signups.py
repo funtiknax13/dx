@@ -64,9 +64,7 @@ async def my_event_signup_state(
     )
     if signup is None:
         return EventSignupState(signed_up=False)
-    return EventSignupState(
-        signed_up=True, group_id=signup.group_id, group_name=signup.group.name
-    )
+    return EventSignupState(signed_up=True, group_id=signup.group_id, group_name=signup.group.name)
 
 
 @router.get("/users/me/signups", response_model=list[MySignupEntry])
@@ -110,12 +108,14 @@ def _event_has_started(group: Group, event: Event) -> bool:
 
 
 @router.get("/users/me/signups/awaiting-result", response_model=list[AwaitingResultEntry])
-async def my_awaiting_results(
-    user: CurrentUser, session: SessionDep
-) -> list[AwaitingResultEntry]:
+async def my_awaiting_results(user: CurrentUser, session: SessionDep) -> list[AwaitingResultEntry]:
     """Past events the runner signed up to where they can self-report a result
     (or it's pending) — the entry point for uploading before the CSV protocol
-    exists. Fully-approved ones drop off (they're already in the protocol)."""
+    exists. Fully-approved ones drop off (they're already in the protocol).
+    Otherwise this lingers forever for a signup that never turned into an
+    actual run — the frontend offers signup_id so the runner can dismiss it
+    themselves ("я не бегал(а)", DELETE /signups/{id}, same endpoint as
+    unsigning before the event)."""
     today = datetime.now(EVENT_TZ).date()
     signups = list(
         await session.scalars(
@@ -156,6 +156,7 @@ async def my_awaiting_results(
             continue  # done — in the protocol already
         out.append(
             AwaitingResultEntry(
+                signup_id=s.id,
                 group_id=s.group_id,
                 group_name=s.group.name,
                 location=s.group.location,

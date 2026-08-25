@@ -50,6 +50,7 @@ class AwaitingResultEntry(BaseModel):
     a result (or one is pending). Once approved it drops off — it's then in the
     protocol / their history."""
 
+    signup_id: int
     group_id: int
     group_name: str
     location: str

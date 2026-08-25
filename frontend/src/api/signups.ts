@@ -4,6 +4,7 @@ import type { EventSignupState, MySignupEntry, Signup } from '../types'
 /** A past event the runner signed up to, where they can still self-report a
  * result (or one is pending). */
 export interface AwaitingResultEntry {
+  signup_id: number
   group_id: number
   group_name: string
   location: string

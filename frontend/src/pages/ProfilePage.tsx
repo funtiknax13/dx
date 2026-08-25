@@ -116,6 +116,7 @@ export function ProfilePage() {
           </p>
           <AwaitingResults
             entries={awaiting.data}
+            gender={user?.gender ?? null}
             onSubmitted={() => {
               awaiting.reload()
               stats.reload()
@@ -197,15 +198,17 @@ function UpcomingSignups({ entries }: { entries: MySignupEntry[] }) {
 
 function AwaitingResults({
   entries,
+  gender,
   onSubmitted,
 }: {
   entries: AwaitingResultEntry[]
+  gender: Gender | null
   onSubmitted: () => void
 }) {
   return (
     <ul className="space-y-3">
       {entries.map((e) => (
-        <AwaitingResultRow key={e.group_id} entry={e} onSubmitted={onSubmitted} />
+        <AwaitingResultRow key={e.signup_id} entry={e} gender={gender} onSubmitted={onSubmitted} />
       ))}
     </ul>
   )
@@ -213,14 +216,28 @@ function AwaitingResults({
 
 function AwaitingResultRow({
   entry: e,
+  gender,
   onSubmitted,
 }: {
   entry: AwaitingResultEntry
+  gender: Gender | null
   onSubmitted: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
   const pending = e.moderation_status === 'pending'
   const rejected = e.moderation_status === 'rejected'
+  const didNotRunLabel = gender === 'female' ? 'Я не бегала' : gender === 'male' ? 'Я не бегал' : 'Я не бегал(а)'
+
+  const dismiss = async () => {
+    setDismissing(true)
+    try {
+      await signupsApi.remove(e.signup_id)
+      onSubmitted()
+    } finally {
+      setDismissing(false)
+    }
+  }
 
   return (
     <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
@@ -245,6 +262,14 @@ function AwaitingResultRow({
         ) : (
           <div className="flex shrink-0 items-center gap-2">
             {rejected && <span className="chip bg-signal/10 text-signal-600">Отклонён</span>}
+            <button
+              onClick={dismiss}
+              disabled={dismissing}
+              className="btn-ghost btn-sm"
+              type="button"
+            >
+              {didNotRunLabel}
+            </button>
             <button onClick={() => setOpen((v) => !v)} className="btn-primary btn-sm" type="button">
               {open ? 'Закрыть' : rejected ? 'Загрузить заново' : 'Загрузить'}
             </button>

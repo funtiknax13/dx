@@ -45,9 +45,7 @@ async def test_signing_up_for_another_group_switches_instead_of_duplicating(
     assert r2.json()["id"] == first_signup_id  # same row, moved — not a new one
     assert r2.json()["group_id"] == group_b.id
 
-    all_signups = list(
-        await session.scalars(select(Signup).where(Signup.runner_id == runner.id))
-    )
+    all_signups = list(await session.scalars(select(Signup).where(Signup.runner_id == runner.id)))
     assert len(all_signups) == 1
     assert all_signups[0].group_id == group_b.id
 
@@ -173,6 +171,42 @@ async def test_todays_event_moves_from_upcoming_to_awaiting_once_started(
 
 
 @pytest.mark.asyncio
+async def test_dismissing_a_signup_removes_it_from_awaiting_results(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A signup for an event the runner never actually ran otherwise lingers
+    in "Загрузить результат" forever. The frontend offers a "я не бегал(а)"
+    button that just deletes the signup (same DELETE /signups/{id} used to
+    unsign before an event starts) — this checks the awaiting-result entry
+    carries the signup_id needed for that, and that deleting it clears the
+    entry."""
+    org = await make_user(session, "org-dismiss@example.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)
+    event.date = date.today() - timedelta(days=1)
+    group.start_time = None
+    runner = await make_user(session, "dismiss-signup@example.com", UserRole.runner)
+    session.add(Signup(runner_id=runner.id, group_id=group.id, event_id=event.id))
+    await session.commit()
+
+    awaiting = await client.get(
+        "/api/v1/users/me/signups/awaiting-result", headers=_auth(runner.id)
+    )
+    assert awaiting.status_code == 200, awaiting.text
+    entries = awaiting.json()
+    assert len(entries) == 1
+    assert entries[0]["event_id"] == event.id
+    signup_id = entries[0]["signup_id"]
+
+    delete_resp = await client.delete(f"/api/v1/signups/{signup_id}", headers=_auth(runner.id))
+    assert delete_resp.status_code == 204, delete_resp.text
+
+    awaiting2 = await client.get(
+        "/api/v1/users/me/signups/awaiting-result", headers=_auth(runner.id)
+    )
+    assert awaiting2.json() == []
+
+
+@pytest.mark.asyncio
 async def test_cannot_sign_up_for_a_started_event(
     session: AsyncSession, client: AsyncClient
 ) -> None:
@@ -209,7 +243,5 @@ async def test_signups_for_different_events_are_both_allowed(
     assert r2.status_code == 201
     assert r1.json()["id"] != r2.json()["id"]
 
-    all_signups = list(
-        await session.scalars(select(Signup).where(Signup.runner_id == runner.id))
-    )
+    all_signups = list(await session.scalars(select(Signup).where(Signup.runner_id == runner.id)))
     assert len(all_signups) == 2
