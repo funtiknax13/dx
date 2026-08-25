@@ -4,10 +4,12 @@ from typing import Any
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.db import SessionLocal
+from app.models.city import City
 from app.models.enums import ModerationStatus, UserRole
 from app.models.profile_edit_request import ProfileEditRequest
 from app.models.user import User
@@ -52,14 +54,34 @@ def _format_value(field: str, value: Any) -> str:
     return str(value)
 
 
-def _row_fields(request: ProfileEditRequest, is_first_review: bool) -> list[dict[str, Any]]:
+async def _proposed_city_display(session: AsyncSession, changes: dict[str, Any]) -> str | None:
+    """The "city" entry to show, even when a caller only staged city_id
+    without the matching city text (the profile form always sends both —
+    see ProfilePage.tsx — but nothing stops some other API client from
+    submitting city_id alone, and this queue must not go blind to a city
+    change just because of that)."""
+    if "city" in changes:
+        return _format_value("city", changes["city"])
+    if "city_id" not in changes:
+        return None
+    city_id = changes["city_id"]
+    if city_id is None:
+        return _format_value("city", None)
+    city = await session.get(City, city_id)
+    return city.name if city is not None else f"#{city_id}"
+
+
+async def _row_fields(
+    session: AsyncSession, request: ProfileEditRequest, is_first_review: bool
+) -> list[dict[str, Any]]:
     """One entry per field shown in the queue row. A first-ever registration
     has no real "before" to compare against (the account didn't exist), so it
     only lists what's proposed; a later edit shows the *whole* profile for
     context, with only the fields actually being changed marked (было →
     стало) — everything else displayed plainly as-is."""
+    city_display = await _proposed_city_display(session, request.changes)
     if is_first_review:
-        return [
+        fields = [
             {
                 "label": FIELD_LABELS.get(f, f),
                 "changed": True,
@@ -67,12 +89,21 @@ def _row_fields(request: ProfileEditRequest, is_first_review: bool) -> list[dict
                 "proposed": _format_value(f, v),
             }
             for f, v in request.changes.items()
-            if f != "city_id"
+            if f not in ("city_id", "city")
         ]
+        if city_display is not None:
+            fields.append(
+                {"label": "Город", "changed": True, "current": None, "proposed": city_display}
+            )
+        return fields
     fields = []
     for f in DISPLAY_FIELDS:
         current = _format_value(f, getattr(request.user, f))
-        proposed = _format_value(f, request.changes[f]) if f in request.changes else None
+        proposed = (
+            city_display
+            if f == "city"
+            else (_format_value(f, request.changes[f]) if f in request.changes else None)
+        )
         # A backfilled request's "changes" is a snapshot of the account as it
         # stood at migration time (see the introducing migration) rather
         # than a genuine diff — было/стало collapses to the same value there,
@@ -116,10 +147,11 @@ async def profile_review_queue(request: Request) -> HTMLResponse | RedirectRespo
                 .order_by(ProfileEditRequest.id)
             )
         )
-    rows = []
-    for r in requests:
-        is_first = is_awaiting_first_review(r.user)
-        rows.append({"req": r, "is_first_review": is_first, "fields": _row_fields(r, is_first)})
+        rows = []
+        for r in requests:
+            is_first = is_awaiting_first_review(r.user)
+            fields = await _row_fields(session, r, is_first)
+            rows.append({"req": r, "is_first_review": is_first, "fields": fields})
     return templates.TemplateResponse(
         request,
         "profile_review.html",

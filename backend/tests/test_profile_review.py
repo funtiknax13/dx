@@ -224,6 +224,90 @@ async def test_profile_update_api_stages_instead_of_applying(
 
 
 @pytest.mark.asyncio
+async def test_editing_one_field_does_not_drop_a_still_pending_name(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Regression: a fresh registration's real name lives only in the
+    pending request while User still shows the bootstrap placeholder. The
+    profile form must resubmit that pending value (not the placeholder) for
+    fields it isn't touching — see ProfilePage.pendingOrCurrent — otherwise
+    submit_for_review's diff-against-committed-User logic reads the
+    resubmitted placeholder as "revert the name", silently discarding the
+    real one the moment any other field is edited before approval."""
+    payload = {
+        "first_name": "Семён",
+        "last_name": "Волков",
+        "email": "one-field-edit@example.com",
+        "password": "supersecret1",
+        "accept_privacy_policy": True,
+    }
+    r = await client.post("/api/v1/auth/register", json=payload)
+    assert r.status_code == 201, r.text
+    user = await session.scalar(select(User).where(User.email == payload["email"]))
+    assert user is not None
+    token = create_access_token(user.id)
+
+    # Mirrors what the (fixed) profile form now sends: the pending name
+    # carried forward untouched, plus a genuinely new field.
+    resp = await client.patch(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"first_name": "Семён", "last_name": "Волков", "city": "Казань"},
+    )
+    assert resp.status_code == 200, resp.text
+    changes = resp.json()["pending_review"]["changes"]
+    assert changes["first_name"] == "Семён"
+    assert changes["last_name"] == "Волков"
+    assert changes["city"] == "Казань"
+
+    # Only one request ever exists for this user — replaced, not stacked.
+    pending = list(
+        await session.scalars(
+            select(ProfileEditRequest).where(ProfileEditRequest.user_id == user.id)
+        )
+    )
+    assert len(pending) == 1
+
+
+@pytest.mark.asyncio
+async def test_admin_queue_shows_city_from_city_id_alone(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Regression: the queue used to go blind to a city change whenever only
+    city_id (no city text) was staged — see _proposed_city_display. The
+    profile form always sends both now, but the queue itself must not rely
+    on that: any API client submitting city_id alone should still show up
+    here as a city change, not silently vanish."""
+    from app.models.city import City
+
+    admin = await make_user(session, "admin-city-only@example.com", UserRole.admin)
+    runner = await make_user(session, "city-id-only@example.com")
+    session.add(
+        City(
+            id=88,
+            name="Казань",
+            name_ascii="Kazan",
+            search_name="казань",
+            search_ascii="kazan",
+            country_code="RU",
+            lat=55.8,
+            lng=49.1,
+            population=1_200_000,
+        )
+    )
+    await session.commit()
+
+    await submit_for_review(session, runner, {"city_id": 88})
+    await session.commit()
+
+    await _login(client, admin.id)
+    resp = await client.get("/admin-tools/profile-review")
+    assert resp.status_code == 200
+    assert "Казань" in resp.text
+    assert "Город" in resp.text
+
+
+@pytest.mark.asyncio
 async def test_admin_queue_approve_and_reject_routes(
     session: AsyncSession, client: AsyncClient
 ) -> None:

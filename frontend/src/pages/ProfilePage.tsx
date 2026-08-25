@@ -280,6 +280,20 @@ function formatPendingValue(field: string, value: string | number | null): strin
   return String(value)
 }
 
+/** A field's still-pending proposed value, if any, else its current
+ * (approved) one. The form must edit *this*, not the raw committed value —
+ * otherwise resubmitting the form after touching only some fields silently
+ * resends the stale committed value for every field it didn't prefill from
+ * the pending edit, which the backend then reads as "revert this field",
+ * wiping out whatever was still awaiting review on it (see
+ * profile_review_service.submit_for_review, which diffs the whole payload
+ * against the committed row every time). */
+function pendingOrCurrent<T>(user: User | null | undefined, field: string, current: T): T {
+  const changes = user?.pending_review?.changes
+  if (changes && field in changes) return changes[field] as T
+  return current
+}
+
 function AvatarUploader() {
   const { user, setUser } = useAuth()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -373,24 +387,27 @@ function ProfileForm({
   hasApprovedClaim: boolean
 }) {
   const { user } = useAuth()
+  // Prefilled from any still-pending proposal rather than the raw committed
+  // value — see pendingOrCurrent for why that matters.
   const [form, setForm] = useState({
-    first_name: user?.first_name ?? '',
-    last_name: user?.last_name ?? '',
-    city: user?.city ?? '',
-    city_id: user?.city_id ?? null,
-    gender: (user?.gender ?? '') as Gender | '',
-    birthday: user?.birthday ?? '',
-    phone: user?.phone ?? '',
+    first_name: pendingOrCurrent(user, 'first_name', user?.first_name ?? ''),
+    last_name: pendingOrCurrent(user, 'last_name', user?.last_name ?? ''),
+    city: pendingOrCurrent(user, 'city', user?.city ?? ''),
+    city_id: pendingOrCurrent(user, 'city_id', user?.city_id ?? null),
+    gender: pendingOrCurrent(user, 'gender', (user?.gender ?? '') as Gender | ''),
+    birthday: pendingOrCurrent(user, 'birthday', user?.birthday ?? ''),
+    phone: pendingOrCurrent(user, 'phone', user?.phone ?? ''),
     prior_experience: (user?.prior_experience ?? '') as PriorExperience | '',
-    parent_first_name: user?.parent_first_name ?? '',
-    parent_last_name: user?.parent_last_name ?? '',
-    parent_phone: user?.parent_phone ?? '',
+    parent_first_name: pendingOrCurrent(user, 'parent_first_name', user?.parent_first_name ?? ''),
+    parent_last_name: pendingOrCurrent(user, 'parent_last_name', user?.parent_last_name ?? ''),
+    parent_phone: pendingOrCurrent(user, 'parent_phone', user?.parent_phone ?? ''),
   })
   // Running club gets its own tri-state: text vs "not in a club" checkbox vs
   // untouched — see profile_completeness_service on the backend for why "" and
   // null mean different things here.
-  const [noClub, setNoClub] = useState(user?.running_club === '')
-  const [club, setClub] = useState(user?.running_club || '')
+  const pendingClub = pendingOrCurrent(user, 'running_club', user?.running_club ?? null)
+  const [noClub, setNoClub] = useState(pendingClub === '')
+  const [club, setClub] = useState(pendingClub || '')
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
@@ -440,11 +457,14 @@ function ProfileForm({
       return
     }
     setLoading(true)
-    // City: a canonical pick sends city_id (server mirrors the name); a legacy
-    // free-text value with no id is kept as text; empty clears both.
+    // City: a canonical pick sends both city_id and its name (the name is
+    // also what the moderation queue displays — see profile_review.html;
+    // city_id alone used to leave "Город" missing from that view since
+    // nothing there was ever staged as a "city" change); a legacy free-text
+    // value with no id is kept as text; empty clears both.
     const cityFields: Pick<UpdateProfilePayload, 'city' | 'city_id'> =
       form.city_id != null
-        ? { city_id: form.city_id }
+        ? { city_id: form.city_id, city: form.city.trim() || null }
         : form.city.trim()
           ? { city: form.city.trim() }
           : { city: null, city_id: null }
