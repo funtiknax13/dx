@@ -43,6 +43,23 @@ async def test_search_running_clubs(session: AsyncSession, client: AsyncClient) 
     assert "Марафонцы Казани" not in titles
 
 
+@pytest.mark.asyncio
+async def test_search_running_clubs_blank_query_lists_all(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A blank q lists every club instead of nothing — powers the picker
+    showing options as soon as the field gains focus, before typing."""
+    await ensure_running_club(session, "Бегуны Чебоксар")
+    await ensure_running_club(session, "Марафонцы Казани")
+    await session.commit()
+
+    resp = await client.get("/api/v1/running-clubs/search")
+    assert resp.status_code == 200
+    titles = [c["title"] for c in resp.json()]
+    assert "Бегуны Чебоксар" in titles
+    assert "Марафонцы Казани" in titles
+
+
 async def _approve_pending(session: AsyncSession, user_id: int) -> None:
     request = await session.scalar(
         select(ProfileEditRequest)

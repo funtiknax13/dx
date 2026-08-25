@@ -19,11 +19,15 @@ export function RunningClubField({ value, onChange, disabled, invalid, placehold
   const blurTimer = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    const term = value.trim()
-    if (!open || term.length < 1) {
+    if (!open) {
       setResults([])
       return
     }
+    // A blank term lists every known club (see backend) — shown the moment
+    // the field gains focus, before anything's typed, so a runner who
+    // starts typing a club that's already listed but misspells it can still
+    // see it was there instead of unknowingly creating a near-duplicate.
+    const term = value.trim()
     const t = window.setTimeout(() => {
       runningClubsApi
         .search(term)
