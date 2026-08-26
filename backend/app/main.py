@@ -20,6 +20,7 @@ from app.admin.tools_guests import router as tools_guests_router
 from app.admin.tools_permissions import router as tools_permissions_router
 from app.admin.tools_profile_review import router as tools_profile_review_router
 from app.admin.tools_results import router as tools_results_router
+from app.admin.tools_runners import router as tools_runners_router
 from app.admin.tools_support import router as tools_support_router
 from app.admin.tools_surveys import router as tools_surveys_router
 from app.admin.views import ALL_VIEWS
@@ -74,6 +75,7 @@ app.include_router(tools_profile_review_router)
 app.include_router(tools_surveys_router)
 app.include_router(tools_support_router)
 app.include_router(tools_permissions_router)
+app.include_router(tools_runners_router)
 app.include_router(moderation_router)
 
 # Serve uploaded media in dev (in prod nginx serves /media directly).

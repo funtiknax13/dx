@@ -16,7 +16,7 @@ router = APIRouter(prefix="/admin-tools", tags=["admin-moderation"], include_in_
 
 
 async def _require_access(request: Request) -> User | None:
-    """CSV import/moderation/runner search — delegable via StaffPermission
+    """CSV import/moderation matching — delegable via StaffPermission
     .csv_import (see permissions_service), admin-only by default."""
     return await require_permission(request, StaffPermission.csv_import)
 
@@ -162,19 +162,3 @@ async def moderation_match(
             await session.commit()
             msg = f"Привязано: «{record.raw_name}» → {runner.first_name} {runner.last_name}"
     return RedirectResponse(f"/admin-tools/moderation?flash={msg}", status_code=303)
-
-
-@router.get("/runners", response_class=HTMLResponse, response_model=None)
-async def runners_lookup(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_access(request)
-    if user is None:
-        return login_redirect()
-    q = request.query_params.get("q", "").strip()
-    async with SessionLocal() as session:
-        stmt = select(User).order_by(User.id).limit(100)
-        if q:
-            stmt = select(User).where(flexible_name_filter(q)).limit(100)
-        users = list(await session.scalars(stmt))
-    return templates.TemplateResponse(
-        request, "runners.html", {"active": "runners", "tools_user": user, "users": users, "q": q}
-    )

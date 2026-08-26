@@ -1,17 +1,40 @@
 {% extends "_base.html" %}
-{% block title %}Поиск бегунов — DH Admin{% endblock %}
+{% block title %}Поиск бегунов — DH Admin Tools{% endblock %}
 {% block content %}
-  <h1>Поиск бегунов</h1>
-  <form class="inline" method="get" action="/admin-tools/runners">
-    <input type="text" name="q" value="{{ q or '' }}" placeholder="имя или email" />
-    <button type="submit">Найти</button>
-  </form>
-  <table style="margin-top: 16px;">
-    <thead><tr><th>ID</th><th>Имя</th><th>Email</th><th>Город</th></tr></thead>
-    <tbody>
-      {% for u in users %}
-      <tr><td>{{ u.id }}</td><td>{{ u.first_name }} {{ u.last_name }}</td><td>{{ u.email }}</td><td>{{ u.city or "—" }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<style>
+  .pager { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:20px; }
+  .pager .page-num { font-size:13px; color:#6b7280; }
+  .pager a.btn.disabled { pointer-events:none; opacity:.4; }
+</style>
+<h1>Поиск бегунов ({{ total }})</h1>
+<p class="hint">Гостевые профили сюда не попадают — по ним отдельная страница «Гости».</p>
+<form class="inline" method="get" action="/admin-tools/runners">
+  <input type="text" name="q" value="{{ q or '' }}" placeholder="имя или email" />
+  <button type="submit">Найти</button>
+</form>
+
+{% if users %}
+<table style="margin-top: 16px;">
+  <thead><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Город</th></tr></thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td><a href="/admin-tools/runners/{{ u.id }}">{{ u.first_name }} {{ u.last_name }}</a></td>
+      <td>{{ {'runner': 'Бегун', 'organizer': 'Организатор', 'admin': 'Админ'}[u.role.value] }}</td>
+      <td>{{ u.city or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if total_pages > 1 %}
+<div class="pager">
+  <a class="btn secondary {{ 'disabled' if page <= 1 }}" href="?q={{ q }}&page={{ page - 1 }}">← Назад</a>
+  <span class="page-num">Страница {{ page }} из {{ total_pages }}</span>
+  <a class="btn secondary {{ 'disabled' if page >= total_pages }}" href="?q={{ q }}&page={{ page + 1 }}">Вперёд →</a>
+</div>
+{% endif %}
+{% else %}
+<div class="empty">Никого не нашлось.</div>
+{% endif %}
 {% endblock %}

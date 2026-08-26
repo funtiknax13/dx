@@ -120,10 +120,8 @@
         {% if 'surveys' in tools_user.granted_permissions %}
         <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты <span id="badge-surveys" class="nav-badge nav-badge-blue" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
         {% endif %}
-        {% if 'csv_import' in tools_user.granted_permissions %}
-        <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
-        {% endif %}
         {% if tools_user.role.value == 'admin' %}
+        <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
         <a href="/admin-tools/permissions" class="{{ 'active' if active == 'permissions' }}">Права организаторов</a>
         {% endif %}
         {% endif %}

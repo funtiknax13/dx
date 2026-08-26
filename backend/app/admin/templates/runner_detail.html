@@ -1,0 +1,74 @@
+{% extends "_base.html" %}
+{% block title %}{{ u.first_name }} {{ u.last_name }} — DH Admin Tools{% endblock %}
+{% block content %}
+<p><a href="/admin-tools/runners">← Поиск бегунов</a></p>
+<h1>{{ u.first_name }} {{ u.last_name }}</h1>
+
+<div class="card">
+  {% if u.avatar %}
+  <img src="{{ u.avatar }}" alt="Аватар" style="width:96px; height:96px; border-radius:50%; object-fit:cover; margin-bottom:16px;">
+  {% endif %}
+  <div class="field">
+    <label>ID</label>
+    <div>{{ u.id }}</div>
+  </div>
+  <div class="field">
+    <label>Email</label>
+    <div>{{ u.email }}{% if u.email_verified %} <span class="hint">(подтверждён)</span>{% else %} <span class="hint">(не подтверждён)</span>{% endif %}</div>
+  </div>
+  <div class="field">
+    <label>Роль</label>
+    <div>{{ {'runner': 'Бегун', 'organizer': 'Организатор', 'admin': 'Админ'}[u.role.value] }}</div>
+  </div>
+  <div class="field">
+    <label>Город</label>
+    <div>{{ u.city or "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Пол</label>
+    <div>{{ {'male': 'Мужской', 'female': 'Женский'}.get(u.gender.value if u.gender else None, "—") }}</div>
+  </div>
+  <div class="field">
+    <label>Дата рождения</label>
+    <div>{{ u.birthday.strftime('%d.%m.%Y') if u.birthday else "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Телефон</label>
+    <div>{{ u.phone or "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Беговой клуб</label>
+    <div>
+      {% if u.running_club is none %}—{% elif u.running_club == '' %}не состоит в клубе{% else %}{{ u.running_club }}{% endif %}
+    </div>
+  </div>
+  <div class="field">
+    <label>Бегал ли раньше с сообществом</label>
+    <div>{{ {'never': 'Нет, ни разу', 'once': 'Да, один раз', 'multiple': 'Да, несколько раз'}.get(u.prior_experience.value if u.prior_experience else None, "—") }}</div>
+  </div>
+  <div class="field">
+    <label>Имя опекуна</label>
+    <div>{{ u.parent_first_name or "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Фамилия опекуна</label>
+    <div>{{ u.parent_last_name or "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Телефон опекуна</label>
+    <div>{{ u.parent_phone or "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Статус аватара</label>
+    <div>{{ 'На проверке' if u.avatar_review.value == 'pending' else 'Подтверждён' }}</div>
+  </div>
+  <div class="field">
+    <label>Согласие на обработку персональных данных</label>
+    <div>{{ u.privacy_accepted_at | local_dt if u.privacy_accepted_at else "—" }}</div>
+  </div>
+  <div class="field">
+    <label>Дата регистрации</label>
+    <div>{{ u.created_at | local_dt }}</div>
+  </div>
+</div>
+{% endblock %}
