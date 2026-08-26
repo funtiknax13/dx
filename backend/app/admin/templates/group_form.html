@@ -2,14 +2,14 @@
 {% block title %}{{ 'Группа' if group else 'Новая группа' }} — DH Admin Tools{% endblock %}
 {% block content %}
   <style>
-    .pace-table { width:100%; border-collapse:collapse; }
-    .pace-table th { text-align:left; font-size:12px; color:#6b7280; font-weight:600; padding:2px 6px; }
-    .pace-table td { padding:2px 6px; vertical-align:middle; }
+    .pace-table { width:100%; border-collapse:collapse; box-shadow:none; border-radius:0; background:transparent; }
+    .pace-table th { text-align:left; font-size:11px; color:var(--clay); font-weight:600; padding:2px 6px; background:transparent; text-transform:none; letter-spacing:0; }
+    .pace-table td { padding:3px 6px; vertical-align:middle; border-bottom:0; }
     .pace-table input { width:100%; box-sizing:border-box; }
     .pace-table td:last-child { text-align:center; }
-    .seg-del { padding:2px 9px; line-height:1.2; }
+    .seg-del { padding:4px 9px; line-height:1.2; }
   </style>
-  <p><a href="/admin-tools/events/{{ event.id }}/edit">← {{ event.title }}</a></p>
+  <p><a href="/admin-tools/events/{{ event.id }}/edit" class="hint">← {{ event.title }}</a></p>
   <div class="row-between">
     <h1 style="margin:0;">{{ group.name if group else 'Новая группа' }}</h1>
     {% if group %}

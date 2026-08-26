@@ -24,14 +24,14 @@
           </form>
           {% if search_for == g.id %}
             {% if search_results %}
-            <table style="margin-top: 6px;">
+            <table style="margin-top: 6px; box-shadow:none; border:1px solid var(--paper-soft);">
               {% for u in search_results %}
               <tr>
                 <td>{{ u.first_name }} {{ u.last_name }} &lt;{{ u.email }}&gt;</td>
                 <td>
                   <form method="post" action="/admin-tools/guests/{{ g.id }}/merge">
                     <input type="hidden" name="real_user_id" value="{{ u.id }}" />
-                    <button type="submit">Объединить</button>
+                    <button type="submit" class="btn-sm">Объединить</button>
                   </form>
                 </td>
               </tr>

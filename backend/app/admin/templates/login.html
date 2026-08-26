@@ -1,20 +1,23 @@
 {% extends "_base.html" %}
 {% block title %}Вход — DH Admin Tools{% endblock %}
 {% block content %}
-  <div class="card" style="max-width: 380px; margin: 60px auto;">
-    <h2>DH Admin Tools</h2>
-    <p class="hint">Обычно сюда попадают по кнопке «Admin Tools» на сайте — вы уже
+  <div style="text-align:center; margin-bottom:24px;">
+    <span style="display:inline-grid; place-items:center; width:52px; height:52px; border-radius:14px; background:var(--ink); color:#fff; font-family:var(--font-mono); font-weight:700; font-size:20px;">DX</span>
+    <h1 style="margin:14px 0 2px;">DH Admin Tools</h1>
+    <p class="hint" style="margin-top:0;">Обычно сюда попадают по кнопке «Admin Tools» на сайте — вы уже
     авторизованы там. Эта форма нужна на случай, если ссылка устарела.</p>
+  </div>
+  <div class="card">
     <form method="post" action="/admin-tools/login">
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" type="email" name="email" required autofocus />
+        <input id="email" type="email" name="email" required autofocus style="max-width:none;" />
       </div>
       <div class="field">
         <label for="password">Пароль</label>
-        <input id="password" type="password" name="password" required />
+        <input id="password" type="password" name="password" required style="max-width:none;" />
       </div>
-      <button type="submit">Войти</button>
+      <button type="submit" style="width:100%; justify-content:center;">Войти</button>
     </form>
   </div>
 {% endblock %}

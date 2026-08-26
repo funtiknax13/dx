@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}{{ 'Анкета' if survey else 'Новая анкета' }} — DH Admin Tools{% endblock %}
 {% block content %}
-  <p><a href="/admin-tools/surveys">← Все анкеты</a></p>
+  <p><a href="/admin-tools/surveys" class="hint">← Все анкеты</a></p>
   <h1>{{ survey.title if survey else 'Новая анкета' }}</h1>
 
   <div class="card">
@@ -52,15 +52,15 @@
           <td style="white-space:nowrap;">
             <form class="inline" method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/{{ q.id }}/move">
               <input type="hidden" name="direction" value="up" />
-              <button type="submit" class="secondary" {% if loop.first %}disabled{% endif %}>↑</button>
+              <button type="submit" class="secondary btn-sm" {% if loop.first %}disabled{% endif %}>↑</button>
             </form>
             <form class="inline" method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/{{ q.id }}/move">
               <input type="hidden" name="direction" value="down" />
-              <button type="submit" class="secondary" {% if loop.last %}disabled{% endif %}>↓</button>
+              <button type="submit" class="secondary btn-sm" {% if loop.last %}disabled{% endif %}>↓</button>
             </form>
             <form class="inline" method="post" action="/admin-tools/surveys/{{ survey.id }}/questions/{{ q.id }}/delete"
                   onsubmit="return confirm('Удалить вопрос? Уже сохранённые ответы на него не пропадут.');">
-              <button type="submit" class="danger">Удалить</button>
+              <button type="submit" class="danger btn-sm">Удалить</button>
             </form>
           </td>
         </tr>

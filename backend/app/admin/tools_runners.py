@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request, status
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy import func, select
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
@@ -68,14 +68,30 @@ async def runners_lookup(request: Request) -> HTMLResponse | RedirectResponse:
 
 
 @router.get("/runners/{user_id}", response_class=HTMLResponse, response_model=None)
-async def runner_detail(request: Request, user_id: int) -> HTMLResponse | RedirectResponse:
+async def runner_detail(
+    request: Request, user_id: int
+) -> HTMLResponse | RedirectResponse | PlainTextResponse:
+    """Serves both the full page (direct link, new tab, JS off) and the
+    fragment the runners-list modal fetches (?partial=1 — see the
+    data-modal-url wiring in runners.html and the shared fetch handler in
+    _base.html). A partial request answers auth failure with a plain 4xx
+    instead of a login redirect, so the fetch() promise rejects and the
+    caller falls back to a real navigation (which then redirects properly)
+    rather than dumping the login page's HTML into the modal."""
+    partial = request.query_params.get("partial") == "1"
     user = await _require_admin(request)
     if user is None:
+        if partial:
+            return PlainTextResponse("Forbidden", status_code=status.HTTP_403_FORBIDDEN)
         return login_redirect()
     async with SessionLocal() as session:
         target = await session.get(User, user_id)
         if target is None or target.is_guest:
+            if partial:
+                return PlainTextResponse("Not found", status_code=status.HTTP_404_NOT_FOUND)
             return RedirectResponse("/admin-tools/runners", status_code=303)
+    if partial:
+        return templates.TemplateResponse(request, "_runner_detail_fragment.html", {"u": target})
     return templates.TemplateResponse(
         request, "runner_detail.html", {"active": "runners", "tools_user": user, "u": target}
     )

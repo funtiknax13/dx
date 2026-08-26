@@ -1,27 +1,30 @@
 {% extends "_base.html" %}
 {% block title %}Поиск бегунов — DH Admin Tools{% endblock %}
 {% block content %}
-<style>
-  .pager { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:20px; }
-  .pager .page-num { font-size:13px; color:#6b7280; }
-  .pager a.btn.disabled { pointer-events:none; opacity:.4; }
-</style>
-<h1>Поиск бегунов ({{ total }})</h1>
-<p class="hint">Гостевые профили сюда не попадают — по ним отдельная страница «Гости».</p>
-<form class="inline" method="get" action="/admin-tools/runners">
-  <input type="text" name="q" value="{{ q or '' }}" placeholder="имя или email" />
+<div class="row-between">
+  <div>
+    <h1>Поиск бегунов</h1>
+    <p class="hint" style="margin-top:2px;">{{ total }} {{ 'аккаунт' if total % 10 == 1 and total % 100 != 11 else 'аккаунтов' }} · гостевые профили сюда не попадают, они на странице «Гости»</p>
+  </div>
+</div>
+<form class="inline" method="get" action="/admin-tools/runners" style="margin-bottom:18px;">
+  <input type="text" name="q" value="{{ q or '' }}" placeholder="Имя, фамилия или email…" style="min-width:260px;" />
   <button type="submit">Найти</button>
+  {% if q %}<a class="btn secondary" href="/admin-tools/runners">Сбросить</a>{% endif %}
 </form>
 
 {% if users %}
-<table style="margin-top: 16px;">
-  <thead><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Город</th></tr></thead>
+<table>
+  <thead><tr><th>Имя</th><th>Роль</th><th>Город</th></tr></thead>
   <tbody>
     {% for u in users %}
     <tr>
-      <td>{{ u.id }}</td>
-      <td><a href="/admin-tools/runners/{{ u.id }}">{{ u.first_name }} {{ u.last_name }}</a></td>
-      <td>{{ {'runner': 'Бегун', 'organizer': 'Организатор', 'admin': 'Админ'}[u.role.value] }}</td>
+      <td>
+        <a href="/admin-tools/runners/{{ u.id }}" data-modal-url="/admin-tools/runners/{{ u.id }}?partial=1" style="font-weight:600; text-decoration:none;">
+          {{ u.first_name }} {{ u.last_name }}
+        </a>
+      </td>
+      <td><span class="chip {{ 'chip-info' if u.role.value == 'admin' else ('chip-amber' if u.role.value == 'organizer' else 'chip-muted') }}">{{ {'runner': 'Бегун', 'organizer': 'Организатор', 'admin': 'Админ'}[u.role.value] }}</span></td>
       <td>{{ u.city or "—" }}</td>
     </tr>
     {% endfor %}

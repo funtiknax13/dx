@@ -11,6 +11,17 @@
     {% endif %}
   </p>
 
+  {% set has_any = 'events' in tools_user.granted_permissions or 'support' in tools_user.granted_permissions
+    or 'csv_import' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions
+    or 'results_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions
+    or tools_user.role.value == 'admin' %}
+  {% if not has_any %}
+  <div class="empty" style="margin-top:20px;">
+    Пока нет ни одного выданного права. Попросите администратора выдать доступ
+    на странице «Права организаторов».
+  </div>
+  {% endif %}
+
   <div class="grid" style="margin-top: 20px;">
     {% if 'events' in tools_user.granted_permissions %}
     <div class="card">

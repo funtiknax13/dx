@@ -20,10 +20,10 @@
         <td>{{ claimant.first_name }} {{ claimant.last_name }} &lt;{{ claimant.email }}&gt;</td>
         <td style="white-space:nowrap;">
           <form class="inline" method="post" action="/admin-tools/claims/{{ c.id }}/approve">
-            <button type="submit">Подтвердить</button>
+            <button type="submit" class="btn-sm">Подтвердить</button>
           </form>
           <form class="inline" method="post" action="/admin-tools/claims/{{ c.id }}/reject" style="margin-top:4px;">
-            <button type="submit" class="secondary">Отклонить</button>
+            <button type="submit" class="secondary btn-sm">Отклонить</button>
           </form>
         </td>
       </tr>

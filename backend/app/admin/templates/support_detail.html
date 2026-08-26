@@ -21,9 +21,9 @@
 
   <div class="card">
     {% for m in ticket.messages %}
-    <div style="margin-bottom:14px;padding:10px 12px;border-radius:6px;background:{{ '#eff6ff' if m.is_staff else '#f9fafb' }};">
-      <div class="hint">{{ 'Поддержка' if m.is_staff else 'Обратившийся' }} · {{ m.created_at|local_dt }}</div>
-      <div style="white-space:pre-wrap;">{{ m.body }}</div>
+    <div style="margin-bottom:14px; padding:12px 14px; border-radius:var(--radius); background:{{ 'var(--signal-wash)' if m.is_staff else 'var(--paper-soft)' }}; border-left:3px solid {{ 'var(--signal)' if m.is_staff else 'var(--paper-deep)' }};">
+      <div class="hint" style="margin-top:0; font-weight:700; text-transform:uppercase; font-size:10.5px; letter-spacing:.05em;">{{ 'Поддержка' if m.is_staff else 'Обратившийся' }} · {{ m.created_at|local_dt }}</div>
+      <div style="white-space:pre-wrap; margin-top:4px;">{{ m.body }}</div>
     </div>
     {% endfor %}
   </div>

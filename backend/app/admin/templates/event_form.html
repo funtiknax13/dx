@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}{{ 'Событие' if event else 'Новое событие' }} — DH Admin Tools{% endblock %}
 {% block content %}
-  <p><a href="/admin-tools/events">← Все события</a></p>
+  <p><a href="/admin-tools/events" class="hint">← Все события</a></p>
   <h1>{{ event.title if event else 'Новое событие' }}</h1>
 
   <div class="card">
@@ -39,7 +39,7 @@
     {% if event.photos %}
     <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
       {% for p in event.photos %}
-      <img src="{{ p.thumbnail or p.image }}" alt="" width="120" height="120" style="object-fit:cover; border-radius:6px;" />
+      <img src="{{ p.thumbnail or p.image }}" alt="" width="120" height="120" style="object-fit:cover; border-radius:var(--radius); box-shadow:var(--shadow-card);" />
       {% endfor %}
     </div>
     {% endif %}
@@ -63,7 +63,7 @@
           <td>{{ g.name }}</td>
           <td>{{ g.location }}</td>
           <td>{{ g.target_distance_km }} км</td>
-          <td><a class="btn secondary" href="/admin-tools/groups/{{ g.id }}/edit">Открыть</a></td>
+          <td><a class="btn secondary btn-sm" href="/admin-tools/groups/{{ g.id }}/edit">Открыть</a></td>
         </tr>
         {% endfor %}
       </tbody>

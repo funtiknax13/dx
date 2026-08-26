@@ -19,13 +19,13 @@
     <tbody>
       {% for s in surveys %}
       <tr>
-        <td>{{ s.title }}</td>
-        <td>{{ 'активна' if s.is_active else 'выключена' }}</td>
-        <td>{{ 'да' if s.is_required_for_access else '—' }}</td>
-        <td>{{ counts.get(s.id, 0) }}</td>
+        <td style="font-weight:600;">{{ s.title }}</td>
+        <td><span class="chip {{ 'chip-ok' if s.is_active else 'chip-muted' }}">{{ 'активна' if s.is_active else 'выключена' }}</span></td>
+        <td>{% if s.is_required_for_access %}<span class="chip chip-amber">да</span>{% else %}—{% endif %}</td>
+        <td class="mono">{{ counts.get(s.id, 0) }}</td>
         <td style="white-space:nowrap;">
-          <a class="btn secondary" href="/admin-tools/surveys/{{ s.id }}/edit">Редактировать</a>
-          <a class="btn secondary" href="/admin-tools/surveys/{{ s.id }}/responses">Ответы</a>
+          <a class="btn secondary btn-sm" href="/admin-tools/surveys/{{ s.id }}/edit">Редактировать</a>
+          <a class="btn secondary btn-sm" href="/admin-tools/surveys/{{ s.id }}/responses">Ответы</a>
         </td>
       </tr>
       {% endfor %}

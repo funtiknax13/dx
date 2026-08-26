@@ -1,7 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}Ответы — {{ survey.title }} — DH Admin Tools{% endblock %}
 {% block content %}
-  <p><a href="/admin-tools/surveys">← Все анкеты</a></p>
+  <p><a href="/admin-tools/surveys" class="hint">← Все анкеты</a></p>
   <div class="row-between">
     <h1>Ответы: {{ survey.title }} ({{ rows|length }})</h1>
     <a class="btn secondary" href="/admin-tools/surveys/{{ survey.id }}/responses/export">Скачать CSV</a>
@@ -16,8 +16,8 @@
     </h2>
     <dl style="margin:0;">
       {% for question, answer in row.answers %}
-      <dt style="font-weight:600; margin-top:10px;">{{ question.prompt }}</dt>
-      <dd style="margin:4px 0 0; color:#374151;">{{ answer or '—' }}</dd>
+      <dt style="font-weight:600; margin-top:10px; color:var(--ink-600); font-size:13px;">{{ question.prompt }}</dt>
+      <dd style="margin:4px 0 0; color:var(--ink);">{{ answer or '—' }}</dd>
       {% endfor %}
     </dl>
   </div>

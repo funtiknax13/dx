@@ -12,10 +12,10 @@
     <tbody>
       {% for e in events %}
       <tr>
-        <td>{{ e.date }}</td>
-        <td>{{ e.title }}</td>
-        <td>{{ e.groups|length }}</td>
-        <td><a class="btn secondary" href="/admin-tools/events/{{ e.id }}/edit">Открыть</a></td>
+        <td class="mono">{{ e.date.strftime('%d.%m.%Y') }}</td>
+        <td style="font-weight:600;">{{ e.title }}</td>
+        <td><span class="chip chip-muted">{{ e.groups|length }}</span></td>
+        <td><a class="btn secondary btn-sm" href="/admin-tools/events/{{ e.id }}/edit">Открыть</a></td>
       </tr>
       {% endfor %}
     </tbody>

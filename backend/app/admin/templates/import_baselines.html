@@ -110,12 +110,12 @@
         </tbody>
       </table>
     </div>
-    <pre style="background:#f4f4f4; padding:10px 12px; border-radius:6px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email;city;gender
+    <pre style="background:var(--paper-soft); padding:10px 12px; border-radius:var(--radius); font-family:var(--font-mono); font-size:12.5px; overflow-x:auto;">first_name;last_name;dx_count;total_runs;total_km;first_run_date;dx_count_this_year;km_this_year;baseline_year;email;city;gender
 Иван;Петров;47;50;623.5;2023-05-14;12;150.2;2026;ivan@example.com;Чебоксары;male</pre>
   </div>
 
   {% if flash_error %}
-  <div class="card"><p class="hint" style="color:#b00;">{{ flash_error }}</p></div>
+  <div class="flash error">{{ flash_error }}</div>
   {% endif %}
 
   {% if result %}

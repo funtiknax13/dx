@@ -2,12 +2,12 @@
 {% block title %}Права организаторов — DH Admin Tools{% endblock %}
 {% block content %}
 <style>
-  .perm-item { display:flex; align-items:flex-start; gap:8px; font-weight:400; margin: 8px 0; cursor:pointer; }
+  .perm-item { display:flex; align-items:flex-start; gap:8px; font-weight:400; margin: 10px 0; cursor:pointer; }
   .perm-item input { margin-top:3px; }
-  .perm-label { display:block; font-size:14px; font-weight:600; color:#111827; }
-  .perm-details { margin-bottom: 8px; }
-  .perm-details summary { cursor:pointer; font-size:14px; color:#2563eb; list-style:revert; }
-  .perm-details[open] summary { margin-bottom: 6px; }
+  .perm-label { display:block; font-size:14px; font-weight:600; color:var(--ink); }
+  .perm-details { margin-bottom: 10px; box-shadow:none; padding:0; background:transparent; }
+  .perm-details summary { cursor:pointer; font-size:13.5px; font-weight:600; color:var(--signal-soft); list-style:revert; }
+  .perm-details[open] summary { margin-bottom: 8px; }
   .role-table td { vertical-align: top; }
   .role-name { font-weight:600; }
 </style>
@@ -31,7 +31,7 @@
           <td>{{ r.first_name }} {{ r.last_name }} <span class="hint">&lt;{{ r.email }}&gt;</span></td>
           <td>
             <form method="post" action="/admin-tools/permissions/{{ r.id }}/promote">
-              <button type="submit">Назначить организатором</button>
+              <button type="submit" class="btn-sm">Назначить организатором</button>
             </form>
           </td>
         </tr>
@@ -59,7 +59,7 @@
         <td>
           <form method="post" action="/admin-tools/permissions/{{ row.organizer.id }}">
             <details class="perm-details">
-              <summary>Права: <span class="perm-count">{{ row.granted|length }}</span> из {{ catalog|length }}</summary>
+              <summary>Права: <span class="chip chip-info perm-count-chip"><span class="perm-count">{{ row.granted|length }}</span> из {{ catalog|length }}</span></summary>
               {% for key, meta in catalog.items() %}
               <label class="perm-item">
                 <input type="checkbox" name="permissions" value="{{ key.value }}" {{ 'checked' if key in row.granted }}>
@@ -70,13 +70,13 @@
               </label>
               {% endfor %}
             </details>
-            <button type="submit">Сохранить</button>
+            <button type="submit" class="btn-sm">Сохранить</button>
           </form>
         </td>
         <td>
           <form method="post" action="/admin-tools/permissions/{{ row.organizer.id }}/demote"
                 onsubmit="return confirm('Убрать роль организатора у {{ row.organizer.first_name }} {{ row.organizer.last_name }}? Все выданные права будут отозваны.');">
-            <button type="submit" class="danger">Снять роль</button>
+            <button type="submit" class="danger btn-sm">Снять роль</button>
           </form>
         </td>
       </tr>

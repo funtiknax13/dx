@@ -4,157 +4,425 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}DH Admin Tools{% endblock %}</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23111827'/><text x='16' y='23' font-family='ui-monospace,monospace' font-size='17' font-weight='700' fill='%23ffffff' text-anchor='middle'>DX</text></svg>">
-  <meta name="theme-color" content="#111827">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230E0E0D'/><text x='16' y='23' font-family='ui-monospace,monospace' font-size='17' font-weight='700' fill='%23ffffff' text-anchor='middle'>DX</text></svg>">
+  <meta name="theme-color" content="#0E0E0D">
   <meta name="robots" content="noindex">
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
-    header { background: #111827; color: #fff; padding: 14px 24px; }
-    .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    header strong { margin-right: 12px; }
-    .nav-toggle { display: none; background: transparent; border: 1px solid rgba(255,255,255,.25); color: #fff; font-size: 18px; line-height: 1; padding: 6px 11px; border-radius: 6px; cursor: pointer; }
-    .nav-panel { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 12px; }
-    header nav { display: flex; gap: 4px; flex-wrap: wrap; }
-    header a { color: #cbd5e1; text-decoration: none; font-size: 14px; padding: 6px 10px; border-radius: 6px; }
-    header a:hover { background: rgba(255,255,255,.08); color: #fff; }
-    header a.active { background: #2563eb; color: #fff; }
-    header .right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    header .right a.sqladmin-link { color: #93c5fd; }
-    header .whoami { font-size: 13px; color: #9ca3af; }
-    header form.logout button { background: transparent; border: 1px solid rgba(255,255,255,.2); padding: 5px 10px; font-size: 13px; }
-    main { max-width: 1000px; margin: 24px auto; padding: 0 16px 48px; }
-    h1 { font-size: 20px; }
-    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; vertical-align: top; }
-    th { background: #f3f4f6; }
-    .table-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
-    form.inline { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    input[type=text], input[type=number], input[type=date], input[type=datetime-local],
-    input[type=file], input[type=email], input[type=password], select, textarea {
-      padding: 7px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; font-family: inherit;
+    :root {
+      /* Same monochrome tokens as the runner-facing frontend (see
+         frontend/tailwind.config.js) — admin-tools reads as the same
+         product instead of a bolted-on internal panel. */
+      --paper: #F6F6F5;
+      --paper-soft: #EBEBE9;
+      --paper-deep: #DCDCD9;
+      --ink: #0E0E0D;
+      --ink-800: #1B1B19;
+      --ink-700: #292927;
+      --ink-600: #4C4C48;
+      --signal: #2E2E2B;
+      --signal-600: #181816;
+      --signal-soft: #55554F;
+      --signal-wash: #E7E7E4;
+      --clay: #87857F;
+      --danger: #DC2626;
+      --danger-600: #B91C1C;
+      --danger-wash: #FDECEC;
+      --ok: #166534;
+      --ok-wash: #DCFCE7;
+      --amber: #B45309;
+      --amber-wash: #FEF3C7;
+      --radius: 0.75rem;
+      --radius-lg: 1.25rem;
+      --shadow-card: 0 1px 0 0 rgba(14,14,13,.05), 0 12px 32px -18px rgba(14,14,13,.4);
+      --shadow-lift: 0 20px 50px -24px rgba(14,14,13,.55);
+      --sidebar-w: 248px;
+      --font-display: 'Montserrat', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
     }
-    label { font-size: 13px; font-weight: 600; color: #374151; }
-    button, .btn { background: #2563eb; color: #fff; border: 0; padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; }
-    button.secondary, .btn.secondary { background: #e5e7eb; color: #111827; }
-    button.danger, .btn.danger { background: #dc2626; }
-    button:hover, .btn:hover { opacity: .9; }
-    .flash { background: #dcfce7; color: #166534; padding: 10px 12px; border-radius: 4px; margin-bottom: 16px; }
-    .flash.error { background: #fee2e2; color: #991b1b; }
-    .empty { color: #6b7280; padding: 24px; text-align: center; }
-    .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.08); margin-bottom: 20px; }
-    .card h2 { margin-top: 0; font-size: 16px; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: var(--font-display); margin: 0; background: var(--paper); color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, .logo { font-family: var(--font-display); font-weight: 700; letter-spacing: -.01em; }
+    code, .mono, .kv dd, td.num, th.num { font-family: var(--font-mono); }
+    a { color: inherit; }
+
+    /* ---------- shell layout ---------- */
+    .shell { display: flex; min-height: 100vh; }
+    .shell.bare { display: block; min-height: 0; }
+    .sidebar {
+      width: var(--sidebar-w); flex: 0 0 auto; background: var(--ink); color: var(--paper);
+      display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px 14px; }
+    .sidebar-brand .mark {
+      width: 34px; height: 34px; border-radius: 9px; background: var(--paper); color: var(--ink);
+      display: grid; place-items: center; font-family: var(--font-mono); font-weight: 700; font-size: 15px; flex: 0 0 auto;
+    }
+    .sidebar-brand .label { font-size: 14px; font-weight: 700; line-height: 1.2; }
+    .sidebar-brand .label span { display: block; font-size: 11px; font-weight: 500; color: var(--clay); }
+    .nav-toggle {
+      display: none; background: transparent; border: 1px solid rgba(255,255,255,.25); color: #fff;
+      font-size: 16px; line-height: 1; padding: 7px 11px; border-radius: 8px; cursor: pointer;
+    }
+    .sidebar-scroll { flex: 1; padding: 6px 12px 12px; }
+    .nav-section { margin-top: 18px; }
+    .nav-section:first-child { margin-top: 4px; }
+    .nav-section-label {
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+      color: var(--clay); padding: 0 10px 6px;
+    }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px;
+      color: #D7D7D4; text-decoration: none; font-size: 13.5px; font-weight: 500; margin-bottom: 1px;
+    }
+    .nav-link svg { flex: 0 0 auto; width: 17px; height: 17px; opacity: .85; }
+    .nav-link:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .nav-link.active { background: var(--paper); color: var(--ink); font-weight: 600; }
+    .nav-link.active svg { opacity: 1; }
+    .nav-link .nav-badge { margin-left: auto; }
+    .sidebar-foot { padding: 12px; border-top: 1px solid rgba(255,255,255,.1); }
+    .whoami { display: flex; align-items: center; gap: 9px; padding: 6px 8px; }
+    .whoami .avatar-dot {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--signal-soft); color: #fff;
+      display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: 0 0 auto;
+    }
+    .whoami .who-name { font-size: 13px; font-weight: 600; color: #fff; line-height: 1.3; }
+    .whoami .who-role { font-size: 11px; color: var(--clay); }
+    .sidebar-foot-links { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+    .sidebar-foot-links a, .sidebar-foot-links button {
+      display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px;
+      color: #D7D7D4; text-decoration: none; font-size: 12.5px; background: transparent; border: 0;
+      cursor: pointer; font-family: var(--font-display); width: 100%; text-align: left;
+    }
+    .sidebar-foot-links a:hover, .sidebar-foot-links button:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .sidebar-foot-links svg { width: 15px; height: 15px; flex: 0 0 auto; opacity: .8; }
+
+    main { flex: 1 1 auto; min-width: 0; padding: 32px 36px 56px; max-width: 1180px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 15px; }
+
+    /* ---------- primitives ---------- */
+    .card { background: #fff; padding: 22px; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); margin-bottom: 20px; }
+    .card h2 { margin-top: 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-    .hint { color: #6b7280; font-size: 13px; margin-top: 6px; }
-    .suggestion { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px; margin-top: 6px; font-size: 13px; }
-    .suggestion form { display: inline; }
-    details { margin-bottom: 20px; background:#fff; padding:12px; border-radius:6px; }
-    code { background:#eef; padding:1px 4px; border-radius:3px; overflow-wrap: anywhere; }
-    .field { margin-bottom: 14px; display: flex; flex-direction: column; gap: 4px; }
-    .field input, .field select, .field textarea { width: 100%; max-width: 480px; }
+    .hint { color: var(--clay); font-size: 13px; margin-top: 6px; line-height: 1.5; }
+    .empty {
+      color: var(--clay); padding: 40px 24px; text-align: center; background: #fff; border-radius: var(--radius-lg);
+      border: 1px dashed var(--paper-deep); font-size: 14px;
+    }
     .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     img { max-width: 100%; }
-    .nav-badge { display: inline-block; min-width: 16px; padding: 1px 5px; border-radius: 9px; font-size: 11px; font-weight: 700; text-align: center; color: #fff; vertical-align: middle; }
-    .nav-badge-red { background: #dc2626; }
-    .nav-badge-blue { background: #2563eb; }
-    .nav-badge-amber { background: #d97706; }
-    .nav-badge-purple { background: #7c3aed; }
 
-    @media (max-width: 760px) {
-      .nav-toggle { display: inline-block; }
-      .nav-panel { display: none; flex-direction: column; align-items: stretch; gap: 2px; }
-      .nav-panel.open { display: flex; }
-      .nav-panel nav { flex-direction: column; gap: 2px; }
-      .nav-panel header a, .nav-panel nav a { padding: 10px 12px; }
-      .nav-panel .right { margin-left: 0; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.12); }
+    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: var(--shadow-card); border-radius: var(--radius-lg); overflow: hidden; }
+    th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--paper-soft); font-size: 13.5px; vertical-align: top; }
+    th { background: var(--paper-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-600); font-weight: 700; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: var(--signal-wash); }
+    .table-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; border-radius: var(--radius-lg); }
+    .table-scroll table { box-shadow: none; }
+
+    form.inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input[type=text], input[type=number], input[type=date], input[type=time], input[type=datetime-local],
+    input[type=file], input[type=email], input[type=password], select, textarea {
+      padding: 9px 11px; border: 1px solid var(--paper-deep); border-radius: 9px; font-size: 14px;
+      font-family: var(--font-display); background: #fff; color: var(--ink); transition: border-color .12s, box-shadow .12s;
     }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-wash);
+    }
+    label { font-size: 12.5px; font-weight: 700; color: var(--ink-600); text-transform: uppercase; letter-spacing: .04em; }
+    .field { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+    .field input, .field select, .field textarea { width: 100%; max-width: 480px; }
+    .field label { text-transform: none; font-size: 13px; letter-spacing: 0; }
+    .field-check { display: flex; align-items: center; gap: 8px; font-weight: normal; }
+    .field-check label { text-transform: none; font-weight: 500; font-size: 14px; color: var(--ink); }
+
+    button, .btn {
+      background: var(--signal); color: #fff; border: 0; padding: 9px 16px; border-radius: 9px; cursor: pointer;
+      font-size: 13.5px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center;
+      gap: 6px; font-family: var(--font-display); transition: background .12s, opacity .12s, box-shadow .12s;
+    }
+    button:hover, .btn:hover { background: var(--signal-600); }
+    button:focus-visible, .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    button.secondary, .btn.secondary { background: var(--paper-soft); color: var(--ink); }
+    button.secondary:hover, .btn.secondary:hover { background: var(--paper-deep); }
+    button.danger, .btn.danger { background: var(--danger); }
+    button.danger:hover, .btn.danger:hover { background: var(--danger-600); }
+    button.ghost, .btn.ghost { background: transparent; color: var(--signal-soft); padding: 9px 10px; }
+    button.ghost:hover, .btn.ghost:hover { background: var(--paper-soft); color: var(--ink); }
+    button[disabled], .btn[disabled] { opacity: .5; cursor: not-allowed; }
+    .btn-sm { padding: 6px 11px; font-size: 12.5px; }
+
+    .flash {
+      background: var(--ok-wash); color: var(--ok); padding: 12px 16px; border-radius: var(--radius);
+      margin-bottom: 18px; font-size: 13.5px; font-weight: 600;
+    }
+    .flash.error { background: var(--danger-wash); color: var(--danger-600); }
+
+    .suggestion { background: var(--amber-wash); border: 1px solid #fde68a; border-radius: var(--radius); padding: 10px 12px; margin-top: 8px; font-size: 13px; }
+    .suggestion form { display: inline; }
+
+    details { margin-bottom: 20px; background: #fff; padding: 14px 16px; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); }
+    details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+    code { background: var(--paper-soft); padding: 2px 6px; border-radius: 5px; overflow-wrap: anywhere; font-size: .92em; }
+    pre code { display: block; padding: 10px 12px; }
+
+    /* status pills */
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 700; white-space: nowrap; line-height: 1.6;
+    }
+    .chip-ok { background: var(--ok-wash); color: var(--ok); }
+    .chip-bad { background: var(--danger-wash); color: var(--danger-600); }
+    .chip-info { background: var(--signal-wash); color: var(--signal-600); }
+    .chip-amber { background: var(--amber-wash); color: var(--amber); }
+    .chip-muted { background: var(--paper-soft); color: var(--ink-600); }
+
+    .nav-badge {
+      display: inline-block; min-width: 17px; padding: 1px 6px; border-radius: 999px; font-size: 10.5px;
+      font-weight: 700; text-align: center; color: #fff; background: var(--danger); font-family: var(--font-mono);
+    }
+
+    /* key:value rows — compact profile-style display */
+    .kv-group { margin-bottom: 18px; }
+    .kv-group:last-child { margin-bottom: 0; }
+    .kv-group h4 {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--clay);
+    }
+    .kv-row { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--paper-soft); font-size: 13.5px; }
+    .kv-row:last-child { border-bottom: 0; }
+    .kv-row dt { color: var(--ink-600); font-weight: 600; }
+    .kv-row dd { margin: 0; color: var(--ink); text-align: right; font-family: var(--font-mono); font-size: 13px; }
+
+    /* pagination */
+    .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 22px; }
+    .pager .page-num { font-size: 12.5px; color: var(--clay); font-family: var(--font-mono); }
+    .pager a.btn.disabled { pointer-events: none; opacity: .35; }
+
+    /* ---------- modals (native <dialog>) ---------- */
+    dialog.modal { border: 0; border-radius: var(--radius-lg); padding: 0; max-width: 560px; width: calc(100% - 40px);
+      box-shadow: var(--shadow-lift); }
+    dialog.modal::backdrop { background: rgba(14,14,13,.62); }
+    dialog.modal[open] { animation: modal-in .16s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+    .modal-box { padding: 24px; position: relative; max-height: 82vh; overflow-y: auto; }
+    .modal-box h3 { margin: 0 0 4px; font-size: 17px; }
+    .modal-close {
+      position: absolute; top: 14px; right: 14px; background: var(--paper-soft); color: var(--ink-600);
+      border: 0; width: 30px; height: 30px; border-radius: 50%; padding: 0; font-size: 16px; line-height: 1;
+    }
+    .modal-close:hover { background: var(--paper-deep); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .modal-avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; margin-bottom: 14px; background: var(--paper-soft); }
+    .reason-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .reason-chip {
+      background: var(--paper-soft); color: var(--ink-700); border: 1px solid var(--paper-deep); border-radius: 999px;
+      padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
+    }
+    .reason-chip:hover { background: var(--paper-deep); }
+    #reason-form textarea { width: 100%; min-height: 90px; resize: vertical; }
+
+    @media (max-width: 860px) {
+      .shell { flex-direction: column; }
+      .nav-toggle { display: inline-flex; }
+      .sidebar {
+        position: fixed; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%); transition: transform .18s ease;
+        box-shadow: var(--shadow-lift);
+      }
+      .sidebar.open { transform: none; }
+      .shell::before {
+        content: ''; position: fixed; inset: 0; background: rgba(14,14,13,.5); z-index: 30;
+        opacity: 0; pointer-events: none; transition: opacity .18s ease;
+      }
+      .shell.nav-open::before { opacity: 1; pointer-events: auto; }
+      main { padding: 20px 16px 40px; }
+      .topbar { display: flex; }
+    }
+    @media (min-width: 861px) {
+      .topbar { display: none; }
+    }
+    .topbar {
+      align-items: center; gap: 10px; padding: 14px 16px; background: var(--ink); color: #fff; position: sticky; top: 0; z-index: 20;
+    }
+    .topbar .logo { font-size: 14px; font-weight: 700; }
+
+    .bare-main { max-width: 420px; margin: 48px auto; padding: 0 16px; }
+
     @media (max-width: 600px) {
-      main { padding: 0 12px 32px; margin: 16px auto; }
-      .card { padding: 14px; }
-      h1 { font-size: 18px; }
-      th, td { padding: 8px; font-size: 13px; }
+      .card { padding: 16px; }
+      h1 { font-size: 19px; }
+      th, td { padding: 9px 10px; font-size: 13px; }
       .field input, .field select, .field textarea { max-width: 100%; }
+      .modal-box { padding: 18px; }
+      .bare-main { margin: 24px auto; }
     }
   </style>
 </head>
 <body>
+{% macro nav_icon(name) %}{% set icons = {
+  'grid': '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+  'calendar': '<rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  'message': '<path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/>',
+  'upload': '<path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  'database': '<ellipse cx="12" cy="5.5" rx="8" ry="2.7"/><path d="M20 5.5v6.2c0 1.5-3.6 2.7-8 2.7s-8-1.2-8-2.7V5.5"/><path d="M4 11.7v6.2c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7v-6.2"/>',
+  'check-circle': '<path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><polyline points="22 4 12 14 9 11"/>',
+  'users': '<path d="M16 20v-1.8a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 18.2V20"/><circle cx="9.3" cy="7.6" r="3.4"/><path d="M21.5 20v-1.8a3.6 3.6 0 0 0-2.7-3.5"/><path d="M15.2 3.3a3.4 3.4 0 0 1 0 6.6"/>',
+  'flag': '<path d="M5 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="5" y1="22" x2="5" y2="15"/>',
+  'image': '<rect x="3" y="3.5" width="18" height="17" rx="2.2"/><circle cx="8.4" cy="9" r="1.6"/><polyline points="21 15.5 15.5 10 5.5 20"/>',
+  'user-check': '<path d="M15.5 20.5v-1.7a3.5 3.5 0 0 0-3.5-3.5H6.5A3.5 3.5 0 0 0 3 18.8v1.7"/><circle cx="8.5" cy="8" r="3.7"/><polyline points="15.5 11.5 17.5 13.5 21.5 9"/>',
+  'unlink': '<path d="M15.5 20.5v-1.7a3.5 3.5 0 0 0-3.5-3.5H6.5A3.5 3.5 0 0 0 3 18.8v1.7"/><circle cx="8.5" cy="8" r="3.7"/><line x1="17" y1="8.5" x2="22" y2="13.5"/><line x1="22" y1="8.5" x2="17" y2="13.5"/>',
+  'clipboard': '<path d="M8.5 5.5h-2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="8.5" y="3" width="7" height="4.4" rx="1.1"/><line x1="8.5" y1="13" x2="15.5" y2="13"/><line x1="8.5" y1="17" x2="13" y2="17"/>',
+  'search': '<circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.2" y2="16.2"/>',
+  'shield': '<path d="M12 21.5S4.5 18 4.5 11.5V5l7.5-2.5L19.5 5v6.5c0 6.5-7.5 10-7.5 10z"/>',
+  'logout': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  'external': '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+} %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ icons.get(name, '')|safe }}</svg>{% endmacro %}
+  <div class="shell{{ ' bare' if no_nav }}" id="shell">
   {% if not no_nav %}
-  <header>
-    <div class="header-bar">
-      <strong>DH Admin Tools</strong>
+    <div class="topbar">
       <button type="button" class="nav-toggle" id="navToggle" aria-label="Меню" aria-expanded="false">☰</button>
+      <span class="logo">DH Admin Tools</span>
     </div>
-    <div class="nav-panel" id="navPanel">
-      <nav>
-        <a href="/admin-tools" class="{{ 'active' if active == 'dashboard' }}">Дашборд</a>
+    <aside class="sidebar" id="navPanel">
+      <div class="sidebar-brand">
+        <span class="mark">DX</span>
+        <span class="label">DH Admin<span>Tools</span></span>
+      </div>
+      <nav class="sidebar-scroll">
+        <div class="nav-section">
+          <a href="/admin-tools" class="nav-link {{ 'active' if active == 'dashboard' }}">{{ nav_icon('grid') }}Дашборд</a>
+        </div>
         {% if tools_user %}
-        {% if 'events' in tools_user.granted_permissions %}
-        <a href="/admin-tools/events" class="{{ 'active' if active == 'events' }}">События</a>
+        {% if 'events' in tools_user.granted_permissions or 'support' in tools_user.granted_permissions %}
+        <div class="nav-section">
+          <div class="nav-section-label">Мои задачи</div>
+          {% if 'events' in tools_user.granted_permissions %}
+          <a href="/admin-tools/events" class="nav-link {{ 'active' if active == 'events' }}">{{ nav_icon('calendar') }}События</a>
+          {% endif %}
+          {% if 'support' in tools_user.granted_permissions %}
+          <a href="/admin-tools/support" class="nav-link {{ 'active' if active == 'support' }}">{{ nav_icon('message') }}Поддержка <span id="badge-tickets" class="nav-badge" style="display:none;" title="Непрочитанные тикеты поддержки"></span></a>
+          {% endif %}
+        </div>
         {% endif %}
-        {% if 'support' in tools_user.granted_permissions %}
-        <a href="/admin-tools/support" class="{{ 'active' if active == 'support' }}">Поддержка <span id="badge-tickets" class="nav-badge nav-badge-red" style="display:none;" title="Непрочитанные тикеты поддержки"></span></a>
-        {% endif %}
-        {% if 'csv_import' in tools_user.granted_permissions %}
-        <a href="/admin-tools/import" class="{{ 'active' if active == 'import' }}">Импорт CSV</a>
-        {% endif %}
-        {% if 'baselines' in tools_user.granted_permissions %}
-        <a href="/admin-tools/import-baselines" class="{{ 'active' if active == 'import-baselines' }}">Стартовые данные</a>
-        {% endif %}
-        {% if 'guest_claims' in tools_user.granted_permissions %}
-        <a href="/admin-tools/claims" class="{{ 'active' if active == 'claims' }}">Заявки <span id="badge-claims" class="nav-badge nav-badge-amber" style="display:none;" title="Заявки на объединение с гостевым профилем"></span></a>
-        <a href="/admin-tools/guests" class="{{ 'active' if active == 'guests' }}">Гости</a>
-        {% endif %}
-        {% if 'results_review' in tools_user.granted_permissions %}
-        <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты <span id="badge-moderation" class="nav-badge nav-badge-purple" style="display:none;" title="Результаты, ожидающие подтверждения"></span></a>
-        {% endif %}
-        {% if 'avatars' in tools_user.granted_permissions %}
-        <a href="/admin-tools/avatars" class="{{ 'active' if active == 'avatars' }}">Аватары <span id="badge-avatars" class="nav-badge nav-badge-amber" style="display:none;" title="Аватары на проверке"></span></a>
-        {% endif %}
-        {% if 'profile_review' in tools_user.granted_permissions %}
-        <a href="/admin-tools/profile-review" class="{{ 'active' if active == 'profile-review' }}">Профили на проверке <span id="badge-profile-review" class="nav-badge nav-badge-amber" style="display:none;" title="Профили, ожидающие подтверждения"></span></a>
-        {% endif %}
-        {% if 'csv_import' in tools_user.granted_permissions %}
-        <a href="/admin-tools/moderation" class="{{ 'active' if active == 'moderation' }}">Без сопоставления</a>
-        {% endif %}
-        {% if 'surveys' in tools_user.granted_permissions %}
-        <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты <span id="badge-surveys" class="nav-badge nav-badge-blue" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
+        {% if 'csv_import' in tools_user.granted_permissions or 'baselines' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions or 'results_review' in tools_user.granted_permissions or 'avatars' in tools_user.granted_permissions or 'profile_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions %}
+        <div class="nav-section">
+          <div class="nav-section-label">Модерация</div>
+          {% if 'csv_import' in tools_user.granted_permissions %}
+          <a href="/admin-tools/import" class="nav-link {{ 'active' if active == 'import' }}">{{ nav_icon('upload') }}Импорт CSV</a>
+          {% endif %}
+          {% if 'baselines' in tools_user.granted_permissions %}
+          <a href="/admin-tools/import-baselines" class="nav-link {{ 'active' if active == 'import-baselines' }}">{{ nav_icon('database') }}Стартовые данные</a>
+          {% endif %}
+          {% if 'guest_claims' in tools_user.granted_permissions %}
+          <a href="/admin-tools/claims" class="nav-link {{ 'active' if active == 'claims' }}">{{ nav_icon('check-circle') }}Заявки <span id="badge-claims" class="nav-badge" style="display:none;" title="Заявки на объединение с гостевым профилем"></span></a>
+          <a href="/admin-tools/guests" class="nav-link {{ 'active' if active == 'guests' }}">{{ nav_icon('users') }}Гости</a>
+          {% endif %}
+          {% if 'results_review' in tools_user.granted_permissions %}
+          <a href="/admin-tools/results" class="nav-link {{ 'active' if active == 'results' }}">{{ nav_icon('flag') }}Результаты <span id="badge-moderation" class="nav-badge" style="display:none;" title="Результаты, ожидающие подтверждения"></span></a>
+          {% endif %}
+          {% if 'avatars' in tools_user.granted_permissions %}
+          <a href="/admin-tools/avatars" class="nav-link {{ 'active' if active == 'avatars' }}">{{ nav_icon('image') }}Аватары <span id="badge-avatars" class="nav-badge" style="display:none;" title="Аватары на проверке"></span></a>
+          {% endif %}
+          {% if 'profile_review' in tools_user.granted_permissions %}
+          <a href="/admin-tools/profile-review" class="nav-link {{ 'active' if active == 'profile-review' }}">{{ nav_icon('user-check') }}Профили на проверке <span id="badge-profile-review" class="nav-badge" style="display:none;" title="Профили, ожидающие подтверждения"></span></a>
+          {% endif %}
+          {% if 'csv_import' in tools_user.granted_permissions %}
+          <a href="/admin-tools/moderation" class="nav-link {{ 'active' if active == 'moderation' }}">{{ nav_icon('unlink') }}Без сопоставления</a>
+          {% endif %}
+          {% if 'surveys' in tools_user.granted_permissions %}
+          <a href="/admin-tools/surveys" class="nav-link {{ 'active' if active == 'surveys' }}">{{ nav_icon('clipboard') }}Анкеты <span id="badge-surveys" class="nav-badge" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
+          {% endif %}
+        </div>
         {% endif %}
         {% if tools_user.role.value == 'admin' %}
-        <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
-        <a href="/admin-tools/permissions" class="{{ 'active' if active == 'permissions' }}">Права организаторов</a>
+        <div class="nav-section">
+          <div class="nav-section-label">Администрирование</div>
+          <a href="/admin-tools/runners" class="nav-link {{ 'active' if active == 'runners' }}">{{ nav_icon('search') }}Поиск бегунов</a>
+          <a href="/admin-tools/permissions" class="nav-link {{ 'active' if active == 'permissions' }}">{{ nav_icon('shield') }}Права организаторов</a>
+        </div>
         {% endif %}
         {% endif %}
       </nav>
-      <div class="right">
-        {% if tools_user %}
-        <span class="whoami">{{ tools_user.first_name }} · {{ tools_user.role.value }}</span>
-        {% endif %}
-        {% if tools_user and tools_user.role.value == 'admin' %}
-        <a href="/admin" class="sqladmin-link">SQLAdmin →</a>
-        {% endif %}
-        <form class="logout" method="post" action="/admin-tools/logout">
-          <button type="submit">Выйти</button>
-        </form>
+      {% if tools_user %}
+      <div class="sidebar-foot">
+        <div class="whoami">
+          <span class="avatar-dot">{{ tools_user.first_name[0] }}</span>
+          <span>
+            <span class="who-name">{{ tools_user.first_name }}</span><br>
+            <span class="who-role">{{ {'admin': 'Админ', 'organizer': 'Организатор'}.get(tools_user.role.value, tools_user.role.value) }}</span>
+          </span>
+        </div>
+        <div class="sidebar-foot-links">
+          {% if tools_user.role.value == 'admin' %}
+          <a href="/admin">{{ nav_icon('external') }}SQLAdmin</a>
+          {% endif %}
+          <form method="post" action="/admin-tools/logout">
+            <button type="submit">{{ nav_icon('logout') }}Выйти</button>
+          </form>
+        </div>
       </div>
-    </div>
-  </header>
+      {% endif %}
+    </aside>
   {% endif %}
-  <main>
-    {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
-    {% if flash_error %}<div class="flash error">{{ flash_error }}</div>{% endif %}
-    {% block content %}{% endblock %}
-  </main>
+    <main class="{{ 'bare-main' if no_nav }}">
+      {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+      {% if flash_error %}<div class="flash error">{{ flash_error }}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% if not no_nav %}
+
+  <dialog class="modal" id="reason-modal">
+    <form method="post" id="reason-form">
+      <div class="modal-box">
+        <button type="button" class="modal-close" data-modal-close aria-label="Закрыть">×</button>
+        <h3 id="reason-title">Причина</h3>
+        <p class="hint" id="reason-hint"></p>
+        <div class="reason-presets" id="reason-presets"></div>
+        <textarea name="reason" id="reason-text" required placeholder="Причина — выберите шаблон выше или напишите свой текст…"></textarea>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" data-modal-close>Отмена</button>
+          <button type="submit" class="btn danger" id="reason-submit">Подтвердить</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="detail-modal">
+    <div class="modal-box">
+      <button type="button" class="modal-close" data-modal-close aria-label="Закрыть">×</button>
+      <div id="detail-modal-body"></div>
+    </div>
+  </dialog>
+
   <script>
     (function () {
+      var shell = document.getElementById('shell');
       var toggle = document.getElementById('navToggle');
       var panel = document.getElementById('navPanel');
       if (toggle && panel) {
         toggle.addEventListener('click', function () {
           var open = panel.classList.toggle('open');
+          if (shell) shell.classList.toggle('nav-open', open);
           toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
       }
+      if (shell) {
+        shell.addEventListener('click', function (e) {
+          if (e.target === shell && shell.classList.contains('nav-open')) {
+            panel.classList.remove('open');
+            shell.classList.remove('nav-open');
+          }
+        });
+      }
+
       // Every <table> gets wrapped in a horizontally-scrollable container —
       // done once here rather than per-template so tables never fight their
       // card for width on narrow screens, no matter which page adds one.
@@ -196,7 +464,74 @@
           })
           .catch(function () {});
       }
+
+      // ---- shared dialog close (× / cancel buttons, backdrop light-dismiss) ----
+      document.querySelectorAll('[data-modal-close]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var dlg = btn.closest('dialog');
+          if (dlg) dlg.close();
+        });
+      });
+      document.querySelectorAll('dialog.modal').forEach(function (dlg) {
+        dlg.addEventListener('click', function (e) {
+          if (e.target === dlg) dlg.close();
+        });
+      });
+
+      // ---- generic "reason" modal: preset chips + textarea, posts to whatever
+      // action the trigger button names — replaces the near-identical dialogs
+      // that used to be copy-pasted per page (avatars/results/profile-review). ----
+      var reasonDialog = document.getElementById('reason-modal');
+      var reasonForm = document.getElementById('reason-form');
+      var reasonTitle = document.getElementById('reason-title');
+      var reasonHint = document.getElementById('reason-hint');
+      var reasonText = document.getElementById('reason-text');
+      var reasonPresets = document.getElementById('reason-presets');
+      var reasonSubmit = document.getElementById('reason-submit');
+      document.querySelectorAll('[data-reason-modal]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          reasonForm.action = btn.dataset.action;
+          reasonTitle.textContent = btn.dataset.title || 'Причина';
+          reasonHint.textContent = btn.dataset.hint || '';
+          reasonHint.style.display = btn.dataset.hint ? '' : 'none';
+          reasonSubmit.textContent = btn.dataset.submitLabel || 'Подтвердить';
+          reasonText.value = '';
+          reasonPresets.innerHTML = '';
+          var presets = [];
+          try { presets = JSON.parse(btn.dataset.presets || '[]'); } catch (e) { presets = []; }
+          presets.forEach(function (text) {
+            var chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'reason-chip';
+            chip.textContent = text;
+            chip.addEventListener('click', function () { reasonText.value = text; reasonText.focus(); });
+            reasonPresets.appendChild(chip);
+          });
+          reasonDialog.showModal();
+        });
+      });
+
+      // ---- generic "detail" modal: fetches a URL fragment and shows it in a
+      // dialog, falling back to a normal navigation if JS/fetch fails — the
+      // trigger's own href always still points at the real full page. ----
+      var detailDialog = document.getElementById('detail-modal');
+      var detailBody = document.getElementById('detail-modal-body');
+      document.querySelectorAll('[data-modal-url]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+          var url = link.dataset.modalUrl;
+          if (!url) return;
+          e.preventDefault();
+          fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error('bad status'); return r.text(); })
+            .then(function (html) {
+              detailBody.innerHTML = html;
+              detailDialog.showModal();
+            })
+            .catch(function () { window.location = link.href; });
+        });
+      });
     })();
   </script>
+  {% endif %}
 </body>
 </html>

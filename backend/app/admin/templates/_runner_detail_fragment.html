@@ -1,0 +1,41 @@
+{% if u.avatar %}
+<img src="{{ u.avatar }}" alt="Аватар" class="modal-avatar">
+{% else %}
+<span class="modal-avatar" style="display:grid; place-items:center; background:var(--signal-wash); color:var(--signal-soft); font-weight:700; font-size:22px; font-family:var(--font-display);">{{ u.first_name[0] }}{{ u.last_name[0] if u.last_name else '' }}</span>
+{% endif %}
+<h3>{{ u.first_name }} {{ u.last_name }}</h3>
+<p class="hint" style="margin-top:0;">ID {{ u.id }} · {{ {'runner': 'Бегун', 'organizer': 'Организатор', 'admin': 'Админ'}[u.role.value] }}</p>
+
+<div class="kv-group">
+  <h4>Основное</h4>
+  <dl style="margin:0;">
+    <div class="kv-row"><dt>Фамилия</dt><dd>{{ u.last_name }}</dd></div>
+    <div class="kv-row"><dt>Имя</dt><dd>{{ u.first_name }}</dd></div>
+    <div class="kv-row"><dt>Email</dt><dd>{{ u.email }}</dd></div>
+    <div class="kv-row"><dt>Email подтверждён</dt><dd>{{ 'Да' if u.email_verified else 'Нет' }}</dd></div>
+    <div class="kv-row"><dt>Город</dt><dd>{{ u.city or "—" }}</dd></div>
+  </dl>
+</div>
+
+<div class="kv-group">
+  <h4>Анкета</h4>
+  <dl style="margin:0;">
+    <div class="kv-row"><dt>Пол</dt><dd>{{ {'male': 'Мужской', 'female': 'Женский'}.get(u.gender.value if u.gender else None, "—") }}</dd></div>
+    <div class="kv-row"><dt>Дата рождения</dt><dd>{{ u.birthday.strftime('%d.%m.%Y') if u.birthday else "—" }}</dd></div>
+    <div class="kv-row"><dt>Телефон</dt><dd>{{ u.phone or "—" }}</dd></div>
+    <div class="kv-row"><dt>Беговой клуб</dt><dd>{% if u.running_club is none %}—{% elif u.running_club == '' %}не состоит{% else %}{{ u.running_club }}{% endif %}</dd></div>
+    <div class="kv-row"><dt>Бегал раньше</dt><dd>{{ {'never': 'Нет, ни разу', 'once': 'Один раз', 'multiple': 'Несколько раз'}.get(u.prior_experience.value if u.prior_experience else None, "—") }}</dd></div>
+    {% if u.parent_first_name or u.parent_last_name or u.parent_phone %}
+    <div class="kv-row"><dt>Опекун</dt><dd>{{ u.parent_first_name or '' }} {{ u.parent_last_name or '' }}{% if u.parent_phone %}, {{ u.parent_phone }}{% endif %}</dd></div>
+    {% endif %}
+  </dl>
+</div>
+
+<div class="kv-group">
+  <h4>Служебное</h4>
+  <dl style="margin:0;">
+    <div class="kv-row"><dt>Статус аватара</dt><dd>{{ 'На проверке' if u.avatar_review.value == 'pending' else 'Подтверждён' }}</dd></div>
+    <div class="kv-row"><dt>Согласие на ПД</dt><dd>{{ u.privacy_accepted_at | local_dt if u.privacy_accepted_at else "—" }}</dd></div>
+    <div class="kv-row"><dt>Регистрация</dt><dd>{{ u.created_at | local_dt }}</dd></div>
+  </dl>
+</div>

@@ -30,7 +30,7 @@
             <form method="post" action="/admin-tools/moderation/match">
               <input type="hidden" name="attendance_id" value="{{ r.id }}" />
               <input type="hidden" name="runner_id" value="{{ suggestion.id }}" />
-              <button type="submit">Привязать</button>
+              <button type="submit" class="btn-sm">Привязать</button>
             </form>
           </div>
           {% endif %}
@@ -43,7 +43,7 @@
 
           {% if search_for == r.id %}
             {% if search_results %}
-            <table style="margin-top: 6px;">
+            <table style="margin-top: 6px; box-shadow:none; border:1px solid var(--paper-soft);">
               {% for u in search_results %}
               <tr>
                 <td>{{ u.first_name }} {{ u.last_name }} &lt;{{ u.email }}&gt;</td>
@@ -51,7 +51,7 @@
                   <form method="post" action="/admin-tools/moderation/match">
                     <input type="hidden" name="attendance_id" value="{{ r.id }}" />
                     <input type="hidden" name="runner_id" value="{{ u.id }}" />
-                    <button type="submit">Привязать</button>
+                    <button type="submit" class="btn-sm">Привязать</button>
                   </form>
                 </td>
               </tr>

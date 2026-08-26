@@ -91,9 +91,11 @@ async def test_runners_pagination_shows_25_per_page(
 
     page1 = await client.get("/admin-tools/runners")
     assert page1.status_code == 200
-    # Only per-row detail links use a trailing "/{id}" — the nav link and
-    # search form both point at the bare "/admin-tools/runners".
-    assert page1.text.count("/admin-tools/runners/") == 25
+    # One per-row detail link per data row — unambiguous count (the shared
+    # `[data-modal-url]` JS selector in _base.html would also match a bare
+    # substring count of "data-modal-url" itself, since that string appears
+    # literally inside the <script> block too).
+    assert page1.text.count('<a href="/admin-tools/runners/') == 25
     assert "Страница 1 из 2" in page1.text
 
     page2 = await client.get("/admin-tools/runners", params={"page": 2})
