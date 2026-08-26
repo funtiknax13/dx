@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}DH Admin Tools{% endblock %}</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230E0E0D'/><text x='16' y='23' font-family='ui-monospace,monospace' font-size='17' font-weight='700' fill='%23ffffff' text-anchor='middle'>DX</text></svg>">
+  <title>{% block title %}DX Tools{% endblock %}</title>
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAHy0lEQVR42u2bX0xUVx7Hv+f+mQGGGZl/MkkRTJgoE4RiRFCJhNXug7WNPpiYLOmuffPBRzUxTVbKdmtbpZFk+7bUl222L/qwJUYf7E61kRiiAe2WHYUwuA2D8md0/t2Ze+ecuw/TOx0Q5j9Ch56EEP7cm/l+zvmd8/tzfgQ5DJPJqOJXMAKBIMn2f0mpiM4XBlfK4rPRQEpVeLargdso4lfSxm0U8Stp5LDBB7eRZn85rdxGE78UwoY3ASGfh5xOJy5evASHw4FYLAaOy41jPB6H3+/H/Pw8pqa8GBv7L3744RHGx8fBGEsszZ/fqf28WoPkuvwJIVBVFS6XC319n6OmpgbhcBiCIEBV1azfwfN88osxhmAwAK93Ct9958aNGzfw9OlTAADP86CUrh8A2uwwxtDc/Cb6+vpgtVoRjUbB83zW71BVdREwnudRVlYGURTh9/tx69YtfPnlACYnJ0EIST5T7MHr9fqeXB9SVRU8z2NmxofR0VF0dnbCZDJBluWszYEQsugLAGRZhiRJEAQBO3e24NChQ6CUYmRkJAm+2BDyArAchP37O2E0GqEoSs57QioUTaQkRSCKOhw8eABNTc0YHh5GKBQCz/NFhZA3gFQIPp8PDx8+RFfX72A0GnNaCdmA2L59Ow4cOIj79+/j+fPnRYVQEIClEB48eIA9e/bAYrEUDCEVhCRFYLFY8dZbv8fw8DCePXtWNAikWE6Qtls3NTWjr68PNpsN0agEQrhlhaV+z2ZQSlFRUQG/34/33z8Br9eb3IzXBYBUCDt2NKG/vx8OhwOyLL8ilDEGSini8ThUVQXHcVnBoJTCaDTC4/HgxIk/IRKJvHKavHYTWGoOgiBgZmYGP/74H2zduhXBYBDz8/NYWFjAwsIC/H4/olEJoijCaDTBYKgAYwyKoiw6EVY6fqNRCXV1W2E0GuF2uws2BbIacYDmLKV6dBogQgj0ej3MZjPq653o6OhAV1cX6upqEQ5HsjpFKKUwmUw4efIkvv/+TkHOElmtQEjbxbOZnaqqKhw5cgTvvfdHVFdXIxQKpYXAGENFRQU8Hg+6u/+AeDyet6NUVBNYag6ZnCCe53/e5SWMjo7i9u3baGjYjtraumX3jtTnY7EYamu3YGJiAk+ePMnbFNYkGtRWBqUUlFIQQiAIArxeL06dOoV79+7BYDCk3eEJIaCU4dixYwUFTesiHFZVFfF4HDzPIxgM4vz5P2NiYgJlZWUrzirHcYhEImhs3AGn05n3Rriu8gGUUvA8j+npaQwM/B2xWCztqUApRVVVFfbv7yw8JbaeIBBCcP36dYyMjKC8vDzt8qY0DpfLVToAUnd6r9ebBLKSGciyAqfTifLy8tIBoAl2u/+NUCi4YhhMCIGiKKiu3ozNmzeXDgBN7Pj4OEKhcNpEC2MMOp0eVqu1tEzglxmWM8LS3OqSAyDLMl68eJERACEEoiiU5grINqdQEn7A0iGKIkwmU0ZIlFJEo9HSA5Cwb13GoCsbU3mtADLF9dkeg/X19WkdIS0dF4lEMDs7uz4AaLmAQpIU2rNvv30YmzZtWtEZ0k6An376H+bm5tYegOawtLa2oru7O+e831L7dzgcacNcDYDH41n7aFBLUNrtdvT2/gXt7e15AdAEv/POu2hpaYEkSRlPAq1wsmYANPFmsxnnz/dg27ZtCAZDeSdV33ijBsePH4dOp0s7+zqdDj6fD3fv3l07AJp4h8OBTz/9DPv27YMkSRk9uKXv0MTb7Xb09PTA5XIhGo2uuIIYYzAYKnDnzh34/f6c6pIotDy+3Mx/9NFf0d7ejkDgJcrKzOC4ROV3OQGpv6OUJu139+7dOH36DBoaGhCJRNIu/URCRMLXX/+zIEdIKFS8zWbDhQufoK2tDcFgMFkIEUUx60xtY2Mjjh49isOHD8NgqMwontI4zGYzrl69hrGxsYIKJEIh4mtqatDb24vW1t0Ih8PJWr8sK9iyZQs6OjowNzcHxhgEQUj6B2azBVarFfX19WhpeRMNDS4YDAaEw+GM4hO2r8fs7By++OJvBfkbeaXFNfFWqxX9/f1oadmJQCCwyAa1DYrnecRiMTDGkuaQCFzEZPCiKHFIkgRKaVYVIkopzGYzzpw5jcHBwYLLY0I+mRq73Y6PP76ApqbmV8RrNi7L8qKyl/YhVVVN/i014MlmE6M0DqvVhoGBAQwODhbl9kjOAKqrq/Hhh73Yu3fvsuIzucP5usnxuAKbzY5vvvkXLl26WJTCaF4A2trasGvXruRlhdcRECU224T4c+fOJVdPMcrjOfsBFosFilJ47R85pMnNZjOuXLmCs2fPQlEUFPO+kJC7tyYsW/NfjdR4VdUm+P1+fPDBBVy7djVpPsW8IpMzAKOxsugfQosetfDWZDKBMYabN2/i8uXLmJqayqnYuuoroBgfRMvlaXVBvV4PURQRCoXgdrvx1Vf/wNDQ0KrfFRTy2QMqKysLu5SQchIoioKXL1/i0aOHGBoagtvtxuPHjxeF16t5UVIIBII5OUM+3zS+/fZW3kcQYwyxWCKFNTPjw+SkFxMT45ienl7kbGm5PqxyBwkBNuZtcQ3Abw0TufbZlVoDFZdPs2EpdY/9ZgL5tpyWSu8gV0jfbSk0TpJSb53NNKlcsbqwf63N02Sjt8//H6ReFEp8T62fAAAAAElFTkSuQmCC">
   <meta name="theme-color" content="#0E0E0D">
   <meta name="robots" content="noindex">
 
@@ -61,12 +61,8 @@
       display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto;
     }
     .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px 14px; }
-    .sidebar-brand .mark {
-      width: 34px; height: 34px; border-radius: 9px; background: var(--paper); color: var(--ink);
-      display: grid; place-items: center; font-family: var(--font-mono); font-weight: 700; font-size: 15px; flex: 0 0 auto;
-    }
-    .sidebar-brand .label { font-size: 14px; font-weight: 700; line-height: 1.2; }
-    .sidebar-brand .label span { display: block; font-size: 11px; font-weight: 500; color: var(--clay); }
+    .sidebar-brand .mark { width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto; display: block; }
+    .sidebar-brand .label { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
     .nav-toggle {
       display: none; background: transparent; border: 1px solid rgba(255,255,255,.25); color: #fff;
       font-size: 16px; line-height: 1; padding: 7px 11px; border-radius: 8px; cursor: pointer;
@@ -289,12 +285,12 @@
   {% if not no_nav %}
     <div class="topbar">
       <button type="button" class="nav-toggle" id="navToggle" aria-label="Меню" aria-expanded="false">☰</button>
-      <span class="logo">DH Admin Tools</span>
+      <span class="logo">DX Tools</span>
     </div>
     <aside class="sidebar" id="navPanel">
       <div class="sidebar-brand">
-        <span class="mark">DX</span>
-        <span class="label">DH Admin<span>Tools</span></span>
+        <img class="mark" src="data:image/png;base64,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" alt="DX">
+        <span class="label">DX Tools</span>
       </div>
       <nav class="sidebar-scroll">
         <div class="nav-section">
@@ -303,7 +299,6 @@
         {% if tools_user %}
         {% if 'events' in tools_user.granted_permissions or 'support' in tools_user.granted_permissions %}
         <div class="nav-section">
-          <div class="nav-section-label">Мои задачи</div>
           {% if 'events' in tools_user.granted_permissions %}
           <a href="/admin-tools/events" class="nav-link {{ 'active' if active == 'events' }}">{{ nav_icon('calendar') }}События</a>
           {% endif %}
@@ -314,9 +309,8 @@
         {% endif %}
         {% if 'csv_import' in tools_user.granted_permissions or 'baselines' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions or 'results_review' in tools_user.granted_permissions or 'avatars' in tools_user.granted_permissions or 'profile_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions %}
         <div class="nav-section">
-          <div class="nav-section-label">Модерация</div>
           {% if 'csv_import' in tools_user.granted_permissions %}
-          <a href="/admin-tools/import" class="nav-link {{ 'active' if active == 'import' }}">{{ nav_icon('upload') }}Импорт CSV</a>
+          <a href="/admin-tools/import" class="nav-link {{ 'active' if active == 'import' }}">{{ nav_icon('upload') }}Загрузка протоколов</a>
           {% endif %}
           {% if 'baselines' in tools_user.granted_permissions %}
           <a href="/admin-tools/import-baselines" class="nav-link {{ 'active' if active == 'import-baselines' }}">{{ nav_icon('database') }}Стартовые данные</a>
@@ -344,7 +338,6 @@
         {% endif %}
         {% if tools_user.role.value == 'admin' %}
         <div class="nav-section">
-          <div class="nav-section-label">Администрирование</div>
           <a href="/admin-tools/runners" class="nav-link {{ 'active' if active == 'runners' }}">{{ nav_icon('search') }}Поиск бегунов</a>
           <a href="/admin-tools/permissions" class="nav-link {{ 'active' if active == 'permissions' }}">{{ nav_icon('shield') }}Права организаторов</a>
         </div>

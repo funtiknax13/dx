@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -143,13 +143,22 @@ async def unread_ticket_count_for_user(session: AsyncSession, user: User) -> int
 
 
 async def unread_ticket_count_for_staff(session: AsyncSession) -> int:
-    """How many tickets have an unread message from the reporter's side —
-    the red admin-tools nav badge. Shared across all staff (team inbox)."""
+    """How many open tickets are awaiting a staff reply — last word in the
+    thread is the reporter's, regardless of whether staff has already
+    *viewed* it. The red admin-tools nav badge. Shared across all staff
+    (team inbox). Deliberately not `read_at`-based: opening the ticket
+    detail page marks messages read, which would zero this out on a mere
+    view instead of an actual reply."""
+    last_message_id = (
+        select(func.max(SupportMessage.id))
+        .where(SupportMessage.ticket_id == SupportTicket.id)
+        .correlate(SupportTicket)
+        .scalar_subquery()
+    )
     result = await session.scalars(
         select(SupportTicket.id)
-        .join(SupportMessage, SupportMessage.ticket_id == SupportTicket.id)
-        .where(SupportMessage.is_staff.is_(False), SupportMessage.read_at.is_(None))
-        .distinct()
+        .join(SupportMessage, SupportMessage.id == last_message_id)
+        .where(SupportTicket.status == TicketStatus.open, SupportMessage.is_staff.is_(False))
     )
     return len(list(result))
 

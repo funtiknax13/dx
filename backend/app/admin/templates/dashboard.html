@@ -1,5 +1,5 @@
 {% extends "_base.html" %}
-{% block title %}Дашборд — DH Admin Tools{% endblock %}
+{% block title %}Дашборд — DX Tools{% endblock %}
 {% block content %}
   <h1>Привет, {{ tools_user.first_name }}!</h1>
   <p class="hint">
@@ -39,7 +39,7 @@
     {% endif %}
     {% if 'csv_import' in tools_user.granted_permissions %}
     <div class="card">
-      <h2>Импорт CSV</h2>
+      <h2>Загрузка протоколов</h2>
       <p class="hint">
         Загрузить список пробежавших для группы. Email из файла сразу сопоставляется
         с зарегистрированным аккаунтом; если совпадения нет — создаётся гостевой

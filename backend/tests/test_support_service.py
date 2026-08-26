@@ -109,12 +109,16 @@ async def test_unread_counts_for_staff_and_user(session: AsyncSession) -> None:
     assert await unread_ticket_count_for_staff(session) == 1
     assert await unread_ticket_count_for_user(session, runner) == 0
 
+    # Merely viewing the ticket (which marks the reporter's message read)
+    # must NOT clear the badge — nobody has replied yet, it's still
+    # awaiting a staff reply.
     await mark_read_by_staff(session, ticket)
     await session.commit()
-    assert await unread_ticket_count_for_staff(session) == 0
+    assert await unread_ticket_count_for_staff(session) == 1
 
     await add_message(session, ticket, sender=admin, is_staff=True, body="Reply")
     await session.commit()
+    assert await unread_ticket_count_for_staff(session) == 0
     assert await unread_ticket_count_for_user(session, runner) == 1
     assert await has_unread_for_user(session, ticket.id) is True
 

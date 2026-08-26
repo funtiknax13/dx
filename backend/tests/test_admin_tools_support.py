@@ -135,7 +135,7 @@ async def test_status_toggle_flips_open_and_closed(
 
 
 @pytest.mark.asyncio
-async def test_opening_ticket_detail_marks_reporter_messages_read(
+async def test_opening_ticket_detail_does_not_clear_awaiting_reply_badge(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     admin = await make_user(session, "admin-support5@example.com", UserRole.admin)
@@ -151,8 +151,20 @@ async def test_opening_ticket_detail_marks_reporter_messages_read(
     detail = await client.get(f"/admin-tools/support/{ticket.id}")
     assert detail.status_code == 200
 
+    # Merely viewing the ticket must not clear the badge — nobody has
+    # replied yet, it's still awaiting a staff reply.
     after = await client.get("/admin-tools/badge-counts")
-    assert after.json()["tickets"] == 0
+    assert after.json()["tickets"] == 1
+
+    reply = await client.post(
+        f"/admin-tools/support/{ticket.id}/reply",
+        data={"body": "Answer"},
+        follow_redirects=False,
+    )
+    assert reply.status_code == 303
+
+    after_reply = await client.get("/admin-tools/badge-counts")
+    assert after_reply.json()["tickets"] == 0
 
 
 @pytest.mark.asyncio
