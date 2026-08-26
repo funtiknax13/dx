@@ -8,11 +8,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.admin.tools_common import (
     can_manage_event,
     combine_event_date_and_time,
-    get_tools_user,
     login_redirect,
+    require_permission,
     templates,
 )
 from app.core.db import SessionLocal
+from app.models.enums import StaffPermission
 from app.models.event import Event
 from app.models.group import Group
 from app.services.gpx_service import TrackParseError, parse_gpx
@@ -83,7 +84,7 @@ def _parse_pace_segments(raw: str) -> list[dict[str, Any]] | None:
 
 
 def _next_group_name(name: str) -> str:
-    """"X-33 группа #1" -> "X-33 группа #2"; falls back to a "(копия)" suffix
+    """ "X-33 группа #1" -> "X-33 группа #2"; falls back to a "(копия)" suffix
     for names that don't end in a #N group number."""
     m = _TRAILING_GROUP_NUMBER.match(name)
     if m:
@@ -91,11 +92,9 @@ def _next_group_name(name: str) -> str:
     return f"{name} (копия)"
 
 
-@router.get(
-    "/events/{event_id}/groups/new", response_class=HTMLResponse, response_model=None
-)
+@router.get("/events/{event_id}/groups/new", response_class=HTMLResponse, response_model=None)
 async def group_new_form(request: Request, event_id: int) -> HTMLResponse | RedirectResponse:
-    user = await get_tools_user(request)
+    user = await require_permission(request, StaffPermission.events)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -123,7 +122,7 @@ async def group_new_submit(
     start_lng: str = Form(""),
     counts_toward_rating: bool = Form(False),
 ) -> RedirectResponse:
-    user = await get_tools_user(request)
+    user = await require_permission(request, StaffPermission.events)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -150,7 +149,7 @@ async def group_new_submit(
 
 @router.get("/groups/{group_id}/edit", response_class=HTMLResponse, response_model=None)
 async def group_edit_form(request: Request, group_id: int) -> HTMLResponse | RedirectResponse:
-    user = await get_tools_user(request)
+    user = await require_permission(request, StaffPermission.events)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -188,7 +187,7 @@ async def group_edit_submit(
     start_lng: str = Form(""),
     counts_toward_rating: bool = Form(False),
 ) -> RedirectResponse:
-    user = await get_tools_user(request)
+    user = await require_permission(request, StaffPermission.events)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -218,7 +217,7 @@ async def group_edit_submit(
 
 @router.post("/groups/{group_id}/duplicate", response_model=None)
 async def group_duplicate(request: Request, group_id: int) -> RedirectResponse:
-    user = await get_tools_user(request)
+    user = await require_permission(request, StaffPermission.events)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -252,7 +251,7 @@ async def group_duplicate(request: Request, group_id: int) -> RedirectResponse:
 
 @router.post("/groups/{group_id}/gpx", response_model=None)
 async def group_gpx_upload(request: Request, group_id: int, file: UploadFile) -> RedirectResponse:
-    user = await get_tools_user(request)
+    user = await require_permission(request, StaffPermission.events)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:

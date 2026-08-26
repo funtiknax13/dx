@@ -3,8 +3,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.enums import TicketStatus, UserRole
+from app.models.enums import StaffPermission, TicketStatus, UserRole
 from app.models.support import SupportMessage, SupportTicket
+from app.services.permissions_service import set_permissions
 from app.services.support_service import create_ticket
 from tests.factories import make_user
 
@@ -23,21 +24,38 @@ async def test_support_list_redirects_to_login_when_anonymous(client: AsyncClien
 
 
 @pytest.mark.asyncio
-async def test_support_list_visible_to_organizer_not_just_admin(
+async def test_support_list_visible_to_organizer_with_support_granted(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    """Explicit product requirement: tickets are "видно и админам и
-    организаторам" — unlike surveys/CSV-import, which stay admin-only."""
+    """Tickets are delegable like everything else now (StaffPermission
+    .support) rather than an unconditional organizer baseline — every
+    *existing* organizer got backfilled with it in the introducing
+    migration, so in practice this is the common case, but a freshly
+    promoted organizer starts without it (see the zero-grant test below)."""
+    admin = await make_user(session, "admin-support6@example.com", UserRole.admin)
     org = await make_user(session, "org-support1@example.com", UserRole.organizer)
     runner = await make_user(session, "runner-adminsupport1@example.com")
     await session.commit()
     await create_ticket(session, user=runner, body="Need help")
+    await set_permissions(session, org, {StaffPermission.support}, granted_by=admin)
     await session.commit()
     await _login(client, org.id)
 
     resp = await client.get("/admin-tools/support")
     assert resp.status_code == 200
     assert "Need help" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_support_list_forbidden_for_organizer_without_the_grant(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-support7@example.com", UserRole.organizer)
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.get("/admin-tools/support", follow_redirects=False)
+    assert resp.status_code == 302
 
 
 @pytest.mark.asyncio

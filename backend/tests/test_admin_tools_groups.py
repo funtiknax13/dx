@@ -8,10 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.enums import UserRole
 from app.models.group import Group
 from app.services.media_service import media_path_to_fs
-from tests.factories import make_event_group, make_user
+from tests.factories import make_event_group, make_organizer
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -38,7 +37,7 @@ async def test_new_group_start_time_takes_date_from_event(
     """The group form only collects time-of-day — the date always comes from
     the parent event, never from the submitted value. The time is entered as
     Cheboksary local time and stored as the equivalent UTC instant."""
-    org = await make_user(session, "org-groups@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-groups@example.com")
     event, _existing_group = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -82,7 +81,7 @@ async def test_editing_event_date_moves_group_start_times_along(
     """Changing the event's date must carry every group's Cheboksary-local
     time-of-day to the new date instead of leaving start_time pointing at
     the old date (or drifting by the UTC offset)."""
-    org = await make_user(session, "org-groups2@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-groups2@example.com")
     event, group = await make_event_group(session, org)
     assert group.start_time == datetime(2026, 5, 1, 8, 0, tzinfo=UTC)
     await session.commit()
@@ -109,7 +108,7 @@ async def test_editing_event_date_moves_group_start_times_along(
 async def test_duplicate_group_copies_fields_and_increments_trailing_number(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-dup@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-dup@example.com")
     event, _ = await make_event_group(session, org)
     original = Group(
         event_id=event.id,
@@ -126,9 +125,7 @@ async def test_duplicate_group_copies_fields_and_increments_trailing_number(
     await session.refresh(original)
     await _login(client, org.id)
 
-    resp = await client.post(
-        f"/admin-tools/groups/{original.id}/duplicate", follow_redirects=False
-    )
+    resp = await client.post(f"/admin-tools/groups/{original.id}/duplicate", follow_redirects=False)
     assert resp.status_code == 303, resp.text
     new_id = int(resp.headers["location"].split("/groups/")[1].split("/edit")[0])
     assert new_id != original.id
@@ -148,15 +145,13 @@ async def test_duplicate_group_copies_fields_and_increments_trailing_number(
 async def test_duplicate_group_without_trailing_number_gets_copy_suffix(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-dup2@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-dup2@example.com")
     event, group = await make_event_group(session, org)
     assert group.name == "X-10"
     await session.commit()
     await _login(client, org.id)
 
-    resp = await client.post(
-        f"/admin-tools/groups/{group.id}/duplicate", follow_redirects=False
-    )
+    resp = await client.post(f"/admin-tools/groups/{group.id}/duplicate", follow_redirects=False)
     assert resp.status_code == 303, resp.text
     new_id = int(resp.headers["location"].split("/groups/")[1].split("/edit")[0])
 
@@ -174,7 +169,7 @@ async def test_reuploading_gpx_does_not_break_a_duplicated_groups_route(
     original must not delete that shared file out from under the
     duplicate — reported as "path shown in the form but doesn't open,
     as if it isn't there"."""
-    org = await make_user(session, "org-gpx@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-gpx@example.com")
     event, original = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -220,7 +215,7 @@ async def test_reuploading_gpx_deletes_the_old_file_when_not_shared(
 ) -> None:
     """The unshared case must still clean up — this isn't a license to leak
     every replaced route file onto disk forever."""
-    org = await make_user(session, "org-gpx2@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-gpx2@example.com")
     event, group = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -250,7 +245,7 @@ async def test_reuploading_gpx_deletes_the_old_file_when_not_shared(
 async def test_new_group_defaults_to_counting_toward_rating_when_checkbox_checked(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-rating-on@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-rating-on@example.com")
     event, _ = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -280,7 +275,7 @@ async def test_new_group_unchecked_box_excludes_it_from_rating(
 ) -> None:
     """An unchecked HTML checkbox is simply absent from the submitted form —
     the field must still resolve to False, not error or default to True."""
-    org = await make_user(session, "org-rating-off@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-rating-off@example.com")
     event, _ = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -311,7 +306,7 @@ async def test_new_group_saves_pace_segments_and_exposes_them(
 ) -> None:
     """The structured pace plan is parsed from the hidden JSON field, blank rows
     dropped, and surfaced on the group API for the frontend to render."""
-    org = await make_user(session, "org-pace@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-pace@example.com")
     event, _ = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -355,7 +350,7 @@ async def test_editing_group_migrates_legacy_range_to_segments(
 ) -> None:
     """Saving the segment-based form clears the legacy flat range so it can't
     linger and override the plan."""
-    org = await make_user(session, "org-pace2@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-pace2@example.com")
     event, group = await make_event_group(session, org)
     group.pace_min = "5:40"
     group.pace_max = "5:30"
@@ -388,7 +383,7 @@ async def test_editing_group_migrates_legacy_range_to_segments(
 async def test_editing_group_can_toggle_counts_toward_rating(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-rating-toggle@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-rating-toggle@example.com")
     event, group = await make_event_group(session, org)
     assert group.counts_toward_rating is True
     await session.commit()
@@ -414,7 +409,7 @@ async def test_editing_group_can_toggle_counts_toward_rating(
 async def test_new_group_saves_start_coordinates(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-coords@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-coords@example.com")
     event, _existing_group = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -449,7 +444,7 @@ async def test_new_group_saves_start_coordinates(
 async def test_new_group_without_coordinates_leaves_them_null(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-nocoords@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-nocoords@example.com")
     event, _existing_group = await make_event_group(session, org)
     await session.commit()
     await _login(client, org.id)
@@ -473,7 +468,7 @@ async def test_new_group_without_coordinates_leaves_them_null(
 async def test_editing_group_can_clear_start_coordinates(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org-clearcoords@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org-clearcoords@example.com")
     event, group = await make_event_group(session, org)
     group.start_lat = 56.130352
     group.start_lng = 47.226109

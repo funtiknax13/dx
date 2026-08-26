@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, OrganizerUser, SessionDep
+from app.api.deps import CurrentUser, EventsPermissionUser, SessionDep
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, UserRole
 from app.models.event import Event
@@ -109,7 +109,7 @@ async def list_groups(event_id: int, session: SessionDep) -> list[GroupOut]:
     "/events/{event_id}/groups", response_model=GroupOut, status_code=status.HTTP_201_CREATED
 )
 async def create_group(
-    event_id: int, payload: GroupCreate, user: OrganizerUser, session: SessionDep
+    event_id: int, payload: GroupCreate, user: EventsPermissionUser, session: SessionDep
 ) -> GroupOut:
     event = await session.get(Event, event_id)
     if event is None:
@@ -132,7 +132,7 @@ async def get_group(group_id: int, session: SessionDep) -> GroupOut:
 
 @router.patch("/groups/{group_id}", response_model=GroupOut)
 async def update_group(
-    group_id: int, payload: GroupUpdate, user: OrganizerUser, session: SessionDep
+    group_id: int, payload: GroupUpdate, user: EventsPermissionUser, session: SessionDep
 ) -> GroupOut:
     group = await _get_group_or_404(session, group_id)
     await _assert_can_manage_group(session, group, user)
@@ -145,7 +145,7 @@ async def update_group(
 
 @router.post("/groups/{group_id}/route-gpx", response_model=GroupOut)
 async def upload_route_gpx(
-    group_id: int, user: OrganizerUser, session: SessionDep, file: UploadFile
+    group_id: int, user: EventsPermissionUser, session: SessionDep, file: UploadFile
 ) -> GroupOut:
     group = await _get_group_or_404(session, group_id)
     await _assert_can_manage_group(session, group, user)
@@ -292,9 +292,7 @@ async def protocol(group_id: int, session: SessionDep, viewer: CurrentUser) -> P
     finisher_ids = {rec.id for rec in finishers}
     dnf_entries = [
         to_entry(rec)
-        for rec in sorted(
-            (r for r in records if r.finish_status == FinishStatus.dnf), key=name_key
-        )
+        for rec in sorted((r for r in records if r.finish_status == FinishStatus.dnf), key=name_key)
     ]
     # Everyone else who's on the list (from CSV import / auto-match / guest
     # creation) but doesn't have an approved+finished result yet — without this

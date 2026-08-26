@@ -85,6 +85,8 @@ class StaffPermission(enum.StrEnum):
     is itself never delegable — only a hard `role == admin` check can hand
     them out (see admin.tools_permissions)."""
 
+    events = "events"
+    support = "support"
     csv_import = "csv_import"
     guest_claims = "guest_claims"
     avatars = "avatars"

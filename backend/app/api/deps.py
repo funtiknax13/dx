@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
 from app.core.security import ACCESS, decode_token
-from app.models.enums import UserRole
+from app.models.enums import StaffPermission, UserRole
 from app.models.user import User
+from app.services.permissions_service import permissions_for
 
 bearer_scheme = HTTPBearer(auto_error=True)
 bearer_scheme_optional = HTTPBearer(auto_error=False)
@@ -69,7 +70,30 @@ def require_roles(*roles: UserRole) -> Callable[..., Awaitable[User]]:
 
 
 require_admin = require_roles(UserRole.admin)
-require_organizer = require_roles(UserRole.organizer, UserRole.admin)
 
 AdminUser = Annotated[User, Depends(require_admin)]
-OrganizerUser = Annotated[User, Depends(require_organizer)]
+
+
+def require_organizer_permission(permission: StaffPermission) -> Callable[..., Awaitable[User]]:
+    """Like require_roles, but for a specific delegable StaffPermission
+    instead of a bare role — admin always passes (implicit full access, see
+    permissions_service.permissions_for); an organizer only if explicitly
+    granted; anyone else is rejected outright."""
+
+    async def checker(user: CurrentUser, session: SessionDep) -> User:
+        if user.role == UserRole.admin:
+            return user
+        if user.role != UserRole.organizer or permission not in await permissions_for(
+            session, user
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            )
+        return user
+
+    return checker
+
+
+EventsPermissionUser = Annotated[
+    User, Depends(require_organizer_permission(StaffPermission.events))
+]

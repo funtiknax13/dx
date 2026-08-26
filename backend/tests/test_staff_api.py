@@ -3,8 +3,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.enums import FinishStatus, ModerationStatus, UserRole
+from app.models.enums import FinishStatus, ModerationStatus, StaffPermission, UserRole
 from app.models.guest_claim import GuestClaim
+from app.services.permissions_service import set_permissions
 from app.services.support_service import create_ticket
 from tests.factories import make_attendance_with_result, make_event_group, make_user
 
@@ -23,13 +24,13 @@ async def test_attention_counts_zero_for_runner(session: AsyncSession, client: A
 
 
 @pytest.mark.asyncio
-async def test_organizer_sees_only_ticket_count_not_admin_only_queues(
+async def test_organizer_with_zero_grants_sees_nothing(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    """Claims and moderation are Admin-only by default (see StaffPermission /
-    permissions_service) — an organizer with no grants has no admin-tools
-    link for them, so no badge count either (see
-    test_organizer_permissions.py for the granted case)."""
+    """All three keys are delegable by default (see StaffPermission /
+    permissions_service) — a freshly-promoted organizer with no grants at
+    all sees zero everywhere, tickets included (see
+    test_organizer_permissions.py for the granted cases)."""
     org = await make_user(session, "org-staffapi1@example.com", UserRole.organizer)
     runner = await make_user(session, "runner-staffapi2@example.com")
     admin = await make_user(session, "admin-staffapi1@example.com", UserRole.admin)
@@ -37,6 +38,27 @@ async def test_organizer_sees_only_ticket_count_not_admin_only_queues(
     await create_ticket(session, user=runner, body="Question")
     await session.commit()
     session.add(GuestClaim(guest_user_id=runner.id, claimant_user_id=admin.id))
+    await session.commit()
+
+    token = create_access_token(org.id)
+    resp = await client.get(
+        "/api/v1/staff/attention-counts", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"tickets": 0, "claims": 0, "moderation": 0}
+
+
+@pytest.mark.asyncio
+async def test_organizer_with_support_only_sees_only_ticket_count(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-staffapi5@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-staffapi5@example.com")
+    admin = await make_user(session, "admin-staffapi5@example.com", UserRole.admin)
+    await session.commit()
+    await create_ticket(session, user=runner, body="Question")
+    session.add(GuestClaim(guest_user_id=runner.id, claimant_user_id=admin.id))
+    await set_permissions(session, org, {StaffPermission.support}, granted_by=admin)
     await session.commit()
 
     token = create_access_token(org.id)

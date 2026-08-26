@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import create_access_token
 from app.models.enums import UserRole
 from app.services.media_service import media_path_to_fs
-from tests.factories import make_event_group, make_user
+from tests.factories import make_event_group, make_organizer, make_user
 
 
 def _fake_jpeg(size: tuple[int, int] = (900, 600)) -> bytes:
@@ -21,7 +21,7 @@ def _fake_jpeg(size: tuple[int, int] = (900, 600)) -> bytes:
 async def test_upload_multiple_photos_generates_thumbnails(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    org = await make_user(session, "org2@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org2@example.com")
     event, _ = await make_event_group(session, org)
     await session.commit()
 
@@ -53,11 +53,9 @@ async def test_upload_multiple_photos_generates_thumbnails(
 
 
 @pytest.mark.asyncio
-async def test_photo_upload_requires_organizer(
-    session: AsyncSession, client: AsyncClient
-) -> None:
+async def test_photo_upload_requires_organizer(session: AsyncSession, client: AsyncClient) -> None:
     runner = await make_user(session, "runner-photo@example.com", UserRole.runner)
-    org = await make_user(session, "org3@example.com", UserRole.organizer)
+    org = await make_organizer(session, "org3@example.com")
     event, _ = await make_event_group(session, org)
     await session.commit()
 

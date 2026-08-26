@@ -6,23 +6,26 @@
     {% if tools_user.role.value == 'admin' %}
     Вы вошли как администратор — доступны все инструменты ниже, для всех событий.
     {% else %}
-    Вы вошли как организатор — доступны события и группы, которые создали вы,
-    плюс отдельно выданные права (если есть — см. карточки ниже).
+    Вы вошли как организатор — доступны только карточки ниже, отдельно
+    выданные вам администратором.
     {% endif %}
   </p>
 
   <div class="grid" style="margin-top: 20px;">
+    {% if 'events' in tools_user.granted_permissions %}
     <div class="card">
       <h2>События и группы</h2>
       <p class="hint">Создание/редактирование событий, обложка, фотогалерея, группы, GPX-маршрут.</p>
       <a class="btn" href="/admin-tools/events">Открыть →</a>
     </div>
+    {% endif %}
+    {% if 'support' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Поддержка</h2>
       <p class="hint">Обращения бегунов и гостей сайта — ответить, закрыть тикет.</p>
       <a class="btn" href="/admin-tools/support">Открыть →</a>
     </div>
-
+    {% endif %}
     {% if 'csv_import' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Импорт CSV</h2>

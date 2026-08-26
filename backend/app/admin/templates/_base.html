@@ -88,9 +88,13 @@
     <div class="nav-panel" id="navPanel">
       <nav>
         <a href="/admin-tools" class="{{ 'active' if active == 'dashboard' }}">Дашборд</a>
-        <a href="/admin-tools/events" class="{{ 'active' if active == 'events' }}">События</a>
-        <a href="/admin-tools/support" class="{{ 'active' if active == 'support' }}">Поддержка <span id="badge-tickets" class="nav-badge nav-badge-red" style="display:none;" title="Непрочитанные тикеты поддержки"></span></a>
         {% if tools_user %}
+        {% if 'events' in tools_user.granted_permissions %}
+        <a href="/admin-tools/events" class="{{ 'active' if active == 'events' }}">События</a>
+        {% endif %}
+        {% if 'support' in tools_user.granted_permissions %}
+        <a href="/admin-tools/support" class="{{ 'active' if active == 'support' }}">Поддержка <span id="badge-tickets" class="nav-badge nav-badge-red" style="display:none;" title="Непрочитанные тикеты поддержки"></span></a>
+        {% endif %}
         {% if 'csv_import' in tools_user.granted_permissions %}
         <a href="/admin-tools/import" class="{{ 'active' if active == 'import' }}">Импорт CSV</a>
         {% endif %}

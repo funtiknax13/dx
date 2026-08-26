@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.admin.tools_common import get_tools_user, login_redirect, templates
+from app.admin.tools_common import get_tools_user, login_redirect, require_permission, templates
 from app.core.db import SessionLocal
 from app.models.enums import StaffPermission, TicketStatus
 from app.models.support import SupportTicket
@@ -27,9 +27,7 @@ PAGE_SIZE = 25
 
 
 async def _require_staff(request: Request) -> User | None:
-    """Unlike surveys/CSV-import/moderation, tickets are visible to both
-    organizer and admin — get_tools_user already restricts to those two roles."""
-    return await get_tools_user(request)
+    return await require_permission(request, StaffPermission.support)
 
 
 @router.get("/support", response_class=HTMLResponse, response_model=None)
@@ -161,7 +159,11 @@ async def support_toggle_status(request: Request, ticket_id: int) -> RedirectRes
 
 @router.get("/badge-counts", response_model=None)
 async def badge_counts(request: Request) -> dict[str, int]:
-    user = await _require_staff(request)
+    # Deliberately get_tools_user (any organizer/admin), not _require_staff
+    # (support-only) — this endpoint aggregates several independently
+    # gated counts, so a single missing permission must only zero out its
+    # own key below, not the whole response.
+    user = await get_tools_user(request)
     empty = {
         "tickets": 0,
         "surveys": 0,
@@ -172,12 +174,14 @@ async def badge_counts(request: Request) -> dict[str, int]:
     }
     if user is None:
         return empty
-    # get_tools_user (inside _require_staff) already attached granted_permissions —
-    # each key below only shows a badge if this admin-tools user actually has the
-    # matching StaffPermission (always true for admin, per-organizer otherwise).
+    # get_tools_user already attached granted_permissions — each key below
+    # only shows a badge if this admin-tools user actually has the matching
+    # StaffPermission (always true for admin, per-organizer otherwise).
     perms = user.granted_permissions
     async with SessionLocal() as session:
-        tickets = await unread_ticket_count_for_staff(session)
+        tickets = (
+            await unread_ticket_count_for_staff(session) if StaffPermission.support in perms else 0
+        )
         surveys = await unread_response_count(session) if StaffPermission.surveys in perms else 0
         claims = await pending_claims_count(session) if StaffPermission.guest_claims in perms else 0
         moderation = (

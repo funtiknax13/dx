@@ -10,6 +10,7 @@ from app.models.enums import (
     ModerationStatus,
     PriorExperience,
     ResultSource,
+    StaffPermission,
     UserRole,
 )
 from app.models.event import Event
@@ -17,6 +18,7 @@ from app.models.group import Group
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
 from app.models.user import User
+from app.services.permissions_service import set_permissions
 
 
 async def make_user(
@@ -49,6 +51,18 @@ async def make_user(
     session.add(user)
     await session.flush()
     return user
+
+
+async def make_organizer(session: AsyncSession, email: str) -> User:
+    """An organizer with StaffPermission.events already granted — the common
+    case for tests exercising event/group admin-tools or REST routes, which
+    otherwise all need an explicit grant now that "create events" is
+    delegable rather than an unconditional organizer baseline (every
+    *existing* organizer gets backfilled with it in the introducing
+    migration; a fresh test fixture needs the same thing done by hand)."""
+    org = await make_user(session, email, UserRole.organizer)
+    await set_permissions(session, org, {StaffPermission.events}, granted_by=org)
+    return org
 
 
 async def make_event_group(

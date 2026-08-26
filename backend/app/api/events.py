@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import and_, func, or_, select
 
-from app.api.deps import OrganizerUser, SessionDep
+from app.api.deps import EventsPermissionUser, SessionDep
 from app.core.timezone import EVENT_TZ
 from app.models.enums import UserRole
 from app.models.event import Event, EventPhoto
@@ -103,7 +103,7 @@ async def get_event(event_id: int, session: SessionDep) -> Event:
 
 @router.post("", response_model=EventOut, status_code=status.HTTP_201_CREATED)
 async def create_event(
-    payload: EventCreate, user: OrganizerUser, session: SessionDep
+    payload: EventCreate, user: EventsPermissionUser, session: SessionDep
 ) -> Event:
     event = Event(**payload.model_dump(), created_by=user.id)
     session.add(event)
@@ -114,7 +114,7 @@ async def create_event(
 
 @router.patch("/{event_id}", response_model=EventOut)
 async def update_event(
-    event_id: int, payload: EventUpdate, user: OrganizerUser, session: SessionDep
+    event_id: int, payload: EventUpdate, user: EventsPermissionUser, session: SessionDep
 ) -> Event:
     event = await _get_event_or_404(session, event_id)
     _assert_can_manage(event, user)
@@ -127,7 +127,7 @@ async def update_event(
 
 @router.post("/{event_id}/cover", response_model=EventOut)
 async def upload_cover(
-    event_id: int, user: OrganizerUser, session: SessionDep, file: UploadFile
+    event_id: int, user: EventsPermissionUser, session: SessionDep, file: UploadFile
 ) -> Event:
     event = await _get_event_or_404(session, event_id)
     _assert_can_manage(event, user)
@@ -155,7 +155,7 @@ async def list_photos(event_id: int, session: SessionDep) -> list[EventPhoto]:
     "/{event_id}/photos", response_model=list[EventPhotoOut], status_code=status.HTTP_201_CREATED
 )
 async def upload_photos(
-    event_id: int, user: OrganizerUser, session: SessionDep, files: list[UploadFile]
+    event_id: int, user: EventsPermissionUser, session: SessionDep, files: list[UploadFile]
 ) -> list[EventPhoto]:
     event = await _get_event_or_404(session, event_id)
     _assert_can_manage(event, user)

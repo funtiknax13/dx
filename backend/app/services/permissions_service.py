@@ -20,6 +20,14 @@ class PermissionMeta:
 
 
 PERMISSION_META: dict[StaffPermission, PermissionMeta] = {
+    StaffPermission.events: PermissionMeta(
+        "События и группы",
+        "Создание и редактирование своих событий/групп, обложка, фото, GPX-маршрут.",
+    ),
+    StaffPermission.support: PermissionMeta(
+        "Тикеты поддержки",
+        "Отвечать на обращения бегунов и гостей сайта.",
+    ),
     StaffPermission.csv_import: PermissionMeta(
         "Импорт CSV и сопоставление участников",
         "Загрузка протокола события, привязка неопознанных записей к аккаунтам, поиск бегунов.",
