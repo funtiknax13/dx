@@ -1,0 +1,41 @@
+{% extends "_base.html" %}
+{% block title %}Права организаторов — DH Admin Tools{% endblock %}
+{% block content %}
+<style>
+  .perm-item { display:flex; align-items:flex-start; gap:8px; font-weight:400; margin-bottom:10px; cursor:pointer; }
+  .perm-item input { margin-top:3px; }
+  .perm-label { display:block; font-size:14px; font-weight:600; color:#111827; }
+</style>
+<h1>Права организаторов ({{ rows|length }})</h1>
+<p class="hint">
+  По умолчанию организатору доступны только свои события/группы и тикеты поддержки.
+  Отметьте, какие из обычно admin-only разделов открыть конкретному организатору —
+  сохраняется отдельно для каждого. Роль (кто вообще организатор) назначается в SQLAdmin,
+  здесь только тонкая настройка доступа внутри роли.
+</p>
+
+{% if rows %}
+{% for row in rows %}
+<div class="card">
+  <h2>
+    {{ row.organizer.first_name }} {{ row.organizer.last_name }}
+    <span class="hint">&lt;{{ row.organizer.email }}&gt;</span>
+  </h2>
+  <form method="post" action="/admin-tools/permissions/{{ row.organizer.id }}">
+    {% for key, meta in catalog.items() %}
+    <label class="perm-item">
+      <input type="checkbox" name="permissions" value="{{ key.value }}" {{ 'checked' if key in row.granted }}>
+      <span>
+        <span class="perm-label">{{ meta.label }}</span>
+        <span class="hint">{{ meta.description }}</span>
+      </span>
+    </label>
+    {% endfor %}
+    <button type="submit">Сохранить</button>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty">Пока нет ни одного организатора — роль назначается вручную через SQLAdmin.</div>
+{% endif %}
+{% endblock %}

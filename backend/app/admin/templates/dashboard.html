@@ -6,7 +6,8 @@
     {% if tools_user.role.value == 'admin' %}
     Вы вошли как администратор — доступны все инструменты ниже, для всех событий.
     {% else %}
-    Вы вошли как организатор — доступны события и группы, которые создали вы.
+    Вы вошли как организатор — доступны события и группы, которые создали вы,
+    плюс отдельно выданные права (если есть — см. карточки ниже).
     {% endif %}
   </p>
 
@@ -22,7 +23,7 @@
       <a class="btn" href="/admin-tools/support">Открыть →</a>
     </div>
 
-    {% if tools_user.role.value == 'admin' %}
+    {% if 'csv_import' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Импорт CSV</h2>
       <p class="hint">
@@ -32,6 +33,8 @@
       </p>
       <a class="btn" href="/admin-tools/import">Открыть →</a>
     </div>
+    {% endif %}
+    {% if 'guest_claims' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Заявки на объединение</h2>
       <p class="hint">Бегун сам находит свой гостевой профиль и заявляет «это я» — подтвердите здесь.</p>
@@ -42,15 +45,26 @@
       <p class="hint">Все ещё не объединённые гостевые профили — можно объединить с аккаунтом вручную.</p>
       <a class="btn" href="/admin-tools/guests">Открыть →</a>
     </div>
+    {% endif %}
+    {% if 'results_review' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Результаты на проверке</h2>
       <p class="hint">Подтвердить или отклонить результаты, требующие модерации.</p>
       <a class="btn" href="/admin-tools/results">Открыть →</a>
     </div>
+    {% endif %}
+    {% if 'surveys' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Анкеты</h2>
       <p class="hint">Анкета обратной связи для новичков — вопросы, ответы, экспорт.</p>
       <a class="btn" href="/admin-tools/surveys">Открыть →</a>
+    </div>
+    {% endif %}
+    {% if tools_user.role.value == 'admin' %}
+    <div class="card">
+      <h2>Права организаторов</h2>
+      <p class="hint">Выдать или забрать у конкретного организатора доступ к отдельным разделам выше.</p>
+      <a class="btn" href="/admin-tools/permissions">Открыть →</a>
     </div>
     <div class="card">
       <h2>SQLAdmin</h2>

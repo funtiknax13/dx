@@ -16,6 +16,7 @@ from app.models.city import City
 from app.models.event import Event, EventPhoto
 from app.models.group import Group
 from app.models.guest_claim import GuestClaim
+from app.models.organizer_permission import OrganizerPermission
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
 from app.models.running_club import RunningClub
@@ -202,6 +203,24 @@ class GuestClaimAdmin(BaseAdmin, model=GuestClaim):
     form_columns = [GuestClaim.status, GuestClaim.decided_at]
 
 
+class OrganizerPermissionAdmin(BaseAdmin, model=OrganizerPermission):
+    name = "Право организатора"
+    name_plural = "Права организаторов"
+    icon = "fa-solid fa-user-shield"
+    column_list = [
+        OrganizerPermission.id,
+        OrganizerPermission.user,
+        OrganizerPermission.permission,
+        OrganizerPermission.granted_by,
+        OrganizerPermission.created_at,
+    ]
+    column_sortable_list = [OrganizerPermission.id, OrganizerPermission.permission]
+    # Normal handling is the /admin-tools/permissions page (checkbox grid,
+    # one save per organizer) — this view is a fallback for inspecting/
+    # correcting a stray grant by hand, not the everyday path.
+    form_columns = [OrganizerPermission.user, OrganizerPermission.permission]
+
+
 class ResultAdmin(BaseAdmin, model=Result):
     name = "Результат"
     name_plural = "Результаты"
@@ -351,5 +370,6 @@ ALL_VIEWS = [
     AttendanceRecordAdmin,
     ResultAdmin,
     GuestClaimAdmin,
+    OrganizerPermissionAdmin,
     RunnerBaselineAdmin,
 ]

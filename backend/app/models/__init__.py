@@ -8,6 +8,7 @@ from app.models.enums import (
     ModerationStatus,
     PriorExperience,
     ResultSource,
+    StaffPermission,
     SurveyQuestionType,
     TicketStatus,
     UserRole,
@@ -15,6 +16,7 @@ from app.models.enums import (
 from app.models.event import Event, EventPhoto
 from app.models.group import Group
 from app.models.guest_claim import GuestClaim
+from app.models.organizer_permission import OrganizerPermission
 from app.models.profile_edit_request import ProfileEditRequest
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
@@ -34,6 +36,7 @@ __all__ = [
     "AttendanceRecord",
     "Result",
     "GuestClaim",
+    "OrganizerPermission",
     "ProfileEditRequest",
     "RunnerBaseline",
     "Survey",
@@ -51,4 +54,5 @@ __all__ = [
     "PriorExperience",
     "SurveyQuestionType",
     "TicketStatus",
+    "StaffPermission",
 ]

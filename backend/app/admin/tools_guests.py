@@ -4,9 +4,9 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
-from app.admin.tools_common import get_tools_user, login_redirect, templates
+from app.admin.tools_common import login_redirect, require_permission, templates
 from app.core.db import SessionLocal
-from app.models.enums import ClaimStatus, UserRole
+from app.models.enums import ClaimStatus, StaffPermission
 from app.models.guest_claim import GuestClaim
 from app.models.user import User
 from app.services.guest_service import merge_guest_into
@@ -15,16 +15,13 @@ from app.services.name_search import flexible_name_filter
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
 
 
-async def _require_admin(request: Request) -> User | None:
-    user = await get_tools_user(request)
-    if user is None or user.role != UserRole.admin:
-        return None
-    return user
+async def _require_access(request: Request) -> User | None:
+    return await require_permission(request, StaffPermission.guest_claims)
 
 
 @router.get("/claims", response_class=HTMLResponse, response_model=None)
 async def claims_queue(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -38,8 +35,7 @@ async def claims_queue(request: Request) -> HTMLResponse | RedirectResponse:
         # Resolve names in bulk rather than lazy-loading relationships post-close.
         user_ids = {c.guest_user_id for c in claims} | {c.claimant_user_id for c in claims}
         users_by_id = {
-            u.id: u
-            for u in await session.scalars(select(User).where(User.id.in_(user_ids)))
+            u.id: u for u in await session.scalars(select(User).where(User.id.in_(user_ids)))
         }
     flash = request.query_params.get("flash")
     return templates.TemplateResponse(
@@ -57,7 +53,7 @@ async def claims_queue(request: Request) -> HTMLResponse | RedirectResponse:
 
 @router.post("/claims/{claim_id}/approve", response_model=None)
 async def approve_claim(request: Request, claim_id: int) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -83,7 +79,7 @@ async def approve_claim(request: Request, claim_id: int) -> RedirectResponse:
 
 @router.post("/claims/{claim_id}/reject", response_model=None)
 async def reject_claim(request: Request, claim_id: int) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -97,7 +93,7 @@ async def reject_claim(request: Request, claim_id: int) -> RedirectResponse:
 
 @router.get("/guests", response_class=HTMLResponse, response_model=None)
 async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
 
@@ -144,7 +140,7 @@ async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
 async def merge_guest(
     request: Request, guest_id: int, real_user_id: int = Form(...)
 ) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:

@@ -1,10 +1,14 @@
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 from app.models.enums import AvatarReview, Gender, PriorExperience, UserRole
+
+if TYPE_CHECKING:
+    from app.models.enums import StaffPermission
 
 
 class User(Base, TimestampMixin):
@@ -91,6 +95,14 @@ class User(Base, TimestampMixin):
     baseline = relationship(
         "RunnerBaseline", back_populates="runner", uselist=False, cascade="all, delete-orphan"
     )
+
+    if TYPE_CHECKING:
+        # Set by app.admin.tools_common.get_tools_user on the admin-tools
+        # login path only — never a real column, never persisted (the
+        # TYPE_CHECKING guard keeps this out of SQLAlchemy's mapping
+        # entirely; it exists purely so mypy knows about the attribute
+        # wherever admin-tools code reads it — see permissions_service).
+        granted_permissions: set[StaffPermission]
 
     def __str__(self) -> str:  # nice label in SQLAdmin dropdowns
         suffix = " [guest]" if self.is_guest else ""

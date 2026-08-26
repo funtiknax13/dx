@@ -1,6 +1,8 @@
-"""Counts of things waiting on a staff member — guest-merge claims and results
-pending moderation. Both are Admin-only actions (see CLAUDE.md), unlike
-support tickets which Organizer also handles — see app.api.staff."""
+"""Counts of things waiting on a staff member — guest-merge claims, results
+pending moderation, avatars, and profile-review requests. All Admin-only by
+default, delegable per-organizer via StaffPermission (see
+permissions_service) — unlike support tickets, which every organizer already
+handles unconditionally — see app.api.staff / app.admin.tools_support."""
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

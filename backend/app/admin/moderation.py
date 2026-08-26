@@ -3,10 +3,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.admin.tools_common import get_tools_user, login_redirect, templates
+from app.admin.tools_common import login_redirect, require_permission, templates
 from app.core.db import SessionLocal
 from app.models.attendance import AttendanceRecord
-from app.models.enums import UserRole
+from app.models.enums import StaffPermission
 from app.models.event import Event
 from app.models.user import User
 from app.services.csv_import_service import import_attendance_csv
@@ -15,18 +15,15 @@ from app.services.name_search import flexible_name_filter
 router = APIRouter(prefix="/admin-tools", tags=["admin-moderation"], include_in_schema=False)
 
 
-async def _require_admin(request: Request) -> User | None:
-    """CSV import/moderation/runner search are Admin-only per CLAUDE.md, even
-    though the rest of admin-tools is also open to organizers."""
-    user = await get_tools_user(request)
-    if user is None or user.role != UserRole.admin:
-        return None
-    return user
+async def _require_access(request: Request) -> User | None:
+    """CSV import/moderation/runner search — delegable via StaffPermission
+    .csv_import (see permissions_service), admin-only by default."""
+    return await require_permission(request, StaffPermission.csv_import)
 
 
 @router.get("/import", response_class=HTMLResponse, response_model=None)
 async def import_page(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -52,7 +49,7 @@ async def import_page(request: Request) -> HTMLResponse | RedirectResponse:
 async def import_submit(
     request: Request, event_id: int = Form(...), file: UploadFile | None = None
 ) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
 
@@ -91,7 +88,7 @@ async def import_submit(
 
 @router.get("/moderation", response_class=HTMLResponse, response_model=None)
 async def moderation_page(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
 
@@ -125,10 +122,7 @@ async def moderation_page(request: Request) -> HTMLResponse | RedirectResponse:
         if search_for is not None and q:
             search_results = list(
                 await session.scalars(
-                    select(User)
-                    .where(flexible_name_filter(q))
-                    .order_by(User.id)
-                    .limit(10)
+                    select(User).where(flexible_name_filter(q)).order_by(User.id).limit(10)
                 )
             )
 
@@ -155,7 +149,7 @@ async def moderation_match(
     attendance_id: int = Form(...),
     runner_id: int = Form(...),
 ) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -172,7 +166,7 @@ async def moderation_match(
 
 @router.get("/runners", response_class=HTMLResponse, response_model=None)
 async def runners_lookup(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     q = request.query_params.get("q", "").strip()

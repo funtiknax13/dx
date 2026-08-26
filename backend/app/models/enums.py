@@ -76,3 +76,19 @@ class TicketStatus(enum.StrEnum):
 
     open = "open"
     closed = "closed"
+
+
+class StaffPermission(enum.StrEnum):
+    """A single admin-tools moderation capability, delegable to an organizer
+    via OrganizerPermission — see app.services.permissions_service. Admin
+    always has every value implicitly (never stored as rows). Granting these
+    is itself never delegable — only a hard `role == admin` check can hand
+    them out (see admin.tools_permissions)."""
+
+    csv_import = "csv_import"
+    guest_claims = "guest_claims"
+    avatars = "avatars"
+    baselines = "baselines"
+    profile_review = "profile_review"
+    results_review = "results_review"
+    surveys = "surveys"

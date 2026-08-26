@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.db import SessionLocal
-from app.models.enums import TicketStatus, UserRole
+from app.models.enums import StaffPermission, TicketStatus
 from app.models.support import SupportTicket
 from app.models.user import User
 from app.services.staff_attention_service import (
@@ -172,18 +172,25 @@ async def badge_counts(request: Request) -> dict[str, int]:
     }
     if user is None:
         return empty
+    # get_tools_user (inside _require_staff) already attached granted_permissions —
+    # each key below only shows a badge if this admin-tools user actually has the
+    # matching StaffPermission (always true for admin, per-organizer otherwise).
+    perms = user.granted_permissions
     async with SessionLocal() as session:
         tickets = await unread_ticket_count_for_staff(session)
-        if user.role != UserRole.admin:
-            # Surveys/claims/moderation/avatars/profile_review are Admin-only
-            # queues (see CLAUDE.md) — an organizer has no nav link for them,
-            # so no badge.
-            return {**empty, "tickets": tickets}
-        surveys = await unread_response_count(session)
-        claims = await pending_claims_count(session)
-        moderation = await pending_moderation_count(session)
-        avatars = await pending_avatar_count(session)
-        profile_review = await pending_profile_review_count(session)
+        surveys = await unread_response_count(session) if StaffPermission.surveys in perms else 0
+        claims = await pending_claims_count(session) if StaffPermission.guest_claims in perms else 0
+        moderation = (
+            await pending_moderation_count(session)
+            if StaffPermission.results_review in perms
+            else 0
+        )
+        avatars = await pending_avatar_count(session) if StaffPermission.avatars in perms else 0
+        profile_review = (
+            await pending_profile_review_count(session)
+            if StaffPermission.profile_review in perms
+            else 0
+        )
     return {
         "tickets": tickets,
         "surveys": surveys,

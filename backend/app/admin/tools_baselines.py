@@ -1,27 +1,22 @@
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.admin.tools_common import get_tools_user, login_redirect, templates
+from app.admin.tools_common import login_redirect, require_permission, templates
 from app.core.db import SessionLocal
-from app.models.enums import UserRole
+from app.models.enums import StaffPermission
 from app.models.user import User
 from app.services.baseline_import_service import import_baseline_csv
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-baselines"], include_in_schema=False)
 
 
-async def _require_admin(request: Request) -> User | None:
-    """Same restriction as CSV attendance import — Admin-only per CLAUDE.md,
-    even though the rest of admin-tools is also open to organizers."""
-    user = await get_tools_user(request)
-    if user is None or user.role != UserRole.admin:
-        return None
-    return user
+async def _require_access(request: Request) -> User | None:
+    return await require_permission(request, StaffPermission.baselines)
 
 
 @router.get("/import-baselines", response_class=HTMLResponse, response_model=None)
 async def import_baselines_page(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     return templates.TemplateResponse(
@@ -35,7 +30,7 @@ async def import_baselines_page(request: Request) -> HTMLResponse | RedirectResp
 async def import_baselines_submit(
     request: Request, file: UploadFile | None = None
 ) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
 

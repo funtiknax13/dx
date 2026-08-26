@@ -26,8 +26,10 @@ async def test_attention_counts_zero_for_runner(session: AsyncSession, client: A
 async def test_organizer_sees_only_ticket_count_not_admin_only_queues(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    """Claims and moderation are Admin-only actions (see CLAUDE.md) — an
-    organizer has no admin-tools link for them, so no badge count either."""
+    """Claims and moderation are Admin-only by default (see StaffPermission /
+    permissions_service) — an organizer with no grants has no admin-tools
+    link for them, so no badge count either (see
+    test_organizer_permissions.py for the granted case)."""
     org = await make_user(session, "org-staffapi1@example.com", UserRole.organizer)
     runner = await make_user(session, "runner-staffapi2@example.com")
     admin = await make_user(session, "admin-staffapi1@example.com", UserRole.admin)

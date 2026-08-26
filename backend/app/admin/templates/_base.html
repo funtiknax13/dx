@@ -90,17 +90,38 @@
         <a href="/admin-tools" class="{{ 'active' if active == 'dashboard' }}">Дашборд</a>
         <a href="/admin-tools/events" class="{{ 'active' if active == 'events' }}">События</a>
         <a href="/admin-tools/support" class="{{ 'active' if active == 'support' }}">Поддержка <span id="badge-tickets" class="nav-badge nav-badge-red" style="display:none;" title="Непрочитанные тикеты поддержки"></span></a>
-        {% if tools_user and tools_user.role.value == 'admin' %}
+        {% if tools_user %}
+        {% if 'csv_import' in tools_user.granted_permissions %}
         <a href="/admin-tools/import" class="{{ 'active' if active == 'import' }}">Импорт CSV</a>
+        {% endif %}
+        {% if 'baselines' in tools_user.granted_permissions %}
         <a href="/admin-tools/import-baselines" class="{{ 'active' if active == 'import-baselines' }}">Стартовые данные</a>
+        {% endif %}
+        {% if 'guest_claims' in tools_user.granted_permissions %}
         <a href="/admin-tools/claims" class="{{ 'active' if active == 'claims' }}">Заявки <span id="badge-claims" class="nav-badge nav-badge-amber" style="display:none;" title="Заявки на объединение с гостевым профилем"></span></a>
         <a href="/admin-tools/guests" class="{{ 'active' if active == 'guests' }}">Гости</a>
+        {% endif %}
+        {% if 'results_review' in tools_user.granted_permissions %}
         <a href="/admin-tools/results" class="{{ 'active' if active == 'results' }}">Результаты <span id="badge-moderation" class="nav-badge nav-badge-purple" style="display:none;" title="Результаты, ожидающие подтверждения"></span></a>
+        {% endif %}
+        {% if 'avatars' in tools_user.granted_permissions %}
         <a href="/admin-tools/avatars" class="{{ 'active' if active == 'avatars' }}">Аватары <span id="badge-avatars" class="nav-badge nav-badge-amber" style="display:none;" title="Аватары на проверке"></span></a>
+        {% endif %}
+        {% if 'profile_review' in tools_user.granted_permissions %}
         <a href="/admin-tools/profile-review" class="{{ 'active' if active == 'profile-review' }}">Профили на проверке <span id="badge-profile-review" class="nav-badge nav-badge-amber" style="display:none;" title="Профили, ожидающие подтверждения"></span></a>
+        {% endif %}
+        {% if 'csv_import' in tools_user.granted_permissions %}
         <a href="/admin-tools/moderation" class="{{ 'active' if active == 'moderation' }}">Без сопоставления</a>
+        {% endif %}
+        {% if 'surveys' in tools_user.granted_permissions %}
         <a href="/admin-tools/surveys" class="{{ 'active' if active == 'surveys' }}">Анкеты <span id="badge-surveys" class="nav-badge nav-badge-blue" style="display:none;" title="Непрочитанные ответы на анкеты"></span></a>
+        {% endif %}
+        {% if 'csv_import' in tools_user.granted_permissions %}
         <a href="/admin-tools/runners" class="{{ 'active' if active == 'runners' }}">Поиск бегунов</a>
+        {% endif %}
+        {% if tools_user.role.value == 'admin' %}
+        <a href="/admin-tools/permissions" class="{{ 'active' if active == 'permissions' }}">Права организаторов</a>
+        {% endif %}
         {% endif %}
       </nav>
       <div class="right">

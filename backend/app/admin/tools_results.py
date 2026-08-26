@@ -7,7 +7,7 @@ from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.attendance import AttendanceRecord
-from app.models.enums import ModerationStatus, UserRole
+from app.models.enums import ModerationStatus, StaffPermission
 from app.models.group import Group
 from app.models.result import Result
 from app.services.support_service import create_staff_ticket
@@ -22,8 +22,8 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
     user = await get_tools_user(request)
     if user is None:
         return login_redirect()
-    if user.role != UserRole.admin:
-        # Result approval is an Admin-only function per CLAUDE.md.
+    if StaffPermission.results_review not in user.granted_permissions:
+        # Admin by default, delegable to an organizer via StaffPermission.results_review.
         return RedirectResponse("/admin-tools", status_code=303)
 
     try:
@@ -78,7 +78,7 @@ async def approve_result(request: Request, result_id: int) -> RedirectResponse:
     user = await get_tools_user(request)
     if user is None:
         return login_redirect()
-    if user.role != UserRole.admin:
+    if StaffPermission.results_review not in user.granted_permissions:
         return RedirectResponse("/admin-tools", status_code=303)
     async with SessionLocal() as session:
         result = await session.get(Result, result_id)
@@ -121,7 +121,7 @@ async def reject_result(
     user = await get_tools_user(request)
     if user is None:
         return login_redirect()
-    if user.role != UserRole.admin:
+    if StaffPermission.results_review not in user.granted_permissions:
         return RedirectResponse("/admin-tools", status_code=303)
     async with SessionLocal() as session:
         result = await session.scalar(

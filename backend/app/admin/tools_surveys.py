@@ -4,9 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.admin.tools_common import get_tools_user, login_redirect, templates
+from app.admin.tools_common import login_redirect, require_permission, templates
 from app.core.db import SessionLocal
-from app.models.enums import UserRole
+from app.models.enums import StaffPermission
 from app.models.survey import Survey, SurveyQuestion, SurveyResponse
 from app.models.user import User
 from app.services.survey_service import (
@@ -18,18 +18,13 @@ from app.services.survey_service import (
 router = APIRouter(prefix="/admin-tools", tags=["admin-surveys"], include_in_schema=False)
 
 
-async def _require_admin(request: Request) -> User | None:
-    """Surveys are Admin-only, same as CSV import/moderation — organizers
-    don't manage them."""
-    user = await get_tools_user(request)
-    if user is None or user.role != UserRole.admin:
-        return None
-    return user
+async def _require_access(request: Request) -> User | None:
+    return await require_permission(request, StaffPermission.surveys)
 
 
 @router.get("/surveys", response_class=HTMLResponse, response_model=None)
 async def surveys_list(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -49,7 +44,7 @@ async def surveys_list(request: Request) -> HTMLResponse | RedirectResponse:
 
 @router.get("/surveys/new", response_class=HTMLResponse, response_model=None)
 async def survey_new_form(request: Request) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     return templates.TemplateResponse(
@@ -64,7 +59,7 @@ async def survey_new_submit(
     description: str = Form(""),
     is_required_for_access: bool = Form(False),
 ) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -96,13 +91,11 @@ async def _unset_other_required_surveys(session: AsyncSession, exclude_id: int |
 
 @router.get("/surveys/{survey_id}/edit", response_class=HTMLResponse, response_model=None)
 async def survey_edit_form(request: Request, survey_id: int) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
-        survey = await session.get(
-            Survey, survey_id, options=[selectinload(Survey.questions)]
-        )
+        survey = await session.get(Survey, survey_id, options=[selectinload(Survey.questions)])
         if survey is None:
             return RedirectResponse("/admin-tools/surveys", status_code=303)
     flash = request.query_params.get("flash")
@@ -122,7 +115,7 @@ async def survey_edit_submit(
     is_required_for_access: bool = Form(False),
     is_active: bool = Form(False),
 ) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -146,7 +139,7 @@ async def survey_question_add(
     prompt: str = Form(...),
     required: bool = Form(False),
 ) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -167,7 +160,7 @@ async def survey_question_add(
 async def survey_question_delete(
     request: Request, survey_id: int, question_id: int
 ) -> RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -184,7 +177,7 @@ async def survey_question_move(
 ) -> RedirectResponse:
     """Swap this question's position with its neighbor — the simplest
     reorder UI that works with plain forms/page reloads (no drag-and-drop)."""
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -206,7 +199,7 @@ async def survey_question_move(
 
 @router.get("/surveys/{survey_id}/responses", response_class=HTMLResponse, response_model=None)
 async def survey_responses(request: Request, survey_id: int) -> HTMLResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -247,7 +240,7 @@ async def survey_responses(request: Request, survey_id: int) -> HTMLResponse | R
 async def survey_responses_export(
     request: Request, survey_id: int
 ) -> PlainTextResponse | RedirectResponse:
-    user = await _require_admin(request)
+    user = await _require_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
@@ -258,7 +251,5 @@ async def survey_responses_export(
     return PlainTextResponse(
         csv_text,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="survey-{survey_id}-responses.csv"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="survey-{survey_id}-responses.csv"'},
     )
