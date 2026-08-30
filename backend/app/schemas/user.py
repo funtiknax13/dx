@@ -88,7 +88,6 @@ class UserUpdate(BaseModel):
     birthday: date | None = None
     phone: str | None = Field(default=None, max_length=40)
     running_club: str | None = Field(default=None, max_length=150)
-    prior_experience: PriorExperience | None = None
     parent_first_name: str | None = Field(default=None, max_length=100)
     parent_last_name: str | None = Field(default=None, max_length=100)
     parent_phone: str | None = Field(default=None, max_length=40)
@@ -106,6 +105,15 @@ class UserUpdate(BaseModel):
     @classmethod
     def _check_birthday(cls, v: date | None) -> date | None:
         return validate_birthday(v)
+
+
+class PriorExperienceUpdate(BaseModel):
+    """Its own request shape, deliberately not a field on UserUpdate — a
+    one-time self-report that must apply the instant it's picked, and never
+    get silently lost to an unrelated field failing validation (or landing
+    in moderation) in the same PATCH /me request. See PriorExperience."""
+
+    prior_experience: PriorExperience
 
 
 class PasswordChangeRequest(BaseModel):

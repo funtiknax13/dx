@@ -179,6 +179,15 @@ export const usersApi = {
   updateMe: async (payload: UpdateProfilePayload) =>
     mapUser(await api.patch<RawUser>('/users/me', payload)),
 
+  /** Its own request, deliberately not folded into updateMe — applies the
+   * instant it's picked and must never be lost just because some other
+   * field in the same profile-form submit fails validation or only lands
+   * in moderation (see backend PATCH /users/me/prior-experience). */
+  setPriorExperience: async (value: PriorExperience) =>
+    mapUser(
+      await api.patch<RawUser>('/users/me/prior-experience', { prior_experience: value }),
+    ),
+
   uploadAvatar: async (file: File) => {
     const form = new FormData()
     form.append('file', file)

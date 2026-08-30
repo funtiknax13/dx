@@ -341,7 +341,6 @@ export interface UpdateProfilePayload {
   birthday?: string | null
   phone?: string | null
   running_club?: string | null
-  prior_experience?: PriorExperience | null
   parent_first_name?: string | null
   parent_last_name?: string | null
   parent_phone?: string | null

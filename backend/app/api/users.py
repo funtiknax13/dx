@@ -22,6 +22,7 @@ from app.schemas.user import (
     ParticipationHistoryItem,
     PasswordChangeRequest,
     PendingProfileReview,
+    PriorExperienceUpdate,
     PublicProfile,
     UserMe,
     UserUpdate,
@@ -79,23 +80,33 @@ async def get_my_access(user: CurrentUser, session: SessionDep) -> AccessLockOut
 @router.patch("/me", response_model=UserMe)
 async def update_me(payload: UserUpdate, user: CurrentUser, session: SessionDep) -> UserMe:
     updates = payload.model_dump(exclude_unset=True)
-    # Frozen once answered — otherwise a "never ran before" runner could
-    # just switch their answer to dodge the newbie survey requirement (see
-    # survey_service.stats_locked_pending_survey). Silently ignored rather
-    # than a 400: the field is disabled client-side once set, so a request
-    # trying to change it only happens via a direct API call, not normal use.
-    if "prior_experience" in updates and user.prior_experience is not None:
-        del updates["prior_experience"]
-    elif "prior_experience" in updates:
-        # Not moderated (see profile_review_service.MODERATED_FIELDS) — a
-        # one-time self-report, not identity data, applies immediately.
-        user.prior_experience = updates.pop("prior_experience")
-    # Everything else in the form is post-moderated — see
-    # profile_review_service.submit_for_review: `user`'s own columns are
-    # untouched here, the diff against them is staged for an admin instead.
+    # Everything here is post-moderated — see profile_review_service.submit_for_review:
+    # `user`'s own columns are untouched here, the diff against them is staged for an
+    # admin instead. prior_experience has its own dedicated endpoint below instead of
+    # being a field here, precisely so it never rides along in this request and gets
+    # lost if some other field in the same payload fails validation or just sits in
+    # the moderation queue.
     await submit_for_review(session, user, updates)
     await session.commit()
     await session.refresh(user)
+    return await _build_user_me(session, user)
+
+
+@router.patch("/me/prior-experience", response_model=UserMe)
+async def update_prior_experience(
+    payload: PriorExperienceUpdate, user: CurrentUser, session: SessionDep
+) -> UserMe:
+    """Deliberately its own endpoint, not a field on PATCH /me (see there) —
+    applies immediately, not moderated. Frozen once answered — otherwise a
+    "never ran before" runner could just switch their answer to dodge the
+    newbie survey requirement (see survey_service.stats_locked_pending_survey).
+    Silently ignored rather than a 400 if already set: the field is disabled
+    client-side once set, so a request trying to change it only happens via a
+    direct API call, not normal use."""
+    if user.prior_experience is None:
+        user.prior_experience = payload.prior_experience
+        await session.commit()
+        await session.refresh(user)
     return await _build_user_me(session, user)
 
 

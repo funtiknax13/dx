@@ -437,6 +437,8 @@ function ProfileForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [priorExpSaving, setPriorExpSaving] = useState(false)
+  const [priorExpError, setPriorExpError] = useState<string | null>(null)
 
   const set =
     (k: keyof typeof form) =>
@@ -444,6 +446,24 @@ function ProfileForm({
       setForm((f) => ({ ...f, [k]: e.target.value }))
       setSaved(false)
     }
+
+  // Applies immediately, its own request — see usersApi.setPriorExperience
+  // for why this can't just ride along with the rest of the form's submit.
+  const handlePriorExperienceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value as PriorExperience | ''
+    setForm((f) => ({ ...f, prior_experience: value }))
+    if (!value) return
+    setPriorExpError(null)
+    setPriorExpSaving(true)
+    try {
+      const updated = await usersApi.setPriorExperience(value)
+      onSaved(updated)
+    } catch (err) {
+      setPriorExpError(err instanceof ApiError ? err.message : 'Не удалось сохранить ответ')
+    } finally {
+      setPriorExpSaving(false)
+    }
+  }
 
   // Name fields (own + guardian) capitalise the first letter as you type.
   const setName =
@@ -502,7 +522,6 @@ function ProfileForm({
         birthday: form.birthday || null,
         phone: form.phone.trim() || null,
         running_club: noClub ? '' : club.trim() || null,
-        prior_experience: form.prior_experience || null,
         parent_first_name: form.parent_first_name.trim() || null,
         parent_last_name: form.parent_last_name.trim() || null,
         parent_phone: form.parent_phone.trim() || null,
@@ -734,9 +753,9 @@ function ProfileForm({
               label="Бегали ли вы раньше с DАЙ ХАРD?"
               name="prior_experience"
               value={form.prior_experience}
-              onChange={set('prior_experience')}
-              disabled={priorExperienceLocked}
-              error={missing.priorExperience ? REQUIRED_HINT : undefined}
+              onChange={handlePriorExperienceChange}
+              disabled={priorExperienceLocked || priorExpSaving}
+              error={priorExpError ?? (missing.priorExperience ? REQUIRED_HINT : undefined)}
             >
               <option value="">Не указано</option>
               <option value="never">Нет, ни разу</option>

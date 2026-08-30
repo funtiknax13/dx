@@ -61,7 +61,7 @@ async def test_prior_experience_can_be_set_once(session: AsyncSession, client: A
 
     token = create_access_token(user.id)
     resp = await client.patch(
-        "/api/v1/users/me",
+        "/api/v1/users/me/prior-experience",
         headers={"Authorization": f"Bearer {token}"},
         json={"prior_experience": "never"},
     )
@@ -82,14 +82,14 @@ async def test_prior_experience_is_frozen_after_first_answer(
     token = create_access_token(user.id)
 
     first = await client.patch(
-        "/api/v1/users/me",
+        "/api/v1/users/me/prior-experience",
         headers={"Authorization": f"Bearer {token}"},
         json={"prior_experience": "never"},
     )
     assert first.json()["prior_experience"] == "never"
 
     second = await client.patch(
-        "/api/v1/users/me",
+        "/api/v1/users/me/prior-experience",
         headers={"Authorization": f"Bearer {token}"},
         json={"prior_experience": "multiple"},
     )
@@ -99,26 +99,29 @@ async def test_prior_experience_is_frozen_after_first_answer(
 
 
 @pytest.mark.asyncio
-async def test_other_fields_still_update_once_prior_experience_is_frozen(
+async def test_prior_experience_survives_a_rejected_profile_update(
     session: AsyncSession, client: AsyncClient
 ) -> None:
-    """The freeze only applies to prior_experience — it shouldn't silently
-    drop the rest of the payload in the same request. prior_experience isn't
-    post-moderated (applies immediately); city is (see ProfileEditRequest)."""
+    """Regression guard for the reason this got its own endpoint: it must
+    never be lost just because some unrelated field in the same PATCH /me
+    request fails validation or is only staged for moderation."""
     user = await make_user(session, "prior-exp3@example.com", complete_profile=False)
     await session.commit()
     token = create_access_token(user.id)
+    headers = {"Authorization": f"Bearer {token}"}
 
     await client.patch(
-        "/api/v1/users/me",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"prior_experience": "never"},
+        "/api/v1/users/me/prior-experience", headers=headers, json={"prior_experience": "never"}
     )
-    resp = await client.patch(
-        "/api/v1/users/me",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"prior_experience": "multiple", "city": "Чебоксары"},
-    )
+
+    # A profile update with an invalid field (digit in a name) 422s entirely —
+    # must not touch prior_experience, which lives on a separate request.
+    rejected = await client.patch("/api/v1/users/me", headers=headers, json={"first_name": "Иван3"})
+    assert rejected.status_code == 422
+
+    # A profile update that succeeds (city goes to moderation) must likewise
+    # leave prior_experience untouched — nothing to bundle it with anymore.
+    resp = await client.patch("/api/v1/users/me", headers=headers, json={"city": "Чебоксары"})
     body = resp.json()
     assert body["prior_experience"] == "never"
     assert body["pending_review"]["changes"]["city"] == "Чебоксары"
