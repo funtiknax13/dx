@@ -53,6 +53,7 @@ class UserAdmin(BaseAdmin, model=User):
         User.role,
         User.email_verified,
         User.city,
+        User.prior_experience,
         User.is_guest,
         User.merged_into,
     ]
@@ -84,6 +85,7 @@ class UserAdmin(BaseAdmin, model=User):
         "birthday",
         "phone",
         "avatar",
+        "prior_experience",
     ]
     form_create_rules = [*_editable_fields, "password_hash"]
     form_edit_rules = _editable_fields
