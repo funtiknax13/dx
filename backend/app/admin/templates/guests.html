@@ -15,7 +15,14 @@
     <tbody>
       {% for g in guests %}
       <tr>
-        <td>{{ g.first_name }} {{ g.last_name }} <span class="hint">#{{ g.id }}</span></td>
+        <td>
+          <form class="inline" method="post" action="/admin-tools/guests/{{ g.id }}/rename">
+            <input type="text" name="first_name" value="{{ g.first_name }}" required />
+            <input type="text" name="last_name" value="{{ g.last_name }}" required />
+            <button type="submit" class="secondary btn-sm">Сохранить</button>
+          </form>
+          <span class="hint">#{{ g.id }}</span>
+        </td>
         <td>
           <form class="inline" method="get" action="/admin-tools/guests">
             <input type="hidden" name="for" value="{{ g.id }}" />

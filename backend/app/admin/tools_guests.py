@@ -121,6 +121,7 @@ async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
                 )
             )
     flash = request.query_params.get("flash")
+    flash_error = request.query_params.get("flash_error")
     return templates.TemplateResponse(
         request,
         "guests.html",
@@ -132,8 +133,39 @@ async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
             "search_results": search_results,
             "q": q,
             "flash": flash,
+            "flash_error": flash_error,
         },
     )
+
+
+@router.post("/guests/{guest_id}/rename", response_model=None)
+async def rename_guest(
+    request: Request,
+    guest_id: int,
+    # Not Form(...): an empty submitted value parses as an absent field (the
+    # browser still sends `first_name=`, but Starlette's urlencoded form
+    # parsing drops blank values), which would 422 before the friendly
+    # empty-check below ever runs.
+    first_name: str = Form(default=""),
+    last_name: str = Form(default=""),
+) -> RedirectResponse:
+    user = await _require_access(request)
+    if user is None:
+        return login_redirect()
+    first_name = first_name.strip()
+    last_name = last_name.strip()
+    if not first_name or not last_name:
+        return RedirectResponse(
+            "/admin-tools/guests?flash_error=Имя и фамилия не могут быть пустыми", 303
+        )
+    async with SessionLocal() as session:
+        guest = await session.get(User, guest_id)
+        if guest is None or not guest.is_guest:
+            return RedirectResponse("/admin-tools/guests?flash_error=Профиль не найден", 303)
+        guest.first_name = first_name
+        guest.last_name = last_name
+        await session.commit()
+    return RedirectResponse("/admin-tools/guests?flash=Имя обновлено", status_code=303)
 
 
 @router.post("/guests/{guest_id}/merge", response_model=None)
