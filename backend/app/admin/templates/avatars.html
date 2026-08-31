@@ -11,6 +11,11 @@
   .av-actions { display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--paper-soft); }
   .av-actions form { flex:1; margin:0; }
   .av-actions button { width:100%; justify-content:center; }
+  .av-photo { cursor: zoom-in; }
+  #lb { position:fixed; inset:0; background:rgba(14,14,13,.88); display:none; place-items:center; z-index:1000; cursor:zoom-out; }
+  #lb.open { display:grid; }
+  #lb img { max-width:calc(100% - 120px); max-height:86vh; border-radius:10px; box-shadow:var(--shadow-lift); cursor:default; }
+  #lb .hint { position:fixed; top:16px; right:20px; color:#e5e7eb; font-size:13px; }
 </style>
 <h1>Аватары на проверке ({{ users|length }})</h1>
 <p class="hint">
@@ -22,7 +27,7 @@
 <div class="av-grid">
   {% for u in users %}
   <div class="av-card">
-    <img class="av-photo" src="{{ u.avatar }}" alt="Аватар {{ u.first_name }} {{ u.last_name }}">
+    <img class="av-photo" src="{{ u.avatar }}" alt="Аватар {{ u.first_name }} {{ u.last_name }}" onclick="lbOpen(this.src)">
     <div class="av-body">
       <div class="av-name">
         {{ u.first_name }} {{ u.last_name }}{% if u.is_guest %} <span class="hint">(гость)</span>{% endif %}
@@ -50,4 +55,19 @@
 {% else %}
 <div class="empty">Нет аватаров на проверке. 🎉</div>
 {% endif %}
+
+<div id="lb" onclick="lbClose()">
+  <span class="hint">Esc — закрыть</span>
+  <img id="lb-img" src="" alt="" onclick="event.stopPropagation()">
+</div>
+<script>
+  function lbOpen(src){
+    document.getElementById('lb-img').src = src;
+    document.getElementById('lb').classList.add('open');
+  }
+  function lbClose(){ document.getElementById('lb').classList.remove('open'); }
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') lbClose();
+  });
+</script>
 {% endblock %}
