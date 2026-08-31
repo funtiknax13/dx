@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from fastapi import APIRouter, Form, Request, status
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from sqlalchemy import func, select
 
 from app.admin.tools_common import login_redirect, require_permission, templates
 from app.core.db import SessionLocal
@@ -13,6 +13,8 @@ from app.services.guest_service import merge_guest_into
 from app.services.name_search import flexible_name_filter
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
+
+GUEST_PAGE_SIZE = 25
 
 
 async def _require_access(request: Request) -> User | None:
@@ -97,29 +99,34 @@ async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
     if user is None:
         return login_redirect()
 
-    search_for_raw = request.query_params.get("for")
-    search_for = int(search_for_raw) if search_for_raw and search_for_raw.isdigit() else None
     q = request.query_params.get("q", "").strip()
+    try:
+        page = max(1, int(request.query_params.get("page", "1")))
+    except ValueError:
+        page = 1
 
     async with SessionLocal() as session:
+        base = select(User).where(User.is_guest.is_(True), User.merged_into_id.is_(None))
+        count_base = (
+            select(func.count())
+            .select_from(User)
+            .where(User.is_guest.is_(True), User.merged_into_id.is_(None))
+        )
+        if q:
+            base = base.where(flexible_name_filter(q))
+            count_base = count_base.where(flexible_name_filter(q))
+
+        total = await session.scalar(count_base) or 0
+        total_pages = max(1, (total + GUEST_PAGE_SIZE - 1) // GUEST_PAGE_SIZE)
+        page = min(page, total_pages)
+
         guests = list(
             await session.scalars(
-                select(User)
-                .where(User.is_guest.is_(True), User.merged_into_id.is_(None))
-                .order_by(User.id.desc())
-                .limit(100)
+                base.order_by(User.id.desc())
+                .offset((page - 1) * GUEST_PAGE_SIZE)
+                .limit(GUEST_PAGE_SIZE)
             )
         )
-        search_results: list[User] = []
-        if search_for is not None and q:
-            search_results = list(
-                await session.scalars(
-                    select(User)
-                    .where(User.is_guest.is_(False), flexible_name_filter(q))
-                    .order_by(User.id)
-                    .limit(10)
-                )
-            )
     flash = request.query_params.get("flash")
     flash_error = request.query_params.get("flash_error")
     return templates.TemplateResponse(
@@ -129,11 +136,60 @@ async def guests_page(request: Request) -> HTMLResponse | RedirectResponse:
             "active": "guests",
             "tools_user": user,
             "guests": guests,
-            "search_for": search_for,
-            "search_results": search_results,
             "q": q,
+            "total": total,
+            "page": page,
+            "total_pages": total_pages,
             "flash": flash,
             "flash_error": flash_error,
+        },
+    )
+
+
+@router.get("/guests/{guest_id}", response_class=HTMLResponse, response_model=None)
+async def guest_detail(
+    request: Request, guest_id: int
+) -> HTMLResponse | RedirectResponse | PlainTextResponse:
+    """Serves both the full page and the fragment the guests-list modal
+    fetches (?partial=1) — same dual-purpose pattern as tools_runners.py's
+    runner_detail. `q` here searches *registered* accounts to merge this
+    guest into, unrelated to the guest-name search on the list page."""
+    partial = request.query_params.get("partial") == "1"
+    user = await _require_access(request)
+    if user is None:
+        if partial:
+            return PlainTextResponse("Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+        return login_redirect()
+
+    q = request.query_params.get("q", "").strip()
+    async with SessionLocal() as session:
+        guest = await session.get(User, guest_id)
+        if guest is None or not guest.is_guest or guest.merged_into_id is not None:
+            if partial:
+                return PlainTextResponse("Not found", status_code=status.HTTP_404_NOT_FOUND)
+            return RedirectResponse("/admin-tools/guests", status_code=303)
+        search_results: list[User] = []
+        if q:
+            search_results = list(
+                await session.scalars(
+                    select(User)
+                    .where(User.is_guest.is_(False), flexible_name_filter(q))
+                    .order_by(User.id)
+                    .limit(10)
+                )
+            )
+    ctx = {"g": guest, "q": q, "search_results": search_results}
+    if partial:
+        return templates.TemplateResponse(request, "_guest_detail_fragment.html", ctx)
+    return templates.TemplateResponse(
+        request,
+        "guest_detail.html",
+        {
+            **ctx,
+            "active": "guests",
+            "tools_user": user,
+            "flash": request.query_params.get("flash"),
+            "flash_error": request.query_params.get("flash_error"),
         },
     )
 
@@ -156,7 +212,8 @@ async def rename_guest(
     last_name = last_name.strip()
     if not first_name or not last_name:
         return RedirectResponse(
-            "/admin-tools/guests?flash_error=Имя и фамилия не могут быть пустыми", 303
+            f"/admin-tools/guests/{guest_id}?flash_error=Имя и фамилия не могут быть пустыми",
+            303,
         )
     async with SessionLocal() as session:
         guest = await session.get(User, guest_id)
@@ -165,7 +222,7 @@ async def rename_guest(
         guest.first_name = first_name
         guest.last_name = last_name
         await session.commit()
-    return RedirectResponse("/admin-tools/guests?flash=Имя обновлено", status_code=303)
+    return RedirectResponse(f"/admin-tools/guests/{guest_id}?flash=Имя обновлено", status_code=303)
 
 
 @router.post("/guests/{guest_id}/merge", response_model=None)

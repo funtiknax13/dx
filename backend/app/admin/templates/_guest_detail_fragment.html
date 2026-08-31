@@ -1,0 +1,39 @@
+<span class="modal-avatar" style="display:grid; place-items:center; background:var(--signal-wash); color:var(--signal-soft); font-weight:700; font-size:22px; font-family:var(--font-display);">{{ g.first_name[0] }}{{ g.last_name[0] if g.last_name else '' }}</span>
+<h3>{{ g.first_name }} {{ g.last_name }}</h3>
+<p class="hint" style="margin-top:0;">ID {{ g.id }} · гостевой профиль</p>
+
+<div class="kv-group">
+  <h4>Переименовать</h4>
+  <form class="inline" method="post" action="/admin-tools/guests/{{ g.id }}/rename">
+    <input type="text" name="first_name" value="{{ g.first_name }}" required />
+    <input type="text" name="last_name" value="{{ g.last_name }}" required />
+    <button type="submit" class="secondary btn-sm">Сохранить</button>
+  </form>
+</div>
+
+<div class="kv-group">
+  <h4>Объединить с аккаунтом</h4>
+  <form class="inline" method="get" action="/admin-tools/guests/{{ g.id }}">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Поиск по имени" />
+    <button type="submit" class="secondary btn-sm">Найти</button>
+  </form>
+  {% if q %}
+    {% if search_results %}
+    <table style="margin-top: 10px; box-shadow:none; border:1px solid var(--paper-soft);">
+      {% for u in search_results %}
+      <tr>
+        <td>{{ u.first_name }} {{ u.last_name }} &lt;{{ u.email }}&gt;</td>
+        <td style="white-space:nowrap;">
+          <form method="post" action="/admin-tools/guests/{{ g.id }}/merge">
+            <input type="hidden" name="real_user_id" value="{{ u.id }}" />
+            <button type="submit" class="btn-sm">Объединить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="hint">Никого не нашлось по запросу «{{ q }}».</p>
+    {% endif %}
+  {% endif %}
+</div>

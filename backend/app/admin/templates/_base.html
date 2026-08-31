@@ -317,7 +317,6 @@
           {% endif %}
           {% if 'guest_claims' in tools_user.granted_permissions %}
           <a href="/admin-tools/claims" class="nav-link {{ 'active' if active == 'claims' }}">{{ nav_icon('check-circle') }}Заявки <span id="badge-claims" class="nav-badge" style="display:none;" title="Заявки на объединение с гостевым профилем"></span></a>
-          <a href="/admin-tools/guests" class="nav-link {{ 'active' if active == 'guests' }}">{{ nav_icon('users') }}Гости</a>
           {% endif %}
           {% if 'results_review' in tools_user.granted_permissions %}
           <a href="/admin-tools/results" class="nav-link {{ 'active' if active == 'results' }}">{{ nav_icon('flag') }}Результаты <span id="badge-moderation" class="nav-badge" style="display:none;" title="Результаты, ожидающие подтверждения"></span></a>
@@ -336,10 +335,17 @@
           {% endif %}
         </div>
         {% endif %}
-        {% if tools_user.role.value == 'admin' %}
+        {% if tools_user.role.value == 'admin' or 'guest_claims' in tools_user.granted_permissions %}
         <div class="nav-section">
+          {% if tools_user.role.value == 'admin' %}
           <a href="/admin-tools/runners" class="nav-link {{ 'active' if active == 'runners' }}">{{ nav_icon('search') }}Поиск бегунов</a>
+          {% endif %}
+          {% if 'guest_claims' in tools_user.granted_permissions %}
+          <a href="/admin-tools/guests" class="nav-link {{ 'active' if active == 'guests' }}">{{ nav_icon('users') }}Гости</a>
+          {% endif %}
+          {% if tools_user.role.value == 'admin' %}
           <a href="/admin-tools/permissions" class="nav-link {{ 'active' if active == 'permissions' }}">{{ nav_icon('shield') }}Права организаторов</a>
+          {% endif %}
         </div>
         {% endif %}
         {% endif %}

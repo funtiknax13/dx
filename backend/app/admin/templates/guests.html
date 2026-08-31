@@ -1,59 +1,50 @@
 {% extends "_base.html" %}
-{% block title %}Гостевые профили — DX Tools{% endblock %}
+{% block title %}Гости — DX Tools{% endblock %}
 {% block content %}
-  <h1>Гостевые профили ({{ guests|length }})</h1>
-  <p class="hint">
-    Создаются автоматически при импорте CSV, если email не совпал ни с одним
-    зарегистрированным аккаунтом. Обычно объединения дожидаются заявки от самого
-    бегуна (см. «Заявки»), но здесь можно объединить и вручную, если нужно
-    сделать это раньше.
-  </p>
+<div class="row-between">
+  <div>
+    <h1>Гостевые профили</h1>
+    <p class="hint" style="margin-top:2px;">
+      {{ total }} {{ 'профиль' if total % 10 == 1 and total % 100 != 11 else ('профиля' if total % 10 in (2,3,4) and total % 100 not in (12,13,14) else 'профилей') }}
+      · создаются автоматически при импорте CSV, если email не совпал ни с одним зарегистрированным
+      аккаунтом. Обычно объединения дожидаются заявки от самого бегуна (см. «Заявки»), но здесь можно
+      переименовать или объединить вручную.
+    </p>
+  </div>
+</div>
+<form class="inline" method="get" action="/admin-tools/guests" style="margin-bottom:18px;">
+  <input type="text" name="q" value="{{ q or '' }}" placeholder="Имя или фамилия…" style="min-width:260px;" />
+  <button type="submit">Найти</button>
+  {% if q %}<a class="btn secondary" href="/admin-tools/guests">Сбросить</a>{% endif %}
+</form>
 
-  {% if guests %}
-  <table>
-    <thead><tr><th>Имя</th><th>Объединить с аккаунтом</th></tr></thead>
-    <tbody>
-      {% for g in guests %}
-      <tr>
-        <td>
-          <form class="inline" method="post" action="/admin-tools/guests/{{ g.id }}/rename">
-            <input type="text" name="first_name" value="{{ g.first_name }}" required />
-            <input type="text" name="last_name" value="{{ g.last_name }}" required />
-            <button type="submit" class="secondary btn-sm">Сохранить</button>
-          </form>
-          <span class="hint">#{{ g.id }}</span>
-        </td>
-        <td>
-          <form class="inline" method="get" action="/admin-tools/guests">
-            <input type="hidden" name="for" value="{{ g.id }}" />
-            <input type="text" name="q" value="{{ q if search_for == g.id else '' }}" placeholder="Поиск по имени/почте" />
-            <button type="submit" class="secondary">Найти</button>
-          </form>
-          {% if search_for == g.id %}
-            {% if search_results %}
-            <table style="margin-top: 6px; box-shadow:none; border:1px solid var(--paper-soft);">
-              {% for u in search_results %}
-              <tr>
-                <td>{{ u.first_name }} {{ u.last_name }} &lt;{{ u.email }}&gt;</td>
-                <td>
-                  <form method="post" action="/admin-tools/guests/{{ g.id }}/merge">
-                    <input type="hidden" name="real_user_id" value="{{ u.id }}" />
-                    <button type="submit" class="btn-sm">Объединить</button>
-                  </form>
-                </td>
-              </tr>
-              {% endfor %}
-            </table>
-            {% else %}
-            <p class="hint">Никого не найдено по запросу «{{ q }}».</p>
-            {% endif %}
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty">Нет гостевых профилей.</div>
-  {% endif %}
+{% if guests %}
+<table>
+  <thead><tr><th>Имя</th><th></th></tr></thead>
+  <tbody>
+    {% for g in guests %}
+    <tr>
+      <td>
+        <a href="/admin-tools/guests/{{ g.id }}" data-modal-url="/admin-tools/guests/{{ g.id }}?partial=1" style="font-weight:600; text-decoration:none;">
+          {{ g.first_name }} {{ g.last_name }}
+        </a>
+        <span class="hint">#{{ g.id }}</span>
+      </td>
+      <td style="white-space:nowrap;">
+        <a class="btn secondary btn-sm" href="/admin-tools/guests/{{ g.id }}" data-modal-url="/admin-tools/guests/{{ g.id }}?partial=1">Открыть</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if total_pages > 1 %}
+<div class="pager">
+  <a class="btn secondary {{ 'disabled' if page <= 1 }}" href="?q={{ q }}&page={{ page - 1 }}">← Назад</a>
+  <span class="page-num">Страница {{ page }} из {{ total_pages }}</span>
+  <a class="btn secondary {{ 'disabled' if page >= total_pages }}" href="?q={{ q }}&page={{ page + 1 }}">Вперёд →</a>
+</div>
+{% endif %}
+{% else %}
+<div class="empty">{{ 'Никого не нашлось.' if q else 'Нет гостевых профилей.' }}</div>
+{% endif %}
 {% endblock %}
