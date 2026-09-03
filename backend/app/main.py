@@ -13,6 +13,7 @@ from app.admin.auth import AdminAuth
 from app.admin.moderation import router as moderation_router
 from app.admin.tools_avatars import router as tools_avatars_router
 from app.admin.tools_baselines import router as tools_baselines_router
+from app.admin.tools_birthdays import router as tools_birthdays_router
 from app.admin.tools_dashboard import router as tools_dashboard_router
 from app.admin.tools_events import router as tools_events_router
 from app.admin.tools_groups import router as tools_groups_router
@@ -76,6 +77,7 @@ app.include_router(tools_surveys_router)
 app.include_router(tools_support_router)
 app.include_router(tools_permissions_router)
 app.include_router(tools_runners_router)
+app.include_router(tools_birthdays_router)
 app.include_router(moderation_router)
 
 # Serve uploaded media in dev (in prod nginx serves /media directly).

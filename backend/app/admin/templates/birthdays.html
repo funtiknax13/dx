@@ -1,0 +1,112 @@
+{% extends "_base.html" %}
+{% block title %}Дни рождения — DX Tools{% endblock %}
+{% block content %}
+<style>
+  .bday-hero { display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:26px; }
+  @media (max-width: 760px) { .bday-hero { grid-template-columns: 1fr; } }
+  .bday-hero .card { margin-bottom:0; }
+  .bday-hero h2 { display:flex; align-items:center; gap:8px; font-size:16px; margin-bottom:14px; }
+
+  .bday-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--paper-soft); }
+  .bday-row:last-child { border-bottom:none; }
+  .bday-day-badge {
+    width:42px; height:42px; border-radius:12px; background:var(--paper-soft); color:var(--ink-700);
+    display:grid; place-items:center; font-family:var(--font-mono); font-weight:700; font-size:15px; flex:0 0 auto;
+  }
+  .bday-day-badge.today { background:var(--signal); color:#fff; }
+  .bday-name { font-weight:600; text-decoration:none; color:inherit; }
+  .bday-name:hover { color: var(--signal); }
+  .bday-meta { font-size:12px; color:var(--clay); margin-top:1px; }
+  .bday-when { margin-left:auto; font-size:12px; color:var(--clay); white-space:nowrap; text-align:right; padding-left:8px; }
+
+  .month-nav { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:22px; }
+  .month-nav a {
+    padding:7px 13px; border-radius:999px; font-size:12.5px; font-weight:600; text-decoration:none;
+    background:var(--paper-soft); color:var(--ink-700); border:1px solid transparent; transition:border-color .12s;
+  }
+  .month-nav a:hover { border-color: var(--paper-deep); }
+  .month-nav a.current { border-color: var(--signal); }
+  .month-nav a .count { color:var(--clay); font-family:var(--font-mono); margin-left:3px; }
+  .month-nav a.is-empty { opacity:.4; }
+
+  .month-section { margin-bottom:22px; scroll-margin-top:16px; }
+  .month-section h3 { display:flex; align-items:baseline; gap:8px; margin:0 0 8px; }
+  .month-section h3 .count { font-size:12px; color:var(--clay); font-weight:500; font-family:var(--font-mono); }
+  .month-card { padding:4px 22px; }
+</style>
+
+<div class="row-between">
+  <div>
+    <h1>Дни рождения</h1>
+    <p class="hint" style="margin-top:2px;">{{ total }} человек с указанной датой рождения</p>
+  </div>
+</div>
+
+<div class="bday-hero">
+  <div class="card">
+    <h2>🎂 Сегодня</h2>
+    {% if today_rows %}
+      {% for r in today_rows %}
+      <div class="bday-row">
+        <span class="bday-day-badge today">{{ r.birthday.day }}</span>
+        <div>
+          <a href="/admin-tools/runners/{{ r.user.id }}" data-modal-url="/admin-tools/runners/{{ r.user.id }}?partial=1" class="bday-name">{{ r.user.first_name }} {{ r.user.last_name }}</a>
+          <div class="bday-meta">исполняется {{ r.age }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="hint" style="margin:0;">Сегодня дней рождения нет.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Ближайшие 7 дней</h2>
+    {% if upcoming_rows %}
+      {% for r in upcoming_rows %}
+      <div class="bday-row">
+        <span class="bday-day-badge">{{ r.birthday.day }}</span>
+        <div>
+          <a href="/admin-tools/runners/{{ r.user.id }}" data-modal-url="/admin-tools/runners/{{ r.user.id }}?partial=1" class="bday-name">{{ r.user.first_name }} {{ r.user.last_name }}</a>
+          <div class="bday-meta">{{ r.next_occurrence.strftime('%d.%m') }} · исполняется {{ r.age }}</div>
+        </div>
+        <span class="bday-when">через {{ r.days_until }} {{ 'день' if r.days_until == 1 else ('дня' if r.days_until in (2,3,4) else 'дней') }}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="hint" style="margin:0;">В ближайшие 7 дней дней рождения нет.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if total %}
+<div class="month-nav">
+  {% for m in months %}
+  <a href="#month-{{ m.index }}" class="{{ 'current' if m.index == current_month }} {{ 'is-empty' if not m.rows }}">{{ m.name }} <span class="count">{{ m.rows|length }}</span></a>
+  {% endfor %}
+</div>
+
+{% for m in months %}
+<div class="month-section" id="month-{{ m.index }}">
+  <h3>{{ m.name }} <span class="count">{{ m.rows|length }}</span></h3>
+  {% if m.rows %}
+  <div class="card month-card">
+    {% for r in m.rows %}
+    <div class="bday-row">
+      <span class="bday-day-badge">{{ r.birthday.day }}</span>
+      <div>
+        <a href="/admin-tools/runners/{{ r.user.id }}" data-modal-url="/admin-tools/runners/{{ r.user.id }}?partial=1" class="bday-name">{{ r.user.first_name }} {{ r.user.last_name }}</a>
+        <div class="bday-meta">исполняется {{ r.age }}{% if r.user.city %} · {{ r.user.city }}{% endif %}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">Нет дней рождения в этом месяце.</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="empty">Ни у одного бегуна не указана дата рождения.</div>
+{% endif %}
+{% endblock %}
