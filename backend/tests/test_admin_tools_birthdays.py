@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.admin.tools_birthdays import _next_occurrence
+from app.admin.tools_birthdays import MONTH_NAMES, _next_occurrence
 from app.core.security import create_access_token
 from app.models.enums import UserRole
 from tests.factories import make_user
@@ -69,7 +69,7 @@ async def test_birthdays_page_forbidden_for_organizer(
 
 
 @pytest.mark.asyncio
-async def test_birthdays_page_groups_today_upcoming_and_by_month(
+async def test_birthdays_page_shows_today_upcoming_and_current_month_by_default(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     admin = await make_user(session, "admin-bdays2@example.com", UserRole.admin)
@@ -98,8 +98,32 @@ async def test_birthdays_page_groups_today_upcoming_and_by_month(
     resp = await client.get("/admin-tools/birthdays")
     assert resp.status_code == 200
     body = resp.text
+    # "Сегодня" and "Ближайшие 7 дней" are unaffected by month selection —
+    # both always show on the default view.
     assert today_user.last_name in body
     assert soon_user.last_name in body
-    assert far_user.last_name in body
-    # A guest with a matching birthday must not show up anywhere on the page.
+    # A different month's birthday must NOT show up until that month is picked.
+    assert far_user.last_name not in body
+    # A guest with a matching birthday must never show up anywhere on the page.
     assert guest.last_name not in body
+
+    resp2 = await client.get("/admin-tools/birthdays", params={"month": far_month})
+    assert resp2.status_code == 200
+    body2 = resp2.text
+    assert far_user.last_name in body2
+    # Switching months must not lose the today/upcoming sections.
+    assert today_user.last_name in body2
+
+
+@pytest.mark.asyncio
+async def test_birthdays_page_falls_back_to_current_month_for_bad_month_param(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-bdays3@example.com", UserRole.admin)
+    await session.commit()
+    await _login(client, admin.id)
+
+    for bad in ("0", "13", "not-a-number"):
+        resp = await client.get("/admin-tools/birthdays", params={"month": bad})
+        assert resp.status_code == 200
+        assert MONTH_NAMES[date.today().month - 1] in resp.text

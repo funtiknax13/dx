@@ -72,6 +72,13 @@ async def birthdays_page(request: Request) -> HTMLResponse | RedirectResponse:
         return login_redirect()
 
     today = date.today()
+    try:
+        selected_month = int(request.query_params.get("month", today.month))
+    except ValueError:
+        selected_month = today.month
+    if not 1 <= selected_month <= 12:
+        selected_month = today.month
+
     async with SessionLocal() as session:
         users = list(
             await session.scalars(
@@ -102,16 +109,20 @@ async def birthdays_page(request: Request) -> HTMLResponse | RedirectResponse:
     )
     upcoming_rows = sorted((r for r in rows if 1 <= r.days_until <= 7), key=lambda r: r.days_until)
 
+    # Only counts for the pill nav — the page shows one month's full row
+    # list at a time (the selected one), not all twelve stacked, so it
+    # stays scannable once there are 100+ runners with birthdays.
     months = [
         {
             "index": m,
             "name": MONTH_NAMES[m - 1],
-            "rows": sorted(
-                (r for r in rows if r.birthday.month == m), key=lambda r: r.birthday.day
-            ),
+            "count": sum(1 for r in rows if r.birthday.month == m),
         }
         for m in range(1, 13)
     ]
+    selected_rows = sorted(
+        (r for r in rows if r.birthday.month == selected_month), key=lambda r: r.birthday.day
+    )
 
     return templates.TemplateResponse(
         request,
@@ -122,6 +133,9 @@ async def birthdays_page(request: Request) -> HTMLResponse | RedirectResponse:
             "today_rows": today_rows,
             "upcoming_rows": upcoming_rows,
             "months": months,
+            "selected_month": selected_month,
+            "selected_month_name": MONTH_NAMES[selected_month - 1],
+            "selected_rows": selected_rows,
             "total": len(rows),
             "current_month": today.month,
         },

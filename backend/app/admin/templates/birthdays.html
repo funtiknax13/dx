@@ -26,10 +26,11 @@
   }
   .month-nav a:hover { border-color: var(--paper-deep); }
   .month-nav a.current { border-color: var(--signal); }
+  .month-nav a.selected { background: var(--ink); color: #fff; }
+  .month-nav a.selected .count { color: var(--clay); }
   .month-nav a .count { color:var(--clay); font-family:var(--font-mono); margin-left:3px; }
   .month-nav a.is-empty { opacity:.4; }
 
-  .month-section { margin-bottom:22px; scroll-margin-top:16px; }
   .month-section h3 { display:flex; align-items:baseline; gap:8px; margin:0 0 8px; }
   .month-section h3 .count { font-size:12px; color:var(--clay); font-weight:500; font-family:var(--font-mono); }
   .month-card { padding:4px 22px; }
@@ -82,16 +83,15 @@
 {% if total %}
 <div class="month-nav">
   {% for m in months %}
-  <a href="#month-{{ m.index }}" class="{{ 'current' if m.index == current_month }} {{ 'is-empty' if not m.rows }}">{{ m.name }} <span class="count">{{ m.rows|length }}</span></a>
+  <a href="?month={{ m.index }}" class="{{ 'current' if m.index == current_month }} {{ 'selected' if m.index == selected_month }} {{ 'is-empty' if not m.count }}">{{ m.name }} <span class="count">{{ m.count }}</span></a>
   {% endfor %}
 </div>
 
-{% for m in months %}
-<div class="month-section" id="month-{{ m.index }}">
-  <h3>{{ m.name }} <span class="count">{{ m.rows|length }}</span></h3>
-  {% if m.rows %}
+<div class="month-section">
+  <h3>{{ selected_month_name }} <span class="count">{{ selected_rows|length }}</span></h3>
+  {% if selected_rows %}
   <div class="card month-card">
-    {% for r in m.rows %}
+    {% for r in selected_rows %}
     <div class="bday-row">
       <span class="bday-day-badge">{{ r.birthday.day }}</span>
       <div>
@@ -105,7 +105,6 @@
   <div class="empty">Нет дней рождения в этом месяце.</div>
   {% endif %}
 </div>
-{% endfor %}
 {% else %}
 <div class="empty">Ни у одного бегуна не указана дата рождения.</div>
 {% endif %}
