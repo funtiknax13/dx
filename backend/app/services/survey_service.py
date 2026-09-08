@@ -26,9 +26,7 @@ async def get_active_required_survey(session: AsyncSession) -> Survey | None:
 
 async def _has_any_attendance(session: AsyncSession, runner_id: int) -> bool:
     return bool(
-        await session.scalar(
-            select(exists().where(AttendanceRecord.runner_id == runner_id))
-        )
+        await session.scalar(select(exists().where(AttendanceRecord.runner_id == runner_id)))
     )
 
 
@@ -72,15 +70,17 @@ async def survey_required_for(session: AsyncSession, runner: User) -> Survey | N
     ("first DX") — before that there's nothing to survey them about yet
     (they haven't run), so GET /surveys/active has nothing to hand back even
     though stats_locked_pending_survey is already True.
-    settings.survey_force_for_all (testing only) bypasses both the
-    prior_experience and attendance checks, so any runner can pull up and try
-    the survey regardless of history."""
+    settings.survey_force_for_all (testing only) bypasses the prior_experience
+    check, so an already-experienced test account can pull up the survey too
+    — it does NOT bypass the attendance check: filling out "how was your
+    first DX" without ever having attended one makes no sense regardless of
+    who's testing, so that requirement stays unconditional."""
     if not settings.survey_force_for_all and runner.prior_experience != PriorExperience.never:
         return None
     survey = await get_active_required_survey(session)
     if survey is None:
         return None
-    if not settings.survey_force_for_all and not await _has_any_attendance(session, runner.id):
+    if not await _has_any_attendance(session, runner.id):
         return None
     if await _has_completed(session, survey.id, runner.id):
         return None
@@ -130,9 +130,7 @@ async def export_responses_csv(session: AsyncSession, survey: Survey) -> str:
 
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(
-        ["runner_name", "runner_email", "submitted_at"] + [q.prompt for q in questions]
-    )
+    writer.writerow(["runner_name", "runner_email", "submitted_at"] + [q.prompt for q in questions])
     for response in responses:
         runner = await session.get(User, response.runner_id)
         answers = {

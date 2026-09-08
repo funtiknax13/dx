@@ -14,6 +14,16 @@ from app.services.survey_service import (
 from tests.factories import make_attendance_with_result, make_event_group, make_user
 
 
+@pytest.fixture(autouse=True)
+def _default_survey_force_for_all_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the testing override to its documented default regardless of the
+    developer's local .env — SURVEY_FORCE_FOR_ALL=true is a common local
+    setting for trying the newbie-survey flow by hand, but these tests
+    assert the *default* (non-override) behavior unless they explicitly
+    flip it back on themselves."""
+    monkeypatch.setattr(settings, "survey_force_for_all", False)
+
+
 async def _make_survey(
     session: AsyncSession, admin, *, required: bool = True, active: bool = True
 ) -> Survey:
@@ -196,12 +206,14 @@ async def test_survey_not_required_once_completed(session: AsyncSession) -> None
 
 
 @pytest.mark.asyncio
-async def test_force_for_all_bypasses_prior_experience_and_attendance(
+async def test_force_for_all_bypasses_prior_experience_but_not_attendance(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The testing override (settings.survey_force_for_all) hands the survey
-    to any runner, even an experienced one with no tracked attendance —
-    normally both would exclude them (see the two tests above)."""
+    """The testing override (settings.survey_force_for_all) waives the
+    prior_experience check — an already-experienced runner reaches the
+    survey too — but must NOT also waive the attendance requirement: a
+    runner with zero tracked attendance still can't fill it out even under
+    the override, since "how was your first DX" makes no sense without one."""
     admin = await make_user(session, "admin-survey-force1@example.com", UserRole.admin)
     runner = await make_user(session, "runner-survey-force1@example.com")
     runner.prior_experience = PriorExperience.multiple
@@ -212,9 +224,24 @@ async def test_force_for_all_bypasses_prior_experience_and_attendance(
     assert await stats_locked_pending_survey(session, runner) is False
 
     monkeypatch.setattr(settings, "survey_force_for_all", True)
+    # Still no tracked attendance — must stay unavailable even under the override.
+    assert await survey_required_for(session, runner) is None
+    assert await stats_locked_pending_survey(session, runner) is True
+
+    # Give them a tracked run: now the override's prior_experience waiver
+    # actually lets them through.
+    org = await make_user(session, "org-survey-force1@example.com", UserRole.organizer)
+    _, group = await make_event_group(session, org)
+    await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    await session.commit()
     required = await survey_required_for(session, runner)
     assert required is not None and required.id == survey.id
-    assert await stats_locked_pending_survey(session, runner) is True
 
 
 @pytest.mark.asyncio

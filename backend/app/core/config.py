@@ -85,11 +85,14 @@ class Settings(BaseSettings):
 
     # TESTING SWITCH — normally the newbie survey only gates runners who
     # self-reported never having run with the community before (see
-    # User.prior_experience). Flip to True to force it onto *every* runner
-    # regardless of prior_experience/attendance, so the whole flow can be
-    # tried out without needing a fresh "never ran before" test account.
-    # Rollback is just flipping this back to False (the default) and
-    # restarting — no data/migration involved either way.
+    # User.prior_experience). Flip to True to force it onto every runner's
+    # prior_experience check, so an already-experienced test account can
+    # try the flow too without needing a fresh "never ran before" test
+    # account. Does NOT waive the attendance requirement (see
+    # survey_service.survey_required_for) — a runner still needs at least
+    # one tracked attendance before the survey is actually fillable, testing
+    # or not. Rollback is just flipping this back to False (the default)
+    # and restarting — no data/migration involved either way.
     survey_force_for_all: bool = False
 
     @property

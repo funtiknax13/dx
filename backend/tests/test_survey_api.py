@@ -2,10 +2,19 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import create_access_token
 from app.models.enums import FinishStatus, ModerationStatus, PriorExperience, UserRole
 from app.models.survey import Survey, SurveyQuestion
 from tests.factories import make_attendance_with_result, make_event_group, make_user
+
+
+@pytest.fixture(autouse=True)
+def _default_survey_force_for_all_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    """See the matching fixture in test_survey_service.py — pins the testing
+    override to its documented default regardless of the developer's local
+    .env (SURVEY_FORCE_FOR_ALL=true is a common local setting)."""
+    monkeypatch.setattr(settings, "survey_force_for_all", False)
 
 
 async def _make_required_survey(session: AsyncSession, admin) -> Survey:
