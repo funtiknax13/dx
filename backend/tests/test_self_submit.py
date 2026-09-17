@@ -72,6 +72,64 @@ async def test_manual_requires_screenshot(session: AsyncSession, client: AsyncCl
 
 
 @pytest.mark.asyncio
+async def test_manual_result_rejects_an_implausible_pace(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """27 km entered with a time field misread as 2 min 5 sec (meant as 2h05m)
+    — an implausibly fast pace, not a real result. See MIN_MANUAL_PACE_SECONDS_PER_KM."""
+    runner, _group, rec = await _matched_record(session, "org-pace1@e.com", "run-pace1@e.com")
+    resp = await client.post(
+        f"/api/v1/attendance/{rec.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "27", "duration_seconds": "125"},  # 2:05 read as mm:ss
+        files=_IMG,
+    )
+    assert resp.status_code == 422
+    assert "ЧЧ:ММ:СС" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_manual_result_accepts_a_plausible_slow_pace(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """The same 27 km actually run in 2h05m (7500s, ~278 s/km) must go through
+    fine — the check only rejects implausibly *fast* paces."""
+    runner, _group, rec = await _matched_record(session, "org-pace2@e.com", "run-pace2@e.com")
+    resp = await client.post(
+        f"/api/v1/attendance/{rec.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "27", "duration_seconds": "7500"},
+        files=_IMG,
+    )
+    assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.asyncio
+async def test_manual_result_rejects_implausible_pace_even_for_admin(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Unlike the screenshot requirement, admins get no exemption here — a
+    physically implausible pace is a typo regardless of who typed it."""
+    admin = await make_user(session, "admin-pace3@e.com", UserRole.admin)
+    org = await make_user(session, "org-pace3@e.com", UserRole.organizer)
+    _event, group = await make_event_group(session, org)
+    runner = await make_user(session, "run-pace3@e.com")
+    rec = AttendanceRecord(
+        group_id=group.id, raw_name="R", runner_id=runner.id, finish_status=FinishStatus.finished
+    )
+    session.add(rec)
+    await session.commit()
+
+    resp = await client.post(
+        f"/api/v1/attendance/{rec.id}/result",
+        headers=_auth(admin.id),
+        data={"distance_km": "27", "duration_seconds": "125"},
+    )
+    assert resp.status_code == 422
+    assert "ЧЧ:ММ:СС" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_manual_result_stores_optional_comment(
     session: AsyncSession, client: AsyncClient
 ) -> None:
@@ -133,6 +191,26 @@ async def test_self_submit_before_protocol_creates_self_reported(
 
 
 @pytest.mark.asyncio
+async def test_self_submit_rejects_an_implausible_pace(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-self-pace@e.com", UserRole.organizer)
+    event, group = await make_event_group(session, org)  # past
+    runner = await make_user(session, "run-self-pace@e.com")
+    session.add(Signup(runner_id=runner.id, group_id=group.id, event_id=event.id))
+    await session.commit()
+
+    r = await client.post(
+        f"/api/v1/groups/{group.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "27", "duration_seconds": "125"},
+        files=_IMG,
+    )
+    assert r.status_code == 422
+    assert "ЧЧ:ММ:СС" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_self_submit_requires_signup(session: AsyncSession, client: AsyncClient) -> None:
     org = await make_user(session, "org-nosig@e.com", UserRole.organizer)
     _event, group = await make_event_group(session, org)
@@ -148,9 +226,7 @@ async def test_self_submit_requires_signup(session: AsyncSession, client: AsyncC
 
 
 @pytest.mark.asyncio
-async def test_self_submit_future_event_blocked(
-    session: AsyncSession, client: AsyncClient
-) -> None:
+async def test_self_submit_future_event_blocked(session: AsyncSession, client: AsyncClient) -> None:
     org = await make_user(session, "org-fut@e.com", UserRole.organizer)
     event, group = await make_event_group(session, org)
     event.date = date(2099, 1, 1)

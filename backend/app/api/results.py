@@ -57,9 +57,7 @@ async def _check_resubmit_allowed(
     never blocked (they can overwrite directly instead of going via the queue)."""
     if user.role == UserRole.admin:
         return
-    existing = await session.scalar(
-        select(Result).where(Result.attendance_record_id == record.id)
-    )
+    existing = await session.scalar(select(Result).where(Result.attendance_record_id == record.id))
     if existing is None:
         return
     if existing.status == ModerationStatus.pending:
@@ -97,6 +95,23 @@ def _require_manual_screenshot(user: CurrentUser, images: list[UploadFile]) -> N
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "К ручному результату нужен хотя бы один скриншот, где видны дата и время "
             "старта, дистанция, время пробежки и трек.",
+        )
+
+
+# Faster than this is not a real running pace for any distance on offer here —
+# it almost always means the H:MM:SS field was misread as M:SS (e.g. "2:05"
+# typed meaning 2h05m, parsed as 2m05s). Backend-side backstop for the same
+# check the manual-entry form already runs client-side; no admin exemption —
+# entering data by hand on someone else's behalf is just as typo-prone.
+MIN_MANUAL_PACE_SECONDS_PER_KM = 90
+
+
+def _require_plausible_pace(distance_km: float, duration_seconds: int) -> None:
+    if distance_km > 0 and duration_seconds / distance_km < MIN_MANUAL_PACE_SECONDS_PER_KM:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Время указано некорректно — проверьте формат ЧЧ:ММ:СС "
+            "(например, 2 часа 5 минут — это 2:05:00, а не 2:05).",
         )
 
 
@@ -166,9 +181,7 @@ async def _save_result(
     )
 
     # 1:1 upsert — overwrite an existing result (and its stored file) in place.
-    result = await session.scalar(
-        select(Result).where(Result.attendance_record_id == record.id)
-    )
+    result = await session.scalar(select(Result).where(Result.attendance_record_id == record.id))
     if result is not None:
         if result.source_file and result.source_file != source_file_path:
             delete_media(result.source_file)
@@ -188,9 +201,7 @@ async def _save_result(
     # Keep the file's own measured distance so moderation can see what was
     # distrusted when distance_km falls back to the group target. Manual entries
     # have no independent measurement.
-    result.measured_distance_km = (
-        parsed.distance_km if source == ResultSource.file else None
-    )
+    result.measured_distance_km = parsed.distance_km if source == ResultSource.file else None
     result.duration_seconds = outcome.duration_seconds
     result.pace_seconds_per_km = outcome.pace_seconds_per_km
     result.start_time = parsed.start_time
@@ -267,6 +278,7 @@ async def submit_result(
                 "Manual entry requires distance_km and duration_seconds",
             )
         _require_manual_screenshot(user, images)
+        _require_plausible_pace(distance_km, duration_seconds)
         parsed = ParsedTrack(
             distance_km=distance_km,
             duration_seconds=duration_seconds,
@@ -323,9 +335,7 @@ async def import_result_from_url(
     assert group is not None
 
     try:
-        content, content_type, content_disposition = await fetch_external_workout_file(
-            payload.url
-        )
+        content, content_type, content_disposition = await fetch_external_workout_file(payload.url)
     except FetchError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
@@ -345,9 +355,7 @@ async def import_result_from_url(
     except (FileTooLargeError, InvalidFileTypeError) as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    return await _save_result(
-        session, record, group, parsed, ResultSource.file, source_file_path
-    )
+    return await _save_result(session, record, group, parsed, ResultSource.file, source_file_path)
 
 
 @router.post(
@@ -374,9 +382,7 @@ async def submit_group_result(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
 
     signup = await session.scalar(
-        select(Signup).where(
-            Signup.event_id == group.event_id, Signup.runner_id == user.id
-        )
+        select(Signup).where(Signup.event_id == group.event_id, Signup.runner_id == user.id)
     )
     if signup is None or signup.group_id != group_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Вы не записаны в эту группу")
@@ -395,6 +401,7 @@ async def submit_group_result(
             "Укажите дистанцию и время.",
         )
     _require_manual_screenshot(user, images)
+    _require_plausible_pace(distance_km, duration_seconds)
 
     # Reuse the runner's existing record in this distance family if any (e.g. a
     # re-submission), else create a self-reported one.

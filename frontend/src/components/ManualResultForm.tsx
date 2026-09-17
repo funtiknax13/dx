@@ -11,6 +11,9 @@ export interface ManualResultData {
 
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const ALLOWED_IMAGE_HINT = 'Файл должен быть в формате JPG, JPEG, PNG или WEBP'
+// Backend enforces the same floor (see MIN_MANUAL_PACE_SECONDS_PER_KM in
+// app/api/results.py) — this is just the earlier, friendlier check.
+const MIN_PACE_SECONDS_PER_KM = 90
 
 /** Digits + a single decimal separator (comma or dot) — strips everything
  * else and any extra separator as you type, so the field can't hold garbage
@@ -91,6 +94,14 @@ export function ManualResultForm({
     const tp = duration.split(':').map(Number)
     if ((tp.length >= 2 && tp[1] >= 60) || (tp.length >= 3 && tp[2] >= 60)) {
       setError('Минуты и секунды должны быть меньше 60')
+      return
+    }
+    // Faster than this isn't a real running pace — almost always the H:MM:SS
+    // field got misread as M:SS (e.g. "2:05" typed meaning 2h05m, parsed as
+    // 2m05s). Catch it here with a clear message instead of silently saving
+    // a nonsense result for a moderator to puzzle over later.
+    if (durationSeconds / distanceKm < MIN_PACE_SECONDS_PER_KM) {
+      setError('Время указано некорректно — проверьте формат ЧЧ:ММ:СС (например, 2 часа 5 минут — это 2:05:00, а не 2:05)')
       return
     }
     if (images.length === 0) {
