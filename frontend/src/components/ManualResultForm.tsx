@@ -35,12 +35,37 @@ function parseDuration(input: string): number {
 }
 
 /** Progressive Ч:ММ:СС mask: 1 digit hours, then auto ":", 2 digits minutes,
- * auto ":", 2 digits seconds. Colons appear on their own as you type. */
+ * auto ":", 2 digits seconds — a colon is inserted on its own once a segment
+ * is full. Typing ':' yourself works too and does the same thing (moves on
+ * to the next segment early, e.g. "1" then ":" for a single-digit minute
+ * count instead of being forced to pad to "01") rather than silently
+ * disappearing, which felt broken. Recomputed from scratch on every
+ * keystroke, so backspace/edit-in-the-middle behave normally. */
 function formatTimeMask(input: string): string {
-  const d = input.replace(/\D/g, '').slice(0, 5) // H MM SS
-  if (d.length <= 1) return d
-  if (d.length <= 3) return `${d[0]}:${d.slice(1)}`
-  return `${d[0]}:${d.slice(1, 3)}:${d.slice(3)}`
+  const cleaned = input.replace(/[^\d:]/g, '')
+  const maxLen = [1, 2, 2]
+  const segments = ['']
+  let seg = 0
+
+  for (const ch of cleaned) {
+    if (ch === ':') {
+      // Only advances when there's something to leave behind, and only up
+      // to seconds — an empty or trailing ':' has nothing to do.
+      if (seg < 2 && segments[seg] !== '') {
+        seg += 1
+        segments[seg] = ''
+      }
+      continue
+    }
+    if (segments[seg].length < maxLen[seg]) {
+      segments[seg] += ch
+    } else if (seg < 2) {
+      seg += 1
+      segments[seg] = ch
+    } // else: seconds already full — extra digits are dropped
+  }
+
+  return segments.join(':')
 }
 
 /** Manual result entry: distance + time + at least one required screenshot.
