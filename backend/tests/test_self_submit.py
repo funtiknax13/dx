@@ -85,7 +85,7 @@ async def test_manual_result_rejects_an_implausible_pace(
         files=_IMG,
     )
     assert resp.status_code == 422
-    assert "ЧЧ:ММ:СС" in resp.json()["detail"]
+    assert "Ч:ММ:СС" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -126,7 +126,7 @@ async def test_manual_result_rejects_implausible_pace_even_for_admin(
         data={"distance_km": "27", "duration_seconds": "125"},
     )
     assert resp.status_code == 422
-    assert "ЧЧ:ММ:СС" in resp.json()["detail"]
+    assert "Ч:ММ:СС" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -207,7 +207,7 @@ async def test_self_submit_rejects_an_implausible_pace(
         files=_IMG,
     )
     assert r.status_code == 422
-    assert "ЧЧ:ММ:СС" in r.json()["detail"]
+    assert "Ч:ММ:СС" in r.json()["detail"]
 
 
 @pytest.mark.asyncio

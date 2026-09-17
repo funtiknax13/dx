@@ -110,7 +110,7 @@ def _require_plausible_pace(distance_km: float, duration_seconds: int) -> None:
     if distance_km > 0 and duration_seconds / distance_km < MIN_MANUAL_PACE_SECONDS_PER_KM:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Время указано некорректно — проверьте формат ЧЧ:ММ:СС "
+            "Время указано некорректно — проверьте формат Ч:ММ:СС "
             "(например, 2 часа 5 минут — это 2:05:00, а не 2:05).",
         )
 

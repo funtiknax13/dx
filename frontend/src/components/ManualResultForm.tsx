@@ -101,7 +101,7 @@ export function ManualResultForm({
     // 2m05s). Catch it here with a clear message instead of silently saving
     // a nonsense result for a moderator to puzzle over later.
     if (durationSeconds / distanceKm < MIN_PACE_SECONDS_PER_KM) {
-      setError('Время указано некорректно — проверьте формат ЧЧ:ММ:СС (например, 2 часа 5 минут — это 2:05:00, а не 2:05)')
+      setError('Время указано некорректно — проверьте формат Ч:ММ:СС (например, 2 часа 5 минут — это 2:05:00, а не 2:05)')
       return
     }
     if (images.length === 0) {
