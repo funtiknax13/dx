@@ -68,3 +68,14 @@ class Result(Base, TimestampMixin):
     )
 
     attendance_record = relationship("AttendanceRecord", back_populates="result")
+
+    def __str__(self) -> str:
+        # Own columns only, no relationship traversal (e.g. self.attendance_record)
+        # — same reasoning as AttendanceRecord.__str__: SQLAdmin can render this
+        # from a bare, non-eager-loading query (e.g. the "Result" field on
+        # AttendanceRecord's own edit form), where that would raise MissingGreenlet.
+        minutes, seconds = divmod(self.duration_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        duration = f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
+        outcome = "DNF" if self.finish_status == FinishStatus.dnf else "финиш"
+        return f"{self.distance_km:g} км, {duration} ({outcome})"

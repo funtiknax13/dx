@@ -1,10 +1,12 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String, select
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.event import Event
 
 
 class Group(Base, TimestampMixin):
@@ -61,5 +63,29 @@ class Group(Base, TimestampMixin):
         "AttendanceRecord", back_populates="group", cascade="all, delete-orphan"
     )
 
+    # A correlated subquery, not the `event` relationship — rides along with
+    # every plain `select(Group)` as an ordinary column (computed by the DB
+    # in the same query), so it's safe to read in __str__ below whenever this
+    # row actually came from a query. The `event` relationship itself is
+    # never safe there: SQLAdmin populates this model's own FK dropdowns
+    # (e.g. AttendanceRecord's "Group" field) via a bare, non-eager-loading
+    # query, and calling __str__ on those rows while still inside that
+    # query's async context would hit "MissingGreenlet" — same class of bug
+    # the comment on AttendanceRecord.__str__ documents.
+    event_date = column_property(
+        select(Event.date).where(Event.id == event_id).correlate_except(Event).scalar_subquery()
+    )
+
     def __str__(self) -> str:
+        # A row just constructed and flushed in Python (not yet re-fetched by
+        # a SELECT) has event_date unset — unlike a plain column, a
+        # column_property doesn't get a value until the DB actually computes
+        # it, so touching it here would itself trigger the same kind of
+        # implicit-IO crash this whole approach exists to avoid. Checking
+        # `unloaded` first means __str__ never queries anything on its own;
+        # it just uses the date when a query already put it there.
+        unloaded = sa_inspect(self).unloaded
+        when = self.event_date.strftime("%d.%m.%Y") if "event_date" not in unloaded else None
+        if when:
+            return f"{self.name} @ {self.location} ({when})"
         return f"{self.name} @ {self.location}"
