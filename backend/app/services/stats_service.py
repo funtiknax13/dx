@@ -1,14 +1,17 @@
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timezone import today_msk
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
+from app.models.result import Result
 from app.services.baseline_service import get_baseline
+from app.services.rating_service import counts_toward_rating
 
 
 @dataclass
@@ -30,7 +33,10 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
     a real DX" distinction. "Total runs" counts every attendance regardless of
     finish_status — a DNF is still a run, just not a completed one."""
     total_runs = await session.scalar(
-        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.runner_id == runner_id)
+        select(func.count(AttendanceRecord.id))
+        .select_from(AttendanceRecord)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
+        .where(AttendanceRecord.runner_id == runner_id, counts_toward_rating())
     )
 
     full_dx_row = (
@@ -40,10 +46,12 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
                 func.coalesce(func.sum(Group.target_distance_km), 0.0),
             )
             .join(Group, Group.id == AttendanceRecord.group_id)
+            .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
             .where(
                 AttendanceRecord.runner_id == runner_id,
                 AttendanceRecord.finish_status == FinishStatus.finished,
                 Group.counts_toward_rating.is_(True),
+                counts_toward_rating(),
             )
         )
     ).first()
@@ -54,23 +62,27 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
         select(func.min(Event.date))
         .join(Group, Group.event_id == Event.id)
         .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id == runner_id,
             AttendanceRecord.finish_status == FinishStatus.finished,
+            counts_toward_rating(),
         )
     )
 
-    today = datetime.now(UTC).date()
+    today = today_msk()
     month_start = today.replace(day=1)
     km_this_month = await session.scalar(
         select(func.coalesce(func.sum(Group.target_distance_km), 0.0))
         .select_from(AttendanceRecord)
         .join(Group, Group.id == AttendanceRecord.group_id)
         .join(Event, Event.id == Group.event_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id == runner_id,
             AttendanceRecord.finish_status == FinishStatus.finished,
             Group.counts_toward_rating.is_(True),
+            counts_toward_rating(),
             Event.date >= month_start,
             Event.date <= today,
         )
@@ -113,10 +125,12 @@ async def _compute_streak(session: AsyncSession, runner_id: int) -> tuple[int, i
     like a miss the moment its date arrives, zeroing the streak before the
     roster is even uploaded (see leaderboard_service.compute_streak_leaderboard,
     which mirrors this same fix)."""
-    today = datetime.now(UTC).date()
+    today = today_msk()
     imported_event_ids = (
         select(Group.event_id)
         .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
+        .where(counts_toward_rating())
         .distinct()
     )
     event_ids = (
@@ -133,9 +147,11 @@ async def _compute_streak(session: AsyncSession, runner_id: int) -> tuple[int, i
         await session.scalars(
             select(Group.event_id)
             .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+            .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
             .where(
                 AttendanceRecord.runner_id == runner_id,
                 AttendanceRecord.finish_status == FinishStatus.finished,
+                counts_toward_rating(),
             )
             .distinct()
         )

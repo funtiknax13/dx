@@ -10,6 +10,7 @@ interface RawEvent {
   date: string
   description?: string | null
   cover_image?: string | null
+  is_past?: boolean
 }
 
 interface RawEventPhoto {
@@ -26,6 +27,7 @@ function mapEvent(raw: RawEvent): EventSummary {
     date: raw.date,
     description: raw.description ?? null,
     cover_url: raw.cover_image ?? null,
+    is_past: raw.is_past ?? false,
   }
 }
 

@@ -65,6 +65,9 @@ class GroupOut(BaseModel):
     event_date: date_type
     signup_count: int
     counts_toward_rating: bool
+    # Computed server-side in Cheboksary time (app.services.event_time
+    # .group_has_started) — signup is open until it flips, result entry after.
+    has_started: bool = False
 
 
 class RouteMap(BaseModel):

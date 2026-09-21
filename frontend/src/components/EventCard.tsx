@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 import { media } from '../api/client'
 import type { EventSummary } from '../types'
-import { formatDate, isPast, plural } from '../lib/format'
+import { formatDate, plural } from '../lib/format'
 import { IconArrow, IconCalendar, IconPin, IconRunner } from './ui/icons'
 
 export function EventCard({ event, index = 0 }: { event: EventSummary; index?: number }) {
   const cover = media(event.cover_url)
-  const past = isPast(event.date)
+  const past = Boolean(event.is_past)
 
   return (
     <Link

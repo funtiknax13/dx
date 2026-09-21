@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { guestsApi } from '../api/guests'
@@ -15,6 +15,7 @@ import {
   fullName,
   nextRuPhoneValue,
   ruPhoneDigits,
+  todayMsk,
 } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
 import { AvatarCropModal } from '../components/AvatarCropModal'
@@ -51,7 +52,12 @@ export function ProfilePage() {
 
   const stats = useAsync(() => usersApi.publicProfile(user!.id), [user?.id])
   const upcoming = useAsync(() => signupsApi.mine(), [user?.id])
-  const awaiting = useAsync(() => signupsApi.awaitingResults(), [user?.id])
+  // "Я бегал(а)" on a group page lands here with ?add_result=<group id> — the
+  // profile is the one place results are entered, so that group is added to
+  // the list below (even without a signup) and its form opened.
+  const [searchParams] = useSearchParams()
+  const addResultId = Number(searchParams.get('add_result')) || null
+  const awaiting = useAsync(() => signupsApi.awaitingResults(addResultId), [user?.id, addResultId])
   const claims = useAsync(() => guestsApi.myClaims(), [user?.id])
   // Once a guest profile has already been claimed and approved, there's
   // nothing left to look for — keep offering the search only to accounts
@@ -107,15 +113,23 @@ export function ProfilePage() {
         </div>
       )}
 
+      {addResultId && awaiting.data && !awaiting.data.some((e) => e.group_id === addResultId) && (
+        <p className="mt-8 rounded-xl2 border border-ink/10 bg-white p-4 text-sm text-ink-600">
+          Для этой тренировки сейчас нельзя добавить результат: она ещё не началась, результат
+          уже подтверждён или в этом событии у вас есть результат в другой группе.
+        </p>
+      )}
+
       {awaiting.data && awaiting.data.length > 0 && (
         <div className="mt-8">
           <h3 className="mb-1 font-display text-xl">Загрузить результат</h3>
           <p className="mb-4 text-sm text-ink-600">
-            Прошедшие события, куда вы записаны. Можно загрузить свой результат, не дожидаясь
-            протокола.
+            Прошедшие тренировки, по которым можно загрузить свой результат, не дожидаясь
+            протокола — в том числе если вы забыли записаться.
           </p>
           <AwaitingResults
             entries={awaiting.data}
+            openGroupId={addResultId}
             gender={user?.gender ?? null}
             onSubmitted={() => {
               awaiting.reload()
@@ -198,17 +212,25 @@ function UpcomingSignups({ entries }: { entries: MySignupEntry[] }) {
 
 function AwaitingResults({
   entries,
+  openGroupId,
   gender,
   onSubmitted,
 }: {
   entries: AwaitingResultEntry[]
+  openGroupId: number | null
   gender: Gender | null
   onSubmitted: () => void
 }) {
   return (
     <ul className="space-y-3">
       {entries.map((e) => (
-        <AwaitingResultRow key={e.signup_id} entry={e} gender={gender} onSubmitted={onSubmitted} />
+        <AwaitingResultRow
+          key={e.signup_id ?? `group-${e.group_id}`}
+          entry={e}
+          autoOpen={e.group_id === openGroupId}
+          gender={gender}
+          onSubmitted={onSubmitted}
+        />
       ))}
     </ul>
   )
@@ -216,20 +238,27 @@ function AwaitingResults({
 
 function AwaitingResultRow({
   entry: e,
+  autoOpen,
   gender,
   onSubmitted,
 }: {
   entry: AwaitingResultEntry
+  autoOpen: boolean
   gender: Gender | null
   onSubmitted: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(autoOpen)
   const [dismissing, setDismissing] = useState(false)
+  const rowRef = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    if (autoOpen) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [autoOpen])
   const pending = e.moderation_status === 'pending'
   const rejected = e.moderation_status === 'rejected'
   const didNotRunLabel = gender === 'female' ? 'Я не бегала' : gender === 'male' ? 'Я не бегал' : 'Я не бегал(а)'
 
   const dismiss = async () => {
+    if (e.signup_id == null) return
     setDismissing(true)
     try {
       await signupsApi.remove(e.signup_id)
@@ -240,7 +269,12 @@ function AwaitingResultRow({
   }
 
   return (
-    <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
+    <li
+      ref={rowRef}
+      className={`rounded-xl2 border bg-white shadow-card ${
+        autoOpen ? 'border-signal/40' : 'border-ink/[0.08]'
+      }`}
+    >
       <div className="flex items-center gap-4 p-4">
         <div className="min-w-0 flex-1">
           <Link
@@ -262,14 +296,16 @@ function AwaitingResultRow({
         ) : (
           <div className="flex shrink-0 items-center gap-2">
             {rejected && <span className="chip bg-signal/10 text-signal-600">Отклонён</span>}
-            <button
-              onClick={dismiss}
-              disabled={dismissing}
-              className="btn-ghost btn-sm"
-              type="button"
-            >
-              {didNotRunLabel}
-            </button>
+            {e.signup_id != null && (
+              <button
+                onClick={dismiss}
+                disabled={dismissing}
+                className="btn-ghost btn-sm"
+                type="button"
+              >
+                {didNotRunLabel}
+              </button>
+            )}
             <button onClick={() => setOpen((v) => !v)} className="btn-primary btn-sm" type="button">
               {open ? 'Закрыть' : rejected ? 'Загрузить заново' : 'Загрузить'}
             </button>
@@ -554,7 +590,7 @@ function ProfileForm({
   // Live, same as the fields above — no need to wait for "Сохранить" (or a
   // round trip to validate_birthday on the backend) to flag it.
   const futureBirthdayError =
-    form.birthday && form.birthday > new Date().toISOString().slice(0, 10)
+    form.birthday && form.birthday > todayMsk()
       ? 'Дата рождения не может быть в будущем'
       : null
   const missing = {
@@ -658,7 +694,7 @@ function ProfileForm({
             label="Дата рождения"
             name="birthday"
             type="date"
-            max={new Date().toISOString().slice(0, 10)}
+            max={todayMsk()}
             value={form.birthday ?? ''}
             onChange={set('birthday')}
             error={futureBirthdayError ?? (missing.birthday ? REQUIRED_HINT : undefined)}

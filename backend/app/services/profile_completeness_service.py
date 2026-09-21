@@ -3,6 +3,7 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timezone import today_msk
 from app.models.user import User
 from app.services.profile_review_service import has_pending_review
 from app.services.survey_service import stats_locked_pending_survey
@@ -13,7 +14,7 @@ PARENT_FIELDS = ["parent_first_name", "parent_last_name", "parent_phone"]
 
 
 def age_years(birthday: date, today: date | None = None) -> int:
-    today = today or date.today()
+    today = today or today_msk()
     return today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
 
 

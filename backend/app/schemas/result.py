@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,3 +35,14 @@ class ResultOut(BaseModel):
     telemetry: dict[str, Any] | None
     finish_status: str
     status: str
+
+
+class GroupParticipationOut(BaseModel):
+    """The current runner's standing in one group — drives the group page's
+    "Я бегал(а)" / "Добавить результат" button (see get_group_participation).
+    `other_group` is the name of a *different* group of the same event where
+    they already have a record: they can't self-report here as well."""
+
+    status: Literal["none", "in_protocol", "pending", "approved", "rejected", "other_group"]
+    attendance_id: int | None = None
+    other_group_name: str | None = None

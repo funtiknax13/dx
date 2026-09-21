@@ -39,14 +39,26 @@ export function formatDistance(km?: number | null): string {
   return `${km.toFixed(km % 1 === 0 ? 0 : 2).replace('.', ',')} км`
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+
 export function formatDate(iso?: string | null, opts?: Intl.DateTimeFormatOptions): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString(
-    'ru-RU',
-    opts ?? { day: 'numeric', month: 'long', year: 'numeric' },
-  )
+  // A bare "YYYY-MM-DD" (an event's date, a birthday) is a calendar day, not
+  // an instant — it parses as UTC midnight, so format it in UTC; in the
+  // viewer's own zone a browser west of Greenwich would show the day before.
+  return d.toLocaleDateString('ru-RU', {
+    ...(opts ?? { day: 'numeric', month: 'long', year: 'numeric' }),
+    ...(DATE_ONLY.test(iso) ? { timeZone: 'UTC' } : {}),
+  })
+}
+
+/** Today's calendar date (YYYY-MM-DD) in Cheboksary time — not the browser's
+ * zone, and not `toISOString()` (UTC), which is still "yesterday" for the
+ * first three hours of every Moscow day. */
+export function todayMsk(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date())
 }
 
 export function formatDateShort(iso?: string | null): string {
@@ -66,12 +78,6 @@ export function formatTime(iso?: string | null): string {
     minute: '2-digit',
     timeZone: 'Europe/Moscow',
   })
-}
-
-export function isPast(iso?: string | null): boolean {
-  if (!iso) return false
-  const d = new Date(iso)
-  return d.getTime() < Date.now()
 }
 
 export function initials(first?: string, last?: string): string {
@@ -103,15 +109,13 @@ export function plural(n: number, one: string, few: string, many: string): strin
  * back negative previously made under-14 guardian-info gates misfire on it
  * (negative is always < 14). */
 export function ageFromISO(iso?: string | null): number | null {
-  if (!iso) return null
-  const b = new Date(iso)
-  if (Number.isNaN(b.getTime())) return null
-  const t = new Date()
-  if (b.getTime() > t.getTime()) return null
-  let age = t.getFullYear() - b.getFullYear()
-  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) {
-    age--
-  }
+  if (!iso || !DATE_ONLY.test(iso) || Number.isNaN(new Date(iso).getTime())) return null
+  const today = todayMsk()
+  if (iso > today) return null
+  const [by, bm, bd] = iso.split('-').map(Number)
+  const [ty, tm, td] = today.split('-').map(Number)
+  let age = ty - by
+  if (tm < bm || (tm === bm && td < bd)) age--
   return age
 }
 

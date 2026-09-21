@@ -5,7 +5,7 @@ import { signupsApi } from '../api/signups'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { formatDistance, formatTime, isPast, paceRange, plural, segmentPace } from '../lib/format'
+import { formatDistance, formatTime, paceRange, plural, segmentPace } from '../lib/format'
 import { PaceSegments } from '../components/ui/PaceSegments'
 import { ProtocolTable } from '../components/ProtocolTable'
 import { ElevationProfile } from '../components/ElevationProfile'
@@ -25,6 +25,7 @@ import {
 } from '../components/ui/icons'
 import type {
   Group,
+  GroupParticipation,
   GroupSignupState,
   Protocol,
   RouteMap as RouteMapData,
@@ -80,10 +81,11 @@ export function GroupDetailPage() {
   const showSegments = Boolean(segs && segs.length > 0 && !simplePace)
   const pace = simplePace ?? (segs && segs.length ? null : paceRange(group.pace_min, group.pace_max))
   const hasRoute = Boolean(route && route.points.length)
-  // The roster is who *plans* to come — once the event has happened, the
+  // The roster is who *plans* to come — once the group has started, the
   // protocol (who actually ran) is what matters, so the intent list is
-  // hidden rather than shown as stale/redundant information.
-  const isUpcoming = !isPast(group.event_date)
+  // hidden rather than shown as stale/redundant information. `has_started`
+  // is computed server-side in Cheboksary time from the group's start time.
+  const isUpcoming = !group.has_started
 
   return (
     <div>
@@ -141,10 +143,14 @@ export function GroupDetailPage() {
               </div>
             </div>
 
-            {/* Signup is intent to run — only before the event. Once it's past,
-                the way in is a self-reported result (profile) or a CSV import. */}
-            {isUpcoming && (
+            {/* Signup is intent to run — only until the group starts. After
+                that the same slot becomes "Я бегал(а)": a link into the
+                profile's result-entry section (the one place results are
+                entered), so a runner who forgot to sign up isn't stuck. */}
+            {isUpcoming ? (
               <SignupControl groupId={group.id} authenticated={isAuthenticated} onChange={reload} />
+            ) : (
+              <ParticipationControl groupId={group.id} authenticated={isAuthenticated} />
             )}
           </div>
         </div>
@@ -445,6 +451,90 @@ function SignupControl({
         )}
       </button>
       {msg && <p className="mt-2 text-right text-xs text-danger-600">{msg}</p>}
+    </div>
+  )
+}
+
+function ParticipationControl({
+  groupId,
+  authenticated,
+}: {
+  groupId: number
+  authenticated: boolean
+}) {
+  const { user } = useAuth()
+  const [state, setState] = useState<GroupParticipation | null>(null)
+  const [loading, setLoading] = useState(authenticated)
+
+  useEffect(() => {
+    if (!authenticated) {
+      setLoading(false)
+      return
+    }
+    let active = true
+    setLoading(true)
+    groupsApi
+      .participation(groupId)
+      .then((s) => active && setState(s))
+      .catch(() => active && setState(null))
+      .finally(() => active && setLoading(false))
+    return () => {
+      active = false
+    }
+  }, [authenticated, groupId])
+
+  if (!authenticated) {
+    return (
+      <div className="shrink-0">
+        <Link to="/login" className="btn-primary btn-lg w-full justify-center sm:w-auto">
+          Войдите, чтобы добавить результат
+        </Link>
+      </div>
+    )
+  }
+  if (loading) {
+    return (
+      <div className="btn-ghost btn-lg pointer-events-none w-full justify-center sm:w-auto">
+        <Spinner className="h-5 w-5" />
+      </div>
+    )
+  }
+  if (!state) return null
+
+  const enter = `/profile?add_result=${groupId}`
+  const ranLabel =
+    user?.gender === 'female' ? 'Я бегала' : user?.gender === 'male' ? 'Я бегал' : 'Я бегал(а)'
+
+  return (
+    <div className="shrink-0 text-right">
+      {state.status === 'none' && (
+        <Link to={enter} className="btn-primary btn-lg w-full justify-center sm:w-auto">
+          {ranLabel}
+        </Link>
+      )}
+      {state.status === 'in_protocol' && (
+        <Link to={enter} className="btn-primary btn-lg w-full justify-center sm:w-auto">
+          Добавить результат
+        </Link>
+      )}
+      {state.status === 'rejected' && (
+        <Link to={enter} className="btn-primary btn-lg w-full justify-center sm:w-auto">
+          Загрузить результат заново
+        </Link>
+      )}
+      {state.status === 'pending' && (
+        <span className="chip inline-flex bg-ink/10 text-ink-600">Ваш результат на проверке</span>
+      )}
+      {state.status === 'approved' && (
+        <span className="chip inline-flex bg-volt/25 text-ink">
+          <IconCheck width={14} height={14} /> Ваш результат подтверждён
+        </span>
+      )}
+      {state.status === 'other_group' && (
+        <p className="max-w-xs text-sm text-ink-600">
+          В этом событии у вас уже есть результат в группе «{state.other_group_name}»
+        </p>
+      )}
     </div>
   )
 }

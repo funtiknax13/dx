@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.db import SessionLocal
+from app.core.timezone import today_msk
 from app.models.enums import UserRole
 from app.models.user import User
 
@@ -71,7 +72,7 @@ async def birthdays_page(request: Request) -> HTMLResponse | RedirectResponse:
     if user is None:
         return login_redirect()
 
-    today = date.today()
+    today = today_msk()
     try:
         selected_month = int(request.query_params.get("month", today.month))
     except ValueError:

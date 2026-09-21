@@ -1,20 +1,21 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Literal
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.timezone import today_msk
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus
 from app.models.event import Event
 from app.models.group import Group
+from app.models.result import Result
 from app.models.user import User
 from app.services.avatar_service import visible_avatar
 from app.services.baseline_service import get_all_baselines
 from app.services.date_windows import calendar_window, current_year
-from app.services.rating_service import gender_filtered_ids
+from app.services.rating_service import counts_toward_rating, gender_filtered_ids
 
 Metric = Literal["dx", "km"]
 
@@ -104,10 +105,12 @@ async def _bulk_ranking_rows(session: AsyncSession) -> dict[int, _RankingRow]:
         .select_from(AttendanceRecord)
         .join(Group, Group.id == AttendanceRecord.group_id)
         .join(Event, Event.id == Group.event_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id.is_not(None),
             AttendanceRecord.finish_status == FinishStatus.finished,
             Group.counts_toward_rating.is_(True),
+            counts_toward_rating(),
         )
         .group_by(AttendanceRecord.runner_id)
     )
@@ -222,10 +225,12 @@ async def compute_streak_leaderboard(
     reuses _bulk_ranking_rows rather than recomputing it, so a baseline's
     carry-over totals can still settle a tie even though they never
     contribute to the streak itself (no dated events behind them)."""
-    today = datetime.now(UTC).date()
+    today = today_msk()
     imported_event_ids = (
         select(Group.event_id)
         .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
+        .where(counts_toward_rating())
         .distinct()
     )
     event_ids = list(
@@ -241,9 +246,11 @@ async def compute_streak_leaderboard(
     rows = await session.execute(
         select(AttendanceRecord.runner_id, Group.event_id)
         .join(Group, Group.id == AttendanceRecord.group_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.runner_id.is_not(None),
             AttendanceRecord.finish_status == FinishStatus.finished,
+            counts_toward_rating(),
         )
         .distinct()
     )

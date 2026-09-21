@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import and_, func, or_, select
 
 from app.api.deps import EventsPermissionUser, SessionDep
-from app.core.timezone import EVENT_TZ
+from app.core.timezone import now_msk
 from app.models.enums import UserRole
 from app.models.event import Event, EventPhoto
 from app.models.group import Group
@@ -16,6 +16,7 @@ from app.schemas.event import (
     EventPhotoOut,
     EventUpdate,
 )
+from app.services.event_time import event_is_past
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -42,6 +43,25 @@ def _assert_can_manage(event: Event, user: User) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not manage this event")
 
 
+async def _events_out(session: SessionDep, events: list[Event]) -> list[EventOut]:
+    """EventOut plus the computed `is_past`, using one query for all the
+    events' group start times rather than one per event."""
+    if not events:
+        return []
+    rows = await session.execute(
+        select(Group.event_id, Group.start_time).where(Group.event_id.in_([e.id for e in events]))
+    )
+    starts: dict[int, list[datetime | None]] = {}
+    for event_id, start_time in rows:
+        starts.setdefault(event_id, []).append(start_time)
+    return [
+        EventOut.model_validate(e).model_copy(
+            update={"is_past": event_is_past(e.date, starts.get(e.id, []))}
+        )
+        for e in events
+    ]
+
+
 @router.get("", response_model=Page[EventOut])
 async def list_events(
     session: SessionDep,
@@ -51,7 +71,7 @@ async def list_events(
 ) -> Page[EventOut]:
     stmt = select(Event)
     if upcoming is not None:
-        now = datetime.now(EVENT_TZ)
+        now = now_msk()
         today = now.date()
 
         # A today-dated event moves to "past" once every one of its groups
@@ -93,42 +113,44 @@ async def list_events(
 
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
     events = await session.scalars(stmt.offset((page - 1) * page_size).limit(page_size))
-    return Page(items=list(events), total=total or 0, page=page, page_size=page_size)
+    items = await _events_out(session, list(events))
+    return Page(items=items, total=total or 0, page=page, page_size=page_size)
 
 
 @router.get("/{event_id}", response_model=EventOut)
-async def get_event(event_id: int, session: SessionDep) -> Event:
-    return await _get_event_or_404(session, event_id)
+async def get_event(event_id: int, session: SessionDep) -> EventOut:
+    event = await _get_event_or_404(session, event_id)
+    return (await _events_out(session, [event]))[0]
 
 
 @router.post("", response_model=EventOut, status_code=status.HTTP_201_CREATED)
 async def create_event(
     payload: EventCreate, user: EventsPermissionUser, session: SessionDep
-) -> Event:
+) -> EventOut:
     event = Event(**payload.model_dump(), created_by=user.id)
     session.add(event)
     await session.commit()
     await session.refresh(event)
-    return event
+    return (await _events_out(session, [event]))[0]
 
 
 @router.patch("/{event_id}", response_model=EventOut)
 async def update_event(
     event_id: int, payload: EventUpdate, user: EventsPermissionUser, session: SessionDep
-) -> Event:
+) -> EventOut:
     event = await _get_event_or_404(session, event_id)
     _assert_can_manage(event, user)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(event, field, value)
     await session.commit()
     await session.refresh(event)
-    return event
+    return (await _events_out(session, [event]))[0]
 
 
 @router.post("/{event_id}/cover", response_model=EventOut)
 async def upload_cover(
     event_id: int, user: EventsPermissionUser, session: SessionDep, file: UploadFile
-) -> Event:
+) -> EventOut:
     event = await _get_event_or_404(session, event_id)
     _assert_can_manage(event, user)
     try:
@@ -139,7 +161,7 @@ async def upload_cover(
     event.cover_image = path
     await session.commit()
     await session.refresh(event)
-    return event
+    return (await _events_out(session, [event]))[0]
 
 
 @router.get("/{event_id}/photos", response_model=list[EventPhotoOut])

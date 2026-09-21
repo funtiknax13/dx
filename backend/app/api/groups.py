@@ -22,6 +22,7 @@ from app.schemas.group import (
 )
 from app.services.achievement_service import get_latest_thresholds
 from app.services.avatar_service import visible_avatar
+from app.services.event_time import group_has_started
 from app.services.gpx_service import TrackParseError, parse_gpx
 from app.services.group_service import set_group_route_gpx
 from app.services.media_service import (
@@ -67,6 +68,7 @@ def _group_out(group: Group, event_date: date_type, signup_count: int) -> GroupO
         event_date=event_date,
         signup_count=signup_count,
         counts_toward_rating=group.counts_toward_rating,
+        has_started=group_has_started(group.start_time, event_date),
     )
 
 
@@ -222,7 +224,17 @@ async def protocol(group_id: int, session: SessionDep, viewer: CurrentUser) -> P
         .where(AttendanceRecord.group_id.in_(group_ids))
         .options(selectinload(AttendanceRecord.result), selectinload(AttendanceRecord.runner))
     )
-    records = list(scalar_records)
+    # A runner's own self-reported run stays off the shared protocol until an
+    # admin approves its result — only the runner themselves (so they can see
+    # it registered) and admins see it before then.
+    records = [
+        rec
+        for rec in scalar_records
+        if not rec.self_reported
+        or (rec.result is not None and rec.result.status == ModerationStatus.approved)
+        or rec.runner_id == viewer.id
+        or viewer.role == UserRole.admin
+    ]
 
     runner_ids = [rec.runner_id for rec in records if rec.runner_id is not None]
     latest_thresholds = await get_latest_thresholds(session, runner_ids)

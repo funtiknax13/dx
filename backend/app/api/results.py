@@ -1,18 +1,17 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, SessionDep
-from app.core.timezone import EVENT_TZ
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, ResultSource, UserRole
 from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
-from app.models.signup import Signup
-from app.schemas.result import ImportUrlRequest, ResultOut
+from app.schemas.result import GroupParticipationOut, ImportUrlRequest, ResultOut
+from app.services.event_time import group_has_started
 from app.services.fit_service import parse_fit
 from app.services.gpx_service import TrackParseError, parse_gpx
 from app.services.media_service import (
@@ -23,6 +22,7 @@ from app.services.media_service import (
     save_track_bytes,
     save_track_file,
 )
+from app.services.participation_service import get_group_participation
 from app.services.result_validation_service import validate_result
 from app.services.safe_fetch import FetchError, detect_workout_format, fetch_external_workout_file
 from app.services.track_types import ParsedTrack
@@ -125,30 +125,6 @@ async def _save_screenshots(images: list[UploadFile]) -> list[str]:
             delete_media(path)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return paths
-
-
-async def _family_group_ids(session: SessionDep, group: Group) -> list[int]:
-    """All groups sharing this group's distance_code (one shared protocol), or
-    just this group when it has no code."""
-    if group.distance_code:
-        ids = await session.scalars(
-            select(Group.id).where(
-                Group.event_id == group.event_id,
-                Group.distance_code == group.distance_code,
-            )
-        )
-        return list(ids)
-    return [group.id]
-
-
-def _event_has_started(group: Group, event: Event) -> bool:
-    now = datetime.now(EVENT_TZ)
-    if group.start_time is not None:
-        start = group.start_time
-        if start.tzinfo is None:  # SQLite (tests) drops tzinfo — stored as UTC
-            start = start.replace(tzinfo=UTC)
-        return start <= now
-    return event.date <= now.date()
 
 
 async def _save_result(
@@ -373,23 +349,19 @@ async def submit_group_result(
     start_time: Annotated[datetime | None, Form()] = None,
     comment: Annotated[str | None, Form()] = None,
 ) -> Result:
-    """Self-report a result for a group you're signed up to, *before* the
-    protocol (CSV) exists. Manual entry only, screenshot required. Creates a
+    """Self-report a result for a group — no signup needed (a runner who forgot
+    to sign up still ran), only that the group has started. Manual entry only,
+    screenshot required, and it always lands in the moderation queue. Creates a
     `self_reported` AttendanceRecord that a later CSV import merges into (so no
-    duplicate in the shared protocol)."""
+    duplicate in the shared protocol); until an admin approves the result the
+    run stays out of the public protocol, profile history and every stat."""
     group = await session.get(Group, group_id)
     if group is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
 
-    signup = await session.scalar(
-        select(Signup).where(Signup.event_id == group.event_id, Signup.runner_id == user.id)
-    )
-    if signup is None or signup.group_id != group_id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Вы не записаны в эту группу")
-
     event = await session.get(Event, group.event_id)
     assert event is not None
-    if not _event_has_started(group, event):
+    if not group_has_started(group.start_time, event.date):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "Загрузить результат можно только после старта группы.",
@@ -404,14 +376,18 @@ async def submit_group_result(
     _require_plausible_pace(distance_km, duration_seconds)
 
     # Reuse the runner's existing record in this distance family if any (e.g. a
-    # re-submission), else create a self-reported one.
-    family_ids = await _family_group_ids(session, group)
-    record = await session.scalar(
-        select(AttendanceRecord).where(
-            AttendanceRecord.group_id.in_(family_ids),
-            AttendanceRecord.runner_id == user.id,
+    # CSV-placed one that has no result yet, or a re-submission), else create a
+    # self-reported one.
+    participation = await get_group_participation(session, user.id, group)
+    if participation.other_group is not None:
+        # One group per runner per event — a second record in another group
+        # would put them in two protocols at once.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"В этом событии у вас уже есть результат в группе «{participation.other_group.name}». "
+            "Если он записан не в ту группу — напишите в поддержку.",
         )
-    )
+    record = participation.record
     if record is None:
         record = AttendanceRecord(
             group_id=group.id,
@@ -440,6 +416,31 @@ async def submit_group_result(
         screenshots=screenshots,
         update_screenshots=screenshots is not None,
         comment=_clean_comment(comment),
+    )
+
+
+@router.get("/groups/{group_id}/participation/me", response_model=GroupParticipationOut)
+async def my_group_participation(
+    group_id: int, user: CurrentUser, session: SessionDep
+) -> GroupParticipationOut:
+    """Where the current runner stands in this group, for the group page's
+    "Я бегал(а)" button: no record yet, on the protocol without a result, or
+    the result's moderation state."""
+    group = await session.get(Group, group_id)
+    if group is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
+    participation = await get_group_participation(session, user.id, group)
+    if participation.other_group is not None:
+        return GroupParticipationOut(
+            status="other_group", other_group_name=participation.other_group.name
+        )
+    if participation.record is None:
+        return GroupParticipationOut(status="none")
+    if participation.result is None:
+        return GroupParticipationOut(status="in_protocol", attendance_id=participation.record.id)
+    return GroupParticipationOut(
+        status=participation.result.status.value,
+        attendance_id=participation.record.id,
     )
 
 

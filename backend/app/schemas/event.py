@@ -28,6 +28,11 @@ class EventOut(BaseModel):
     cover_image: str | None
     created_by: int
     created_at: datetime
+    # Computed server-side in Cheboksary time from the groups' start times
+    # (see app.services.event_time.event_is_past) — the client can't derive it
+    # from `date` alone, and a browser-side guess flipped events to "past" at
+    # 03:00 Moscow time on the day, hours before the run.
+    is_past: bool = False
 
 
 class EventPhotoOut(BaseModel):

@@ -1,6 +1,7 @@
 import { api } from './client'
 import type {
   Group,
+  GroupParticipation,
   GroupSignupState,
   Protocol,
   ProtocolRow,
@@ -32,6 +33,7 @@ interface RawGroup {
   route_gpx?: string | null
   event_date: string
   signup_count: number
+  has_started?: boolean
 }
 
 interface RawProtocolEntry {
@@ -85,6 +87,7 @@ function mapGroup(raw: RawGroup): Group {
     event_date: raw.event_date,
     has_route_gpx: Boolean(raw.route_gpx),
     signup_count: raw.signup_count,
+    has_started: raw.has_started ?? false,
   }
 }
 
@@ -184,6 +187,8 @@ export const groupsApi = {
   routeGpxUrl: (id: number | string) => `${api.apiUrl}/groups/${id}/route-gpx`,
 
   signupState: (id: number | string) => api.get<GroupSignupState>(`/groups/${id}/signups/me`),
+  participation: (id: number | string) =>
+    api.get<GroupParticipation>(`/groups/${id}/participation/me`),
 
   signupRoster: async (id: number | string) =>
     mapSignupRoster(await api.get<RawSignupRoster>(`/groups/${id}/signups`)),

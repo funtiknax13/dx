@@ -50,7 +50,8 @@ class AwaitingResultEntry(BaseModel):
     a result (or one is pending). Once approved it drops off — it's then in the
     protocol / their history."""
 
-    signup_id: int
+    # Null for an entry added via the "Я бегал(а)" deep link — no signup behind it.
+    signup_id: int | None
     group_id: int
     group_name: str
     location: str
@@ -59,7 +60,7 @@ class AwaitingResultEntry(BaseModel):
     event_date: date_type
     start_time: datetime | None
     has_result: bool
-    moderation_status: str | None  # 'pending' | 'approved' | None
+    moderation_status: str | None  # 'pending' | 'approved' | 'rejected' | None
 
 
 class SignupRosterEntry(BaseModel):

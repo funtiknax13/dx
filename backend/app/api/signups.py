@@ -1,11 +1,9 @@
-from datetime import UTC, datetime
-
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
-from app.core.timezone import EVENT_TZ
+from app.core.timezone import today_msk
 from app.models.attendance import AttendanceRecord
 from app.models.event import Event
 from app.models.group import Group
@@ -22,6 +20,8 @@ from app.schemas.signup import (
     SignupRosterEntry,
 )
 from app.services.avatar_service import visible_avatar
+from app.services.event_time import group_has_started
+from app.services.participation_service import get_group_participation
 
 router = APIRouter(tags=["signups"])
 
@@ -73,7 +73,7 @@ async def my_signups(user: CurrentUser, session: SessionDep) -> list[MySignupEnt
     "Загрузить результат" (see my_awaiting_results) the moment its group
     actually starts, rather than lingering here until midnight — otherwise a
     today's-event signup shows in both lists at once for the rest of the day."""
-    today = datetime.now(EVENT_TZ).date()
+    today = today_msk()
     rows = await session.scalars(
         select(Signup)
         .join(Event, Event.id == Signup.event_id)
@@ -93,30 +93,30 @@ async def my_signups(user: CurrentUser, session: SessionDep) -> list[MySignupEnt
             start_time=s.group.start_time,
         )
         for s in rows
-        if not _event_has_started(s.group, s.event)
+        if not group_has_started(s.group.start_time, s.event.date)
     ]
 
 
-def _event_has_started(group: Group, event: Event) -> bool:
-    now = datetime.now(EVENT_TZ)
-    if group.start_time is not None:
-        start = group.start_time
-        if start.tzinfo is None:  # SQLite (tests) drops tzinfo — stored as UTC
-            start = start.replace(tzinfo=UTC)
-        return start <= now
-    return event.date <= now.date()
-
-
 @router.get("/users/me/signups/awaiting-result", response_model=list[AwaitingResultEntry])
-async def my_awaiting_results(user: CurrentUser, session: SessionDep) -> list[AwaitingResultEntry]:
+async def my_awaiting_results(
+    user: CurrentUser,
+    session: SessionDep,
+    include_group_id: int | None = Query(default=None),
+) -> list[AwaitingResultEntry]:
     """Past events the runner signed up to where they can self-report a result
     (or it's pending) — the entry point for uploading before the CSV protocol
     exists. Fully-approved ones drop off (they're already in the protocol).
     Otherwise this lingers forever for a signup that never turned into an
     actual run — the frontend offers signup_id so the runner can dismiss it
     themselves ("я не бегал(а)", DELETE /signups/{id}, same endpoint as
-    unsigning before the event)."""
-    today = datetime.now(EVENT_TZ).date()
+    unsigning before the event).
+
+    `include_group_id` is the "Я бегал(а)" deep link from a group page: that
+    group is added to the list even without a signup (signup_id null — nothing
+    to dismiss), so a runner who forgot to sign up still enters their result in
+    this same place. Skipped when the group hasn't started, the runner already
+    has a record in another group of the event, or the result is approved."""
+    today = today_msk()
     signups = list(
         await session.scalars(
             select(Signup)
@@ -129,7 +129,7 @@ async def my_awaiting_results(user: CurrentUser, session: SessionDep) -> list[Aw
 
     out: list[AwaitingResultEntry] = []
     for s in signups:
-        if not _event_has_started(s.group, s.event):
+        if not group_has_started(s.group.start_time, s.event.date):
             continue
         # Do they already have a record (with a result) in this distance family?
         if s.group.distance_code:
@@ -168,6 +168,32 @@ async def my_awaiting_results(user: CurrentUser, session: SessionDep) -> list[Aw
                 moderation_status=result.status.value if result is not None else None,
             )
         )
+
+    if include_group_id is not None and all(e.group_id != include_group_id for e in out):
+        group = await session.get(Group, include_group_id)
+        event = await session.get(Event, group.event_id) if group is not None else None
+        if group is not None and event is not None:
+            if group_has_started(group.start_time, event.date):
+                part = await get_group_participation(session, user.id, group)
+                approved = part.result is not None and part.result.status.value == "approved"
+                if part.other_group is None and not approved:
+                    out.insert(
+                        0,
+                        AwaitingResultEntry(
+                            signup_id=None,
+                            group_id=group.id,
+                            group_name=group.name,
+                            location=group.location,
+                            event_id=event.id,
+                            event_title=event.title,
+                            event_date=event.date,
+                            start_time=group.start_time,
+                            has_result=part.result is not None,
+                            moderation_status=(
+                                part.result.status.value if part.result is not None else None
+                            ),
+                        ),
+                    )
     return out
 
 
@@ -212,7 +238,7 @@ async def create_signup(group_id: int, user: CurrentUser, session: SessionDep) -
     # retroactive signup.
     event = await session.get(Event, group.event_id)
     assert event is not None
-    if _event_has_started(group, event):
+    if group_has_started(group.start_time, event.date):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "Тренировка уже началась — запись закрыта.",

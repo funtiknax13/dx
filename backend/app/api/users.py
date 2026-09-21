@@ -5,9 +5,10 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.security import hash_password, verify_password
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AvatarReview
+from app.models.enums import AvatarReview, UserRole
 from app.models.event import Event
 from app.models.group import Group
+from app.models.result import Result
 from app.models.signup import Signup
 from app.models.user import User
 from app.schemas.auth import MessageResponse
@@ -42,7 +43,7 @@ from app.services.profile_review_service import (
     pending_request_for,
     submit_for_review,
 )
-from app.services.rating_service import runner_finished_count
+from app.services.rating_service import counts_toward_rating, runner_finished_count
 from app.services.stats_service import compute_profile_stats
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -237,6 +238,7 @@ async def delete_me(
 async def user_history(
     user_id: int,
     session: SessionDep,
+    viewer: OptionalUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Page[ParticipationHistoryItem]:
@@ -248,8 +250,13 @@ async def user_history(
         select(AttendanceRecord)
         .join(Group, Group.id == AttendanceRecord.group_id)
         .join(Event, Event.id == Group.event_id)
+        .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
         .where(AttendanceRecord.runner_id == user_id)
     )
+    # A self-reported run isn't public until an admin approves its result —
+    # the owner (and admins) still see it, with its moderation status.
+    if viewer is None or (viewer.id != user_id and viewer.role != UserRole.admin):
+        base = base.where(counts_toward_rating())
     total = await session.scalar(select(func.count()).select_from(base.subquery()))
     records = await session.scalars(
         base.options(

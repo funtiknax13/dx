@@ -144,6 +144,8 @@ export interface EventSummary {
   date: string // ISO
   description?: string | null
   cover_url?: string | null
+  /** Server-computed (Cheboksary time, from the groups' start times). */
+  is_past?: boolean
   location_summary?: string | null
   group_count?: number
   participant_count?: number
@@ -179,6 +181,8 @@ export interface Group {
   start_lng?: number | null
   event_date?: string | null // ISO date, always the parent event's date
   has_route_gpx?: boolean
+  /** Server-computed (Cheboksary time): signup closes, result entry opens. */
+  has_started?: boolean
   signup_count?: number
   finisher_count?: number
 }
@@ -201,6 +205,14 @@ export interface GroupSignupState {
   signup_id?: number | null
   /** Set when signed up for a *different* group of this same event instead. */
   other_group?: SignupGroupSummary | null
+}
+
+/** Current user's standing in a group after it started — drives the
+ * "Я бегал(а)" button on the group page. */
+export interface GroupParticipation {
+  status: 'none' | 'in_protocol' | 'pending' | 'approved' | 'rejected' | 'other_group'
+  attendance_id?: number | null
+  other_group_name?: string | null
 }
 
 /** Current user's signup state for an event as a whole (any of its groups). */

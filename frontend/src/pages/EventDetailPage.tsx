@@ -5,7 +5,7 @@ import { signupsApi } from '../api/signups'
 import { media } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { formatDate, isPast, plural } from '../lib/format'
+import { formatDate, plural } from '../lib/format'
 import { GroupCard } from '../components/GroupCard'
 import { PhotoGallery } from '../components/PhotoGallery'
 import { PageLoader } from '../components/ui/Spinner'
@@ -59,7 +59,7 @@ export function EventDetailPage() {
 
   const { event, groups, photos, mySignup } = data
   const cover = media(event.cover_url)
-  const past = isPast(event.date)
+  const past = Boolean(event.is_past)
 
   return (
     <article>

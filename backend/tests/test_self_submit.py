@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import create_access_token
 from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, ModerationStatus, UserRole
+from app.models.group import Group
 from app.models.signup import Signup
 from tests.factories import make_event_group, make_user
 
@@ -211,7 +212,11 @@ async def test_self_submit_rejects_an_implausible_pace(
 
 
 @pytest.mark.asyncio
-async def test_self_submit_requires_signup(session: AsyncSession, client: AsyncClient) -> None:
+async def test_self_submit_works_without_a_signup(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A runner who forgot to sign up still ran — the group only has to have
+    started. The result goes to moderation like any self-report."""
     org = await make_user(session, "org-nosig@e.com", UserRole.organizer)
     _event, group = await make_event_group(session, org)
     runner = await make_user(session, "run-nosig@e.com")  # not signed up
@@ -222,7 +227,70 @@ async def test_self_submit_requires_signup(session: AsyncSession, client: AsyncC
         data={"distance_km": "10", "duration_seconds": "3000"},
         files=_IMG,
     )
-    assert r.status_code == 403
+    assert r.status_code == 201, r.text
+    assert r.json()["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_self_submit_blocked_when_already_in_another_group_of_the_event(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """One group per runner per event: a second record elsewhere in the event
+    would put them in two protocols."""
+    org = await make_user(session, "org-two@e.com", UserRole.organizer)
+    event, group_a = await make_event_group(session, org)
+    group_b = Group(
+        event_id=event.id,
+        location="Other",
+        name="D-21",
+        distance_code="D-21",
+        target_distance_km=21.0,
+        start_time=group_a.start_time,
+    )
+    session.add(group_b)
+    runner = await make_user(session, "run-two@e.com")
+    session.add(
+        AttendanceRecord(
+            group_id=group_a.id,
+            raw_name="R",
+            runner_id=runner.id,
+            finish_status=FinishStatus.finished,
+        )
+    )
+    await session.commit()
+
+    r = await client.post(
+        f"/api/v1/groups/{group_b.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "21", "duration_seconds": "6000"},
+        files=_IMG,
+    )
+    assert r.status_code == 409
+    assert "X-10" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_self_submit_reuses_a_csv_placed_record_without_a_result(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """On the protocol via CSV but no result yet: the runner's submission
+    attaches to that record instead of creating a self-reported duplicate."""
+    runner, group, rec = await _matched_record(session, "org-reuse@e.com", "run-reuse@e.com")
+    r = await client.post(
+        f"/api/v1/groups/{group.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "10", "duration_seconds": "3000"},
+        files=_IMG,
+    )
+    assert r.status_code == 201, r.text
+    records = list(
+        await session.scalars(
+            select(AttendanceRecord).where(AttendanceRecord.runner_id == runner.id)
+        )
+    )
+    assert [x.id for x in records] == [rec.id]
+    await session.refresh(rec)
+    assert rec.self_reported is False
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,8 @@ import type { EventSignupState, MySignupEntry, Signup } from '../types'
 /** A past event the runner signed up to, where they can still self-report a
  * result (or one is pending). */
 export interface AwaitingResultEntry {
-  signup_id: number
+  /** Null for a group added via the "Я бегал(а)" deep link — no signup behind it. */
+  signup_id: number | null
   group_id: number
   group_name: string
   location: string
@@ -22,5 +23,10 @@ export const signupsApi = {
   eventState: (eventId: number | string) =>
     api.get<EventSignupState>(`/events/${eventId}/signups/me`),
   mine: () => api.get<MySignupEntry[]>('/users/me/signups'),
-  awaitingResults: () => api.get<AwaitingResultEntry[]>('/users/me/signups/awaiting-result'),
+  /** `includeGroupId` adds that (started) group even without a signup — the
+   * "Я бегал(а)" deep link from a group page. */
+  awaitingResults: (includeGroupId?: number | null) =>
+    api.get<AwaitingResultEntry[]>('/users/me/signups/awaiting-result', {
+      query: includeGroupId ? { include_group_id: includeGroupId } : undefined,
+    }),
 }

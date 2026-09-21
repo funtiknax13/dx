@@ -23,3 +23,17 @@ async def set_group_route_gpx(session: AsyncSession, group: Group, new_path: str
         if still_referenced is None:
             delete_media(old_path)
     group.route_gpx = new_path
+
+
+async def family_group_ids(session: AsyncSession, group: Group) -> list[int]:
+    """All groups sharing this group's distance_code (one shared protocol), or
+    just this group when it has no code."""
+    if group.distance_code:
+        ids = await session.scalars(
+            select(Group.id).where(
+                Group.event_id == group.event_id,
+                Group.distance_code == group.distance_code,
+            )
+        )
+        return list(ids)
+    return [group.id]

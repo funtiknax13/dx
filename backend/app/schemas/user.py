@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.timezone import today_msk
 from app.models.enums import AvatarReview, Gender, PriorExperience, UserRole
 from app.schemas.validators import normalize_optional_name, validate_password
 
@@ -25,7 +26,7 @@ def normalize_ru_phone(value: str | None) -> str | None:
 def validate_birthday(value: date | None) -> date | None:
     if value is None:
         return None
-    if value > date.today():
+    if value > today_msk():
         raise ValueError("Дата рождения не может быть в будущем")
     if value.year < 1900:
         raise ValueError("Проверьте год рождения")
