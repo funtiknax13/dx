@@ -129,41 +129,34 @@ async def my_awaiting_results(
 
     out: list[AwaitingResultEntry] = []
     for s in signups:
-        if not group_has_started(s.group.start_time, s.event.date):
-            continue
-        # Do they already have a record (with a result) in this distance family?
-        if s.group.distance_code:
-            family_ids = list(
-                await session.scalars(
-                    select(Group.id).where(
-                        Group.event_id == s.event_id,
-                        Group.distance_code == s.group.distance_code,
-                    )
-                )
-            )
-        else:
-            family_ids = [s.group_id]
+        # Go by where the runner actually is in this event, not where they
+        # signed up: a record in another group (they signed up for D-21 but the
+        # protocol / their own report has them in X-34) supersedes the signup.
         record = await session.scalar(
             select(AttendanceRecord)
-            .where(
-                AttendanceRecord.group_id.in_(family_ids),
-                AttendanceRecord.runner_id == user.id,
-            )
-            .options(selectinload(AttendanceRecord.result))
+            .join(Group, Group.id == AttendanceRecord.group_id)
+            .where(Group.event_id == s.event_id, AttendanceRecord.runner_id == user.id)
+            .options(selectinload(AttendanceRecord.result), selectinload(AttendanceRecord.group))
+            .order_by(AttendanceRecord.id)
+            .limit(1)
         )
+        group = record.group if record is not None else s.group
+        if record is None and not group_has_started(group.start_time, s.event.date):
+            continue
         result: Result | None = record.result if record is not None else None
         if result is not None and result.status.value == "approved":
             continue  # done — in the protocol already
         out.append(
             AwaitingResultEntry(
                 signup_id=s.id,
-                group_id=s.group_id,
-                group_name=s.group.name,
-                location=s.group.location,
+                group_id=group.id,
+                group_name=group.name,
+                location=group.location,
                 event_id=s.event_id,
                 event_title=s.event.title,
                 event_date=s.event.date,
-                start_time=s.group.start_time,
+                start_time=group.start_time,
+                has_record=record is not None,
                 has_result=result is not None,
                 moderation_status=result.status.value if result is not None else None,
             )
@@ -188,6 +181,7 @@ async def my_awaiting_results(
                             event_title=event.title,
                             event_date=event.date,
                             start_time=group.start_time,
+                            has_record=part.record is not None,
                             has_result=part.result is not None,
                             moderation_status=(
                                 part.result.status.value if part.result is not None else None

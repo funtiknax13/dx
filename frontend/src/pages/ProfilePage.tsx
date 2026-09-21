@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { guestsApi } from '../api/guests'
+import { groupsApi } from '../api/groups'
 import { signupsApi, type AwaitingResultEntry } from '../api/signups'
 import { attendanceApi } from '../api/attendance'
 import { ApiError } from '../api/client'
@@ -36,6 +37,7 @@ import { IconArrow, IconCalendar, IconUser } from '../components/ui/icons'
 import { FIELD_LABELS } from '../lib/profileFieldLabels'
 import type {
   Gender,
+  Group,
   GuestClaim,
   GuestProfile,
   MySignupEntry,
@@ -249,12 +251,29 @@ function AwaitingResultRow({
 }) {
   const [open, setOpen] = useState(autoOpen)
   const [dismissing, setDismissing] = useState(false)
+  // Signed up for D-21 but ran X-34? The group can be switched right here, before
+  // uploading — unless the runner already has a record in the event (protocol or
+  // an earlier report), which fixes the group.
+  const [groupId, setGroupId] = useState(e.group_id)
+  const [groups, setGroups] = useState<Group[] | null>(null)
+  const [switching, setSwitching] = useState(false)
+  const canSwitchGroup = !e.has_record
+  const startSwitching = async () => {
+    setSwitching(true)
+    if (groups) return
+    try {
+      setGroups((await groupsApi.list(e.event_id)).filter((g) => g.has_started))
+    } catch {
+      setGroups([])
+    }
+  }
   const rowRef = useRef<HTMLLIElement>(null)
   useEffect(() => {
     if (autoOpen) rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [autoOpen])
   const pending = e.moderation_status === 'pending'
   const rejected = e.moderation_status === 'rejected'
+  const didRunLabel = gender === 'female' ? 'Бегала' : gender === 'male' ? 'Бегал' : 'Бегал(а)'
   const didNotRunLabel = gender === 'female' ? 'Я не бегала' : gender === 'male' ? 'Я не бегал' : 'Я не бегал(а)'
 
   const dismiss = async () => {
@@ -314,8 +333,42 @@ function AwaitingResultRow({
       </div>
       {open && !pending && (
         <div className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-600">
+            {switching && groups ? (
+              <label className="flex items-center gap-2">
+                Группа, в которой вы бежали:
+                <select
+                  value={groupId}
+                  onChange={(ev) => setGroupId(Number(ev.target.value))}
+                  className="rounded-lg border border-ink/15 bg-white px-2 py-1 text-sm text-ink"
+                >
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                      {g.location ? ` · ${g.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <>
+                <span>
+                  Группа: <b className="text-ink">{e.group_name}</b>
+                </span>
+                {canSwitchGroup && (
+                  <button
+                    type="button"
+                    onClick={startSwitching}
+                    className="text-signal hover:underline"
+                  >
+                    {switching ? 'Загрузка…' : `${didRunLabel} в другой группе?`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
           <ManualResultForm
-            onSubmit={(d) => attendanceApi.submitGroupResult(e.group_id, d)}
+            onSubmit={(d) => attendanceApi.submitGroupResult(groupId, d)}
             onDone={() => {
               setOpen(false)
               onSubmitted()

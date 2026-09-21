@@ -13,6 +13,8 @@ export interface AwaitingResultEntry {
   event_title: string
   event_date: string
   start_time: string | null
+  /** The runner already has an attendance record in this event, so the group is fixed. */
+  has_record: boolean
   has_result: boolean
   moderation_status: 'pending' | 'approved' | 'rejected' | null
 }

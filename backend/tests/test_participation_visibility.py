@@ -259,3 +259,89 @@ async def test_profile_stats_ignore_an_unapproved_self_report(
     after = (await client.get(url, headers=_auth(viewer.id))).json()
     assert after["total_runs_count"] == 1
     assert after["rating"] == 1
+
+
+# ---- signed up for one group, ran in another ---------------------------------
+
+
+async def _two_groups(session: AsyncSession, org_email: str) -> tuple[Group, Group]:
+    org = await make_user(session, org_email, UserRole.organizer)
+    event, group_x = await make_event_group(session, org)  # X-10
+    group_d = Group(
+        event_id=event.id,
+        location="L",
+        name="D-21",
+        distance_code="D-21",
+        target_distance_km=21.0,
+        start_time=group_x.start_time,
+    )
+    session.add(group_d)
+    await session.flush()
+    return group_d, group_x
+
+
+@pytest.mark.asyncio
+async def test_signup_follows_the_run_into_the_group_actually_run(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    from app.models.signup import Signup
+
+    group_d, group_x = await _two_groups(session, "org-move@e.com")
+    runner = await make_user(session, "run-move@e.com")
+    session.add(Signup(runner_id=runner.id, group_id=group_d.id, event_id=group_d.event_id))
+    await session.commit()
+
+    r = await client.post(
+        f"/api/v1/groups/{group_x.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "10", "duration_seconds": "3000"},
+        files={"images": ("s.png", b"fake", "image/png")},
+    )
+    assert r.status_code == 201, r.text
+    signup = await session.scalar(select(Signup).where(Signup.runner_id == runner.id))
+    await session.refresh(signup)
+    assert signup.group_id == group_x.id
+
+
+@pytest.mark.asyncio
+async def test_awaiting_entry_follows_the_protocol_group_not_the_signup(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    from app.models.signup import Signup
+
+    group_d, group_x = await _two_groups(session, "org-await@e.com")
+    runner = await make_user(session, "run-await@e.com")
+    session.add(Signup(runner_id=runner.id, group_id=group_d.id, event_id=group_d.event_id))
+    session.add(
+        AttendanceRecord(
+            group_id=group_x.id,
+            raw_name="R",
+            runner_id=runner.id,
+            finish_status=FinishStatus.finished,
+        )
+    )
+    await session.commit()
+    url = "/api/v1/users/me/signups/awaiting-result"
+
+    entries = (await client.get(url, headers=_auth(runner.id))).json()
+    assert len(entries) == 1
+    assert entries[0]["group_id"] == group_x.id  # where the protocol has them
+    assert entries[0]["has_record"] is True
+
+
+@pytest.mark.asyncio
+async def test_awaiting_entry_without_a_record_keeps_the_signed_group_and_allows_switching(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    from app.models.signup import Signup
+
+    group_d, _group_x = await _two_groups(session, "org-await2@e.com")
+    runner = await make_user(session, "run-await2@e.com")
+    session.add(Signup(runner_id=runner.id, group_id=group_d.id, event_id=group_d.event_id))
+    await session.commit()
+
+    entries = (
+        await client.get("/api/v1/users/me/signups/awaiting-result", headers=_auth(runner.id))
+    ).json()
+    assert [e["group_id"] for e in entries] == [group_d.id]
+    assert entries[0]["has_record"] is False

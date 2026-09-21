@@ -10,6 +10,7 @@ from app.models.enums import FinishStatus, ModerationStatus, ResultSource, UserR
 from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
+from app.models.signup import Signup
 from app.schemas.result import GroupParticipationOut, ImportUrlRequest, ResultOut
 from app.services.event_time import group_has_started
 from app.services.fit_service import parse_fit
@@ -401,6 +402,15 @@ async def submit_group_result(
         await session.flush()
 
     await _check_resubmit_allowed(session, user, record)
+
+    # A signup is intent, the run is the fact: someone who signed up for D-21 and
+    # ran X-34 has their signup follow the run, so the roster and their "upload a
+    # result" list don't keep a stale entry for the group they didn't run in.
+    signup = await session.scalar(
+        select(Signup).where(Signup.event_id == group.event_id, Signup.runner_id == user.id)
+    )
+    if signup is not None and signup.group_id != record.group_id:
+        signup.group_id = record.group_id
 
     screenshots = await _save_screenshots(images) if _real_images(images) else None
     parsed = ParsedTrack(
