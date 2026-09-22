@@ -104,27 +104,6 @@ export const attendanceApi = {
     return mapResult(await api.post<RawResult>(`/attendance/${attendanceId}/result`, form))
   },
 
-  // Backend expects manual entry as multipart Form fields on the same endpoint as
-  // the file upload (not a JSON body) — see backend/app/api/results.py.
-  submitResultManual: async (
-    attendanceId: number | string,
-    payload: {
-      distance_km: number
-      duration_seconds: number
-      start_time?: string
-      images?: File[]
-      comment?: string
-    },
-  ) => {
-    const form = new FormData()
-    form.append('distance_km', String(payload.distance_km))
-    form.append('duration_seconds', String(Math.round(payload.duration_seconds)))
-    if (payload.start_time) form.append('start_time', payload.start_time)
-    for (const img of payload.images ?? []) form.append('images', img)
-    if (payload.comment) form.append('comment', payload.comment)
-    return mapResult(await api.post<RawResult>(`/attendance/${attendanceId}/result`, form))
-  },
-
   // Alternative to uploading a file: a GPX/FIT export link from the watch's
   // own app (Suunto/Garmin/Coros etc). Fetched and validated server-side —
   // see backend/app/services/safe_fetch.py. Admin-only now.

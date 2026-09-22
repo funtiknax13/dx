@@ -159,6 +159,7 @@ export function PublicProfilePage() {
               <ParticipationHistory
                 history={history.data?.items ?? []}
                 editable={Boolean(isSelf)}
+                gender={user?.gender ?? null}
                 onResultSubmitted={() => {
                   history.reload()
                   reload()

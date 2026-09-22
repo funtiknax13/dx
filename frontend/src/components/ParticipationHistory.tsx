@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { ParticipationEntry } from '../types'
+import type { Gender, Group, ParticipationEntry } from '../types'
 import { formatDate, formatDistance, formatDuration, formatPace } from '../lib/format'
 import { attendanceApi } from '../api/attendance'
+import { groupsApi } from '../api/groups'
 import { ManualResultForm } from './ManualResultForm'
 import { IconFlag } from './ui/icons'
 
@@ -10,10 +11,16 @@ interface Props {
   history: ParticipationEntry[]
   /** Show "add result" controls — only true when viewing your own history. */
   editable?: boolean
+  gender?: Gender | null
   onResultSubmitted?: () => void
 }
 
-export function ParticipationHistory({ history, editable = false, onResultSubmitted }: Props) {
+export function ParticipationHistory({
+  history,
+  editable = false,
+  gender = null,
+  onResultSubmitted,
+}: Props) {
   if (!history.length) {
     return (
       <div className="rounded-xl2 border border-dashed border-ink/15 bg-white/50 px-6 py-12 text-center">
@@ -33,6 +40,7 @@ export function ParticipationHistory({ history, editable = false, onResultSubmit
           key={h.attendance_id}
           entry={h}
           editable={editable}
+          gender={gender}
           onResultSubmitted={onResultSubmitted}
         />
       ))}
@@ -43,10 +51,12 @@ export function ParticipationHistory({ history, editable = false, onResultSubmit
 function HistoryRow({
   entry: h,
   editable,
+  gender,
   onResultSubmitted,
 }: {
   entry: ParticipationEntry
   editable: boolean
+  gender: Gender | null
   onResultSubmitted?: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -57,9 +67,38 @@ function HistoryRow({
   // moderation and an approved one is settled — neither can be re-uploaded
   // (see _check_resubmit_allowed in backend/app/api/results.py).
   const needsResult = editable && (h.has_result === false || rejected)
+  // Only a *rejected* record can move to a different group — one with no
+  // result yet (e.g. CSV-placed) is left as is, same rule the backend
+  // enforces (see _group_is_fixed in backend/app/api/signups.py).
+  const canSwitchGroup = rejected
+
+  const [groupId, setGroupId] = useState(h.group_id)
+  const [groups, setGroups] = useState<Group[] | null>(null)
+  const [switching, setSwitching] = useState(false)
+  const startSwitching = async () => {
+    setSwitching(true)
+    if (groups) return
+    try {
+      setGroups((await groupsApi.list(h.event_id)).filter((g) => g.has_started))
+    } catch {
+      setGroups([])
+    }
+  }
+  // The group picker only makes sense while the form for *this* row is open —
+  // reset it each time the row is closed so reopening starts fresh.
+  useEffect(() => {
+    if (!open) {
+      setGroupId(h.group_id)
+      setGroups(null)
+      setSwitching(false)
+    }
+  }, [open, h.group_id])
+
+  const rowRef = useRef<HTMLLIElement>(null)
+  const didRunLabel = gender === 'female' ? 'Бегала' : gender === 'male' ? 'Бегал' : 'Бегал(а)'
 
   return (
-    <li className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
+    <li ref={rowRef} className="rounded-xl2 border border-ink/[0.08] bg-white shadow-card">
       <div className="flex items-center gap-4 p-4">
         <span
           className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl font-display text-xs ${
@@ -117,25 +156,50 @@ function HistoryRow({
         )}
       </div>
       {open && needsResult && (
-        <ResultForm
-          attendanceId={h.attendance_id}
-          onDone={() => {
-            setOpen(false)
-            onResultSubmitted?.()
-          }}
-        />
+        <div className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-600">
+            {switching && groups ? (
+              <label className="flex items-center gap-2">
+                Группа, в которой вы бежали:
+                <select
+                  value={groupId}
+                  onChange={(ev) => setGroupId(Number(ev.target.value))}
+                  className="rounded-lg border border-ink/15 bg-white px-2 py-1 text-sm text-ink"
+                >
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                      {g.location ? ` · ${g.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <>
+                <span>
+                  Группа: <b className="text-ink">{h.group_name}</b>
+                </span>
+                {canSwitchGroup && (
+                  <button
+                    type="button"
+                    onClick={startSwitching}
+                    className="text-signal hover:underline"
+                  >
+                    {switching ? 'Загрузка…' : `${didRunLabel} в другой группе?`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          <ManualResultForm
+            onSubmit={(d) => attendanceApi.submitGroupResult(groupId, d)}
+            onDone={() => {
+              setOpen(false)
+              onResultSubmitted?.()
+            }}
+          />
+        </div>
       )}
     </li>
-  )
-}
-
-function ResultForm({ attendanceId, onDone }: { attendanceId: number; onDone: () => void }) {
-  return (
-    <div className="border-t border-ink/[0.06] bg-paper-soft/40 p-4">
-      <ManualResultForm
-        onSubmit={(d) => attendanceApi.submitResultManual(attendanceId, d)}
-        onDone={onDone}
-      />
-    </div>
   )
 }
