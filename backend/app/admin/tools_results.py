@@ -138,6 +138,12 @@ async def reject_result(
             return RedirectResponse(
                 "/admin-tools/results?flash=Результат не найден", status_code=303
             )
+        if result.status != ModerationStatus.pending:
+            # Already acted on — a double click/submit (the reason-modal form has
+            # no client-side guard against it) must not send a second ticket.
+            return RedirectResponse(
+                "/admin-tools/results?flash=Результат уже обработан", status_code=303
+            )
         record = result.attendance_record
         runner = record.runner if record is not None else None
         # Only real accounts can receive a ticket (guests/unmatched can't log in).

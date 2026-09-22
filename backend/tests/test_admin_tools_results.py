@@ -68,9 +68,7 @@ async def test_reject_marks_rejected_and_notifies_runner(
     )
     assert ticket is not None
     assert ticket.status == TicketStatus.closed
-    msg = await session.scalar(
-        select(SupportMessage).where(SupportMessage.ticket_id == ticket.id)
-    )
+    msg = await session.scalar(select(SupportMessage).where(SupportMessage.ticket_id == ticket.id))
     assert msg is not None
     assert msg.is_staff is True
     assert "не совпадает дата старта" in msg.body
@@ -150,3 +148,56 @@ async def test_reject_unmatched_record_creates_no_ticket(
     assert await session.scalar(select(SupportTicket)) is None
     result = await session.scalar(select(Result).where(Result.id == result_id))
     assert result is not None and result.status == ModerationStatus.rejected
+
+
+@pytest.mark.asyncio
+async def test_reject_twice_sends_only_one_ticket(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Regression guard: a double-click/double-submit of the reject form (it
+    has no client-side guard of its own) must not email the runner twice."""
+    admin = await make_user(session, "admin-reject4@example.com", UserRole.admin)
+    org = await make_user(session, "org-reject4@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-reject4@example.com")
+    _, group = await make_event_group(session, org)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.pending,
+        self_reported=True,
+    )
+    runner_id = runner.id
+    result_id = await _result_id(session, rec.id)
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    first = await client.post(
+        f"/admin-tools/results/{result_id}/reject",
+        data={"reason": "Первая причина."},
+        follow_redirects=False,
+    )
+    second = await client.post(
+        f"/admin-tools/results/{result_id}/reject",
+        data={"reason": "Вторая причина."},
+        follow_redirects=False,
+    )
+    assert first.status_code == 303
+    assert second.status_code == 303
+    session.expire_all()
+
+    tickets = list(
+        await session.scalars(
+            select(SupportTicket).where(SupportTicket.created_by_user_id == runner_id)
+        )
+    )
+    assert len(tickets) == 1
+    messages = list(
+        await session.scalars(
+            select(SupportMessage).where(SupportMessage.ticket_id == tickets[0].id)
+        )
+    )
+    assert len(messages) == 1
+    assert "Первая причина" in messages[0].body

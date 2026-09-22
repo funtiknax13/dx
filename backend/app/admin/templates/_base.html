@@ -496,6 +496,7 @@
           reasonTitle.textContent = btn.dataset.title || 'Причина';
           reasonHint.textContent = btn.dataset.hint || '';
           reasonHint.style.display = btn.dataset.hint ? '' : 'none';
+          reasonSubmit.disabled = false;
           reasonSubmit.textContent = btn.dataset.submitLabel || 'Подтвердить';
           reasonText.value = '';
           reasonPresets.innerHTML = '';
@@ -511,6 +512,15 @@
           });
           reasonDialog.showModal();
         });
+      });
+      // A plain <form method="post"> full-page-submits on click — with no
+      // guard, an impatient double-click (or a slow response) fires the
+      // action twice, e.g. rejecting a result and emailing the runner about
+      // it twice. Disabling on submit is enough: the page navigates away
+      // right after, so there's nothing to re-enable on success.
+      reasonForm.addEventListener('submit', function () {
+        reasonSubmit.disabled = true;
+        reasonSubmit.textContent = 'Отправка…';
       });
 
       // ---- generic "detail" modal: fetches a URL fragment and shows it in a
