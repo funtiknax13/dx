@@ -400,6 +400,11 @@ async def submit_group_result(
         )
         session.add(record)
         await session.flush()
+    elif record.group_id != group.id:
+        # A rejected record from a *different* group's family, reused here —
+        # move it rather than leave it pointing at the group it was turned
+        # down for (see get_group_participation).
+        record.group_id = group.id
 
     await _check_resubmit_allowed(session, user, record)
 

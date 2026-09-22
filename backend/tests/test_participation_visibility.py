@@ -345,3 +345,87 @@ async def test_awaiting_entry_without_a_record_keeps_the_signed_group_and_allows
     ).json()
     assert [e["group_id"] for e in entries] == [group_d.id]
     assert entries[0]["has_record"] is False
+
+
+@pytest.mark.asyncio
+async def test_rejected_record_in_another_group_does_not_block_switching(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """The actual bug report: a runner rejected in X-10 (wrong group) must be
+    able to submit into D-21 instead — not get told they "already have a
+    result" with no way out other than support."""
+    from app.models.signup import Signup
+
+    group_d, group_x = await _two_groups(session, "org-fix1@e.com")
+    runner, rec = await _self_reported(
+        session, group_x, "run-fix1@e.com", ModerationStatus.rejected
+    )
+    session.add(Signup(runner_id=runner.id, group_id=group_x.id, event_id=group_x.event_id))
+    await session.commit()
+
+    # She can't switch to a group that's still fixed for her, but a rejected
+    # one shows up switchable in her "Загрузить результат" list.
+    entries = (
+        await client.get("/api/v1/users/me/signups/awaiting-result", headers=_auth(runner.id))
+    ).json()
+    assert len(entries) == 1
+    assert entries[0]["group_id"] == group_x.id
+    assert entries[0]["has_record"] is False  # switcher visible
+
+    # The group page for D-21 must also offer resubmission, not "other_group".
+    state = (
+        await client.get(f"/api/v1/groups/{group_d.id}/participation/me", headers=_auth(runner.id))
+    ).json()
+    assert state["status"] == "rejected"
+
+    resp = await client.post(
+        f"/api/v1/groups/{group_d.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "21", "duration_seconds": "6000"},
+        files={"images": ("s.png", b"fake", "image/png")},
+    )
+    assert resp.status_code == 201, resp.text
+
+    # The *same* record moved groups — no orphaned duplicate in X-10.
+    records = list(
+        await session.scalars(
+            select(AttendanceRecord).where(AttendanceRecord.runner_id == runner.id)
+        )
+    )
+    assert [r.id for r in records] == [rec.id]
+    await session.refresh(rec)
+    assert rec.group_id == group_d.id
+    result = await session.scalar(select(Result).where(Result.attendance_record_id == rec.id))
+    assert result is not None and result.status == ModerationStatus.pending
+
+    # The signup followed it too.
+    signup = await session.scalar(select(Signup).where(Signup.runner_id == runner.id))
+    await session.refresh(signup)
+    assert signup.group_id == group_d.id
+
+
+@pytest.mark.asyncio
+async def test_pending_record_in_another_group_still_blocks_switching(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Only a *rejected* record is reusable — one still awaiting review stays
+    a hard conflict, same as before (see _check_resubmit_allowed's own-record
+    rule: don't let a runner change what's mid-review)."""
+    group_d, group_x = await _two_groups(session, "org-fix2@e.com")
+    runner, _rec = await _self_reported(
+        session, group_x, "run-fix2@e.com", ModerationStatus.pending
+    )
+    await session.commit()
+
+    state = (
+        await client.get(f"/api/v1/groups/{group_d.id}/participation/me", headers=_auth(runner.id))
+    ).json()
+    assert state["status"] == "other_group"
+
+    resp = await client.post(
+        f"/api/v1/groups/{group_d.id}/result",
+        headers=_auth(runner.id),
+        data={"distance_km": "21", "duration_seconds": "6000"},
+        files={"images": ("s.png", b"fake", "image/png")},
+    )
+    assert resp.status_code == 409

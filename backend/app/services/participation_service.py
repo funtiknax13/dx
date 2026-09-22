@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
+from app.models.enums import ModerationStatus
 from app.models.group import Group
 from app.models.result import Result
 from app.services.group_service import family_group_ids
@@ -16,9 +17,11 @@ from app.services.group_service import family_group_ids
 class GroupParticipation:
     record: AttendanceRecord | None
     result: Result | None
-    # Set when the runner has no record in this group's distance family but
-    # does have one in a *different* group of the same event — a runner is in
-    # one group per event, so that's a conflict to surface, not a gap to fill.
+    # Set when the runner has an unresolved (pending or approved) record in a
+    # *different* group of the same event — a runner is in one group per
+    # event, so that's a conflict to surface, not a gap to fill. A *rejected*
+    # record elsewhere doesn't count: it was already turned down as wrong, so
+    # it's exactly the "moved to the right group" case, not a duplicate.
     other_group: Group | None
 
 
@@ -41,9 +44,9 @@ async def get_group_participation(
         )
         return GroupParticipation(record=record, result=result, other_group=None)
 
-    other_group = await session.scalar(
-        select(Group)
-        .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
+    elsewhere = await session.scalar(
+        select(AttendanceRecord)
+        .join(Group, Group.id == AttendanceRecord.group_id)
         .where(
             Group.event_id == group.event_id,
             AttendanceRecord.runner_id == runner_id,
@@ -52,4 +55,16 @@ async def get_group_participation(
         .order_by(AttendanceRecord.id)
         .limit(1)
     )
+    if elsewhere is None:
+        return GroupParticipation(record=None, result=None, other_group=None)
+
+    other_result = await session.scalar(
+        select(Result).where(Result.attendance_record_id == elsewhere.id)
+    )
+    if other_result is not None and other_result.status == ModerationStatus.rejected:
+        # Turned down in the wrong group — reusable: submitting here moves it,
+        # same as a record with no result yet in this group's own family.
+        return GroupParticipation(record=elsewhere, result=other_result, other_group=None)
+
+    other_group = await session.get(Group, elsewhere.group_id)
     return GroupParticipation(record=None, result=None, other_group=other_group)

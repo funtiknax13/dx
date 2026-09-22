@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.timezone import today_msk
 from app.models.attendance import AttendanceRecord
+from app.models.enums import ModerationStatus
 from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
@@ -24,6 +25,18 @@ from app.services.event_time import group_has_started
 from app.services.participation_service import get_group_participation
 
 router = APIRouter(tags=["signups"])
+
+
+def _group_is_fixed(record: AttendanceRecord | None, result: Result | None) -> bool:
+    """Whether `record`'s group is settled — the "Бегал(а) в другой группе?"
+    switcher only makes sense while it isn't. A record with no result yet
+    (e.g. CSV-placed) or a pending/approved one is fixed; a *rejected* one
+    was already turned down as wrong, so it's exactly the case the switcher
+    exists for (see get_group_participation, which reuses it the same way
+    once the runner actually submits into the right group)."""
+    if record is None:
+        return False
+    return result is None or result.status != ModerationStatus.rejected
 
 
 @router.get("/groups/{group_id}/signups/me", response_model=GroupSignupState)
@@ -156,7 +169,7 @@ async def my_awaiting_results(
                 event_title=s.event.title,
                 event_date=s.event.date,
                 start_time=group.start_time,
-                has_record=record is not None,
+                has_record=_group_is_fixed(record, result),
                 has_result=result is not None,
                 moderation_status=result.status.value if result is not None else None,
             )
@@ -181,7 +194,7 @@ async def my_awaiting_results(
                             event_title=event.title,
                             event_date=event.date,
                             start_time=group.start_time,
-                            has_record=part.record is not None,
+                            has_record=_group_is_fixed(part.record, part.result),
                             has_result=part.result is not None,
                             moderation_status=(
                                 part.result.status.value if part.result is not None else None

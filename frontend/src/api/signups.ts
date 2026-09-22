@@ -13,7 +13,9 @@ export interface AwaitingResultEntry {
   event_title: string
   event_date: string
   start_time: string | null
-  /** The runner already has an attendance record in this event, so the group is fixed. */
+  /** The group is settled and can't be switched (a record with no result yet,
+   * or a pending/approved one) — false for a *rejected* record too, since
+   * that's "wrong group, please redo", exactly what the switcher is for. */
   has_record: boolean
   has_result: boolean
   moderation_status: 'pending' | 'approved' | 'rejected' | null

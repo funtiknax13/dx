@@ -59,8 +59,10 @@ class AwaitingResultEntry(BaseModel):
     event_title: str
     event_date: date_type
     start_time: datetime | None
-    # True when the runner already has an attendance record in the event (the
-    # group is then fixed — it can't be switched from the upload form).
+    # True when the group is settled and can't be switched from the upload
+    # form (see _group_is_fixed): a record with no result yet, or a
+    # pending/approved one. False for a *rejected* record too — that's the
+    # "wrong group, please redo" case the switcher exists to fix.
     has_record: bool = False
     has_result: bool
     moderation_status: str | None  # 'pending' | 'approved' | 'rejected' | None
