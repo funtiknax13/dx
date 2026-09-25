@@ -181,6 +181,41 @@ async def test_streak_ignores_a_not_yet_imported_event(session: AsyncSession) ->
 
 
 @pytest.mark.asyncio
+async def test_streak_ignores_an_event_with_only_non_rating_groups(
+    session: AsyncSession,
+) -> None:
+    """An extra event whose every group is off the rating (counts_toward_rating
+    False) must not enter the streak sequence — otherwise everyone who skipped
+    it would have their streak reset."""
+    org = await make_user(session, "org-stats-norating@example.com", UserRole.organizer)
+    regular = await make_user(session, "regular-stats-norating@example.com")
+    social = await make_user(session, "social-stats-norating@example.com")
+    today = datetime.now(UTC).date()
+    dx_event = Event(title="DX", date=today - timedelta(days=7), created_by=org.id)
+    extra_event = Event(title="Extra", date=today - timedelta(days=1), created_by=org.id)
+    session.add_all([dx_event, extra_event])
+    await session.flush()
+    dx_group = Group(event_id=dx_event.id, location="City", name="A", target_distance_km=10)
+    extra_group = Group(
+        event_id=extra_event.id,
+        location="City",
+        name="Social",
+        target_distance_km=3,
+        counts_toward_rating=False,
+    )
+    session.add_all([dx_group, extra_group])
+    await session.flush()
+
+    await _finish(session, dx_group, regular.id)
+    await _finish(session, extra_group, social.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, regular.id)
+    assert stats.current_streak == 1
+    assert stats.longest_streak == 1
+
+
+@pytest.mark.asyncio
 async def test_total_runs_counts_dnf_attempts_too(
     session: AsyncSession,
 ) -> None:

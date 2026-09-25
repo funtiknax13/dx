@@ -130,7 +130,7 @@ async def _compute_streak(session: AsyncSession, runner_id: int) -> tuple[int, i
         select(Group.event_id)
         .join(AttendanceRecord, AttendanceRecord.group_id == Group.id)
         .outerjoin(Result, Result.attendance_record_id == AttendanceRecord.id)
-        .where(counts_toward_rating())
+        .where(counts_toward_rating(), Group.counts_toward_rating.is_(True))
         .distinct()
     )
     event_ids = (

@@ -223,6 +223,40 @@ async def test_streak_ignores_a_not_yet_imported_event(session: AsyncSession) ->
 
 
 @pytest.mark.asyncio
+async def test_streak_ignores_an_event_with_only_non_rating_groups(
+    session: AsyncSession,
+) -> None:
+    """An extra event whose every group is off the rating must not enter the
+    sequence, so skipping it doesn't reset anyone's streak."""
+    org = await make_user(session, "org-streak-norating@example.com", UserRole.organizer)
+    regular = await make_user(session, "regular-streak-norating@example.com")
+    social = await make_user(session, "social-streak-norating@example.com")
+    today = datetime.now(UTC).date()
+    dx_event = Event(title="DX", date=today - timedelta(days=7), created_by=org.id)
+    extra_event = Event(title="Extra", date=today - timedelta(days=1), created_by=org.id)
+    session.add_all([dx_event, extra_event])
+    await session.flush()
+    dx_group = Group(event_id=dx_event.id, location="City", name="A", target_distance_km=10)
+    extra_group = Group(
+        event_id=extra_event.id,
+        location="City",
+        name="Social",
+        target_distance_km=3,
+        counts_toward_rating=False,
+    )
+    session.add_all([dx_group, extra_group])
+    await session.flush()
+
+    await _finish(session, dx_group, regular.id)
+    await _finish(session, extra_group, social.id)
+    await session.commit()
+
+    entries = await compute_streak_leaderboard(session)
+    assert [e.runner_id for e in entries] == [regular.id]
+    assert entries[0].value == 1.0
+
+
+@pytest.mark.asyncio
 async def test_streak_tie_cascades_to_finishes_this_month(session: AsyncSession) -> None:
     """Same current streak (1) for both -> r1 wins the tie via a higher
     finishes_month, exactly the same cascade the dx/km leaderboards use."""
