@@ -216,6 +216,38 @@ async def test_streak_ignores_an_event_with_only_non_rating_groups(
 
 
 @pytest.mark.asyncio
+async def test_streak_not_kept_alive_by_a_non_rating_group(session: AsyncSession) -> None:
+    org = await make_user(session, "org-stats-pgroup@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-stats-pgroup@example.com")
+    other = await make_user(session, "other-stats-pgroup@example.com")
+    today = datetime.now(UTC).date()
+    e1 = Event(title="DX 1", date=today - timedelta(days=14), created_by=org.id)
+    e2 = Event(title="DX 2", date=today - timedelta(days=7), created_by=org.id)
+    session.add_all([e1, e2])
+    await session.flush()
+    g1 = Group(event_id=e1.id, location="City", name="A", target_distance_km=10)
+    g2 = Group(event_id=e2.id, location="City", name="A", target_distance_km=10)
+    p2 = Group(
+        event_id=e2.id,
+        location="City",
+        name="P",
+        target_distance_km=3,
+        counts_toward_rating=False,
+    )
+    session.add_all([g1, g2, p2])
+    await session.flush()
+
+    await _finish(session, g1, runner.id)
+    await _finish(session, p2, runner.id)
+    await _finish(session, g2, other.id)
+    await session.commit()
+
+    stats = await compute_profile_stats(session, runner.id)
+    assert stats.current_streak == 0
+    assert stats.longest_streak == 1
+
+
+@pytest.mark.asyncio
 async def test_total_runs_counts_dnf_attempts_too(
     session: AsyncSession,
 ) -> None:

@@ -210,7 +210,7 @@ async def compute_streak_leaderboard(
     session: AsyncSession, gender: str = "all", viewer_id: int | None = None
 ) -> list[LeaderboardEntry]:
     """Top runners by *current* streak of consecutive attended past events —
-    any group counts, including "P" (see app.services.stats_service for the
+    only groups that count toward the rating, so not "P" (see app.services.stats_service for the
     per-profile version of this same algorithm). Period-agnostic: a streak is
     inherently "as of right now", there's no "this year"/"this month" streak.
     Only runners with a live streak (> 0) are included.
@@ -250,6 +250,7 @@ async def compute_streak_leaderboard(
         .where(
             AttendanceRecord.runner_id.is_not(None),
             AttendanceRecord.finish_status == FinishStatus.finished,
+            Group.counts_toward_rating.is_(True),
             counts_toward_rating(),
         )
         .distinct()

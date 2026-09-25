@@ -114,11 +114,10 @@ async def compute_profile_stats(session: AsyncSession, runner_id: int) -> Profil
 
 
 async def _compute_streak(session: AsyncSession, runner_id: int) -> tuple[int, int]:
-    """Longest and current run of *consecutive* past events attended (any
-    group, including "P" — showing up at all keeps the streak alive, "full
-    DX" is a separate, stricter stat). Consecutive is relative to events
-    actually held, not calendar weeks, so a week with no event scheduled
-    doesn't break anyone's streak.
+    """Longest and current run of *consecutive* past events attended in a
+    group that counts toward the rating (so a social group like "P" doesn't
+    count). Consecutive is relative to events actually held, not calendar
+    weeks, so a week with no event scheduled doesn't break anyone's streak.
 
     An event only enters the sequence once it actually has attendance data —
     otherwise a same-day event whose CSV hasn't been imported yet would look
@@ -151,6 +150,7 @@ async def _compute_streak(session: AsyncSession, runner_id: int) -> tuple[int, i
             .where(
                 AttendanceRecord.runner_id == runner_id,
                 AttendanceRecord.finish_status == FinishStatus.finished,
+                Group.counts_toward_rating.is_(True),
                 counts_toward_rating(),
             )
             .distinct()
