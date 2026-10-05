@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     result_distance_tolerance_pct: float = 10.0
     result_start_time_tolerance_minutes: int = 60
 
+    # Moderation UI only (doesn't affect auto-validation/approval above) — how
+    # far a pending result's distance can sit from the group's target before
+    # the moderation queue flags it for the admin's attention.
+    result_distance_mismatch_km: float = 1.5
+
     # Altcha (self-hosted, proof-of-work) — no external service, no signup. Set
     # a random secret (e.g. `openssl rand -hex 32`) to enable; leave empty to
     # disable captcha entirely (dev/tests). This key both signs challenges and

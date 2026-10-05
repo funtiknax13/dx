@@ -7,7 +7,7 @@ from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.attendance import AttendanceRecord
-from app.models.enums import ModerationStatus, StaffPermission
+from app.models.enums import FinishStatus, ModerationStatus, StaffPermission
 from app.models.group import Group
 from app.models.result import Result
 from app.services.support_service import create_staff_ticket
@@ -69,6 +69,7 @@ async def results_pending(request: Request) -> HTMLResponse | RedirectResponse:
             "total_pages": total_pages,
             "distance_tol_pct": settings.result_distance_tolerance_pct,
             "start_tol_min": settings.result_start_time_tolerance_minutes,
+            "distance_mismatch_km": settings.result_distance_mismatch_km,
         },
     )
 
@@ -86,6 +87,86 @@ async def approve_result(request: Request, result_id: int) -> RedirectResponse:
             result.status = ModerationStatus.approved
             await session.commit()
     return RedirectResponse("/admin-tools/results?flash=Результат подтверждён", status_code=303)
+
+
+def _dnf_message(result: Result, record: AttendanceRecord | None) -> str:
+    """The body of the closed support ticket a runner gets when their result is
+    accepted but re-classified as DNF — names the run and the distance gap
+    that led to the call, same spirit as _rejection_message."""
+    group = record.group if record is not None else None
+    event = group.event if group is not None else None
+    dur = result.duration_seconds
+    lines = [
+        "Ваш результат принят, но засчитан как сход с дистанции (DNF) — "
+        "пройденная дистанция заметно меньше дистанции группы.",
+        "",
+    ]
+    if event is not None:
+        lines.append(f"Событие: {event.title}")
+    if group is not None:
+        lines.append(f"Группа: {group.name} ({group.target_distance_km:g} км)")
+    lines.append(
+        f"Результат: {result.distance_km:.2f} км, "
+        f"{dur // 3600}:{dur % 3600 // 60:02d}:{dur % 60:02d}"
+    )
+    lines += [
+        "",
+        "Если это не так и вы прошли полную дистанцию — напишите в поддержку.",
+    ]
+    return "\n".join(lines)
+
+
+@router.post("/results/{result_id}/approve-dnf", response_model=None)
+async def approve_result_as_dnf(request: Request, result_id: int) -> RedirectResponse:
+    """Accept a result but record it as a DNF rather than a finish — for a
+    runner who ran a shorter, honestly-reported distance (cut the route
+    short, didn't fully claim "I finished"). Unlike reject_result, this
+    settles the result rather than asking for a re-upload: both the record's
+    and the result's finish_status flip together (finish_status is normally
+    decided once at CSV import and never recomputed from a result — this is
+    the one deliberate, human-reviewed exception, see CLAUDE.md)."""
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    if StaffPermission.results_review not in user.granted_permissions:
+        return RedirectResponse("/admin-tools", status_code=303)
+    async with SessionLocal() as session:
+        result = await session.scalar(
+            select(Result)
+            .where(Result.id == result_id)
+            .options(
+                selectinload(Result.attendance_record).options(
+                    selectinload(AttendanceRecord.group).selectinload(Group.event),
+                    selectinload(AttendanceRecord.runner),
+                )
+            )
+        )
+        if result is None:
+            return RedirectResponse(
+                "/admin-tools/results?flash=Результат не найден", status_code=303
+            )
+        if result.status != ModerationStatus.pending:
+            return RedirectResponse(
+                "/admin-tools/results?flash=Результат уже обработан", status_code=303
+            )
+        record = result.attendance_record
+        runner = record.runner if record is not None else None
+        if record is not None:
+            record.finish_status = FinishStatus.dnf
+        result.finish_status = FinishStatus.dnf
+        result.status = ModerationStatus.approved
+        if runner is not None and not runner.is_guest:
+            await create_staff_ticket(
+                session,
+                recipient=runner,
+                admin=user,
+                body=_dnf_message(result, record),
+            )
+        await session.commit()
+    return RedirectResponse(
+        "/admin-tools/results?flash=Результат принят со статусом DNF, бегун уведомлён",
+        status_code=303,
+    )
 
 
 def _rejection_message(result: Result, record: AttendanceRecord | None, reason: str) -> str:

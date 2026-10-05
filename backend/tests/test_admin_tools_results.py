@@ -201,3 +201,91 @@ async def test_reject_twice_sends_only_one_ticket(
     )
     assert len(messages) == 1
     assert "Первая причина" in messages[0].body
+
+
+@pytest.mark.asyncio
+async def test_approve_as_dnf_flips_record_and_notifies(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-dnf1@example.com", UserRole.admin)
+    org = await make_user(session, "org-dnf1@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-dnf1@example.com")
+    _, group = await make_event_group(session, org, target_km=23.0)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.pending,
+        self_reported=True,
+    )
+    rec_id, runner_id = rec.id, runner.id
+    result_id = await _result_id(session, rec_id)
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    resp = await client.post(
+        f"/admin-tools/results/{result_id}/approve-dnf", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    session.expire_all()
+
+    # Both the record and the result flip to dnf together, and the result is
+    # settled (approved), not left pending or marked rejected.
+    record = await session.get(AttendanceRecord, rec_id)
+    assert record is not None
+    assert record.finish_status == FinishStatus.dnf
+    result = await session.scalar(select(Result).where(Result.id == result_id))
+    assert result is not None
+    assert result.finish_status == FinishStatus.dnf
+    assert result.status == ModerationStatus.approved
+
+    ticket = await session.scalar(
+        select(SupportTicket).where(SupportTicket.created_by_user_id == runner_id)
+    )
+    assert ticket is not None
+    assert ticket.status == TicketStatus.closed
+    msg = await session.scalar(select(SupportMessage).where(SupportMessage.ticket_id == ticket.id))
+    assert msg is not None
+    assert "DNF" in msg.body
+
+
+@pytest.mark.asyncio
+async def test_approve_as_dnf_twice_sends_only_one_ticket(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-dnf2@example.com", UserRole.admin)
+    org = await make_user(session, "org-dnf2@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-dnf2@example.com")
+    _, group = await make_event_group(session, org)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.pending,
+        self_reported=True,
+    )
+    runner_id = runner.id
+    result_id = await _result_id(session, rec.id)
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    first = await client.post(
+        f"/admin-tools/results/{result_id}/approve-dnf", follow_redirects=False
+    )
+    second = await client.post(
+        f"/admin-tools/results/{result_id}/approve-dnf", follow_redirects=False
+    )
+    assert first.status_code == 303
+    assert second.status_code == 303
+    session.expire_all()
+
+    tickets = list(
+        await session.scalars(
+            select(SupportTicket).where(SupportTicket.created_by_user_id == runner_id)
+        )
+    )
+    assert len(tickets) == 1

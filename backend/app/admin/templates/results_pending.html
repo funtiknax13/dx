@@ -73,6 +73,14 @@
      group-distance pace shown in parentheses for comparison. #}
   {% set runner_pace = (r.duration_seconds / r.distance_km) if r.distance_km else r.pace_seconds_per_km %}
   {% set group_pace = (r.duration_seconds / grp.target_distance_km) if grp and grp.target_distance_km else None %}
+  {# Compared against the *measured* distance when there is one (a file that
+     failed auto-validation has distance_km already overridden to the group's
+     own target, see result_validation_service — comparing that would always
+     read as zero mismatch). Manual entries have no measured_distance_km, so
+     the entered distance_km is the only number there is to judge. #}
+  {% set judged_distance = r.measured_distance_km if r.measured_distance_km is not none else r.distance_km %}
+  {% set mismatch_km = (judged_distance - grp.target_distance_km) if grp else None %}
+  {% set mismatch = mismatch_km is not none and mismatch_km|abs > distance_mismatch_km %}
   <details class="mod-card">
     <summary class="mod-top">
       <div class="mod-avatar">
@@ -90,6 +98,11 @@
             {{ 'ручной ввод' if r.source.value == 'manual' else 'файл' }}
           </span>
           {% if rec and rec.self_reported %}<span class="chip chip-info">самозагрузка</span>{% endif %}
+          {% if mismatch %}
+          <span class="chip chip-bad" title="Отличается от дистанции группы ({{ '%.1f'|format(grp.target_distance_km) }} км) больше чем на {{ distance_mismatch_km }} км">
+            Δ{{ '%+.1f'|format(mismatch_km) }} км от группы
+          </span>
+          {% endif %}
         </div>
         <div class="sub">
           {% if runner and runner.city %}{{ runner.city }} · {% endif %}
@@ -132,6 +145,9 @@
         <h4>Результат</h4>
         <dl class="kv-row-list" style="margin:0;">
           <div class="kv-row"><dt>Дистанция</dt><dd>{{ '%.2f'|format(r.distance_km) }} км</dd></div>
+          {% if r.measured_distance_km is not none and r.measured_distance_km != r.distance_km %}
+          <div class="kv-row"><dt>Измерено по файлу</dt><dd>{{ '%.2f'|format(r.measured_distance_km) }} км</dd></div>
+          {% endif %}
           <div class="kv-row"><dt>Время</dt><dd>{{ duration }}</dd></div>
           <div class="kv-row">
             <dt>Темп</dt>
@@ -170,6 +186,11 @@
       <form class="inline" method="post" action="/admin-tools/results/{{ r.id }}/approve">
         <button type="submit" class="btn-sm">Подтвердить</button>
       </form>
+      {% if r.finish_status.value != 'dnf' %}
+      <form class="inline" method="post" action="/admin-tools/results/{{ r.id }}/approve-dnf">
+        <button type="submit" class="btn-sm" title="Принять результат, но засчитать как сход с дистанции (DNF)">Принять как DNF</button>
+      </form>
+      {% endif %}
       <button
         type="button"
         class="danger btn-sm"
