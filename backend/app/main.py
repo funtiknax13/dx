@@ -20,6 +20,7 @@ from app.admin.tools_groups import router as tools_groups_router
 from app.admin.tools_guests import router as tools_guests_router
 from app.admin.tools_permissions import router as tools_permissions_router
 from app.admin.tools_profile_review import router as tools_profile_review_router
+from app.admin.tools_reports import router as tools_reports_router
 from app.admin.tools_results import router as tools_results_router
 from app.admin.tools_runners import router as tools_runners_router
 from app.admin.tools_support import router as tools_support_router
@@ -69,6 +70,7 @@ app.include_router(tools_dashboard_router)
 app.include_router(tools_events_router)
 app.include_router(tools_groups_router)
 app.include_router(tools_results_router)
+app.include_router(tools_reports_router)
 app.include_router(tools_guests_router)
 app.include_router(tools_baselines_router)
 app.include_router(tools_avatars_router)

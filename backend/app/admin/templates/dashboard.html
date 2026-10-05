@@ -14,7 +14,7 @@
   {% set has_any = 'events' in tools_user.granted_permissions or 'support' in tools_user.granted_permissions
     or 'csv_import' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions
     or 'results_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions
-    or tools_user.role.value == 'admin' %}
+    or 'reports' in tools_user.granted_permissions or tools_user.role.value == 'admin' %}
   {% if not has_any %}
   <div class="empty" style="margin-top:20px;">
     Пока нет ни одного выданного права. Попросите администратора выдать доступ
@@ -72,6 +72,13 @@
       <h2>Анкеты</h2>
       <p class="hint">Анкета обратной связи для новичков — вопросы, ответы, экспорт.</p>
       <a class="btn" href="/admin-tools/surveys">Открыть →</a>
+    </div>
+    {% endif %}
+    {% if 'reports' in tools_user.granted_permissions %}
+    <div class="card">
+      <h2>Отчёты</h2>
+      <p class="hint">Протокол события и список результатов в XLSX.</p>
+      <a class="btn" href="/admin-tools/reports">Открыть →</a>
     </div>
     {% endif %}
     {% if tools_user.role.value == 'admin' %}

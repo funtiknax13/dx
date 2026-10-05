@@ -56,6 +56,10 @@ PERMISSION_META: dict[StaffPermission, PermissionMeta] = {
         "Анкеты обратной связи",
         "Создание опросов для новичков, просмотр и выгрузка ответов.",
     ),
+    StaffPermission.reports: PermissionMeta(
+        "Отчёты",
+        "Выгрузка протокола события и списка результатов в XLSX (только по своим событиям).",
+    ),
 }
 
 

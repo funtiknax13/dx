@@ -1,0 +1,70 @@
+{% extends "_base.html" %}
+{% block title %}Отчёты — DX Tools{% endblock %}
+{% block content %}
+<h1>Отчёты</h1>
+<p class="hint">
+  Выгрузка данных в XLSX. {% if not is_admin %}Доступны только ваши события.{% endif %}
+</p>
+
+<div class="grid" style="margin-top:20px;">
+  <div class="card">
+    <h2>Протокол события</h2>
+    <p class="hint">
+      Все участники события одной таблицей, по группам (темповые подгруппы одной
+      дистанции объединены в общий зачёт, как в протоколе на сайте) — финишировавшие
+      по времени, затем DNF, затем ожидающие подтверждения результата.
+    </p>
+    {% if events %}
+    <form class="inline" method="get" action="" onsubmit="return false;" style="flex-wrap:wrap;">
+      <select id="protocol-event" style="min-width:260px;">
+        {% for e in events %}
+        <option value="{{ e.id }}">{{ e.title }} — {{ e.date.strftime('%d.%m.%Y') }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="btn-sm" onclick="downloadProtocol()">Скачать .xlsx</button>
+    </form>
+    {% else %}
+    <div class="empty">Нет доступных событий.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Список результатов</h2>
+    <p class="hint">
+      Плоский список всех записей участия за период — для анализа во внешних
+      инструментах, не для чтения как протокол.
+    </p>
+    <form class="inline" method="get" action="/admin-tools/reports/results" style="flex-wrap:wrap;">
+      <select name="event_id" style="min-width:220px;">
+        <option value="">Все события{% if not is_admin %} (ваши){% endif %}</option>
+        {% for e in events %}
+        <option value="{{ e.id }}">{{ e.title }} — {{ e.date.strftime('%d.%m.%Y') }}</option>
+        {% endfor %}
+      </select>
+      <label style="display:flex; align-items:center; gap:6px; text-transform:none; font-weight:normal;">
+        с <input type="date" name="date_from" style="width:auto;">
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; text-transform:none; font-weight:normal;">
+        по <input type="date" name="date_to" style="width:auto;">
+      </label>
+      <button type="submit" class="btn-sm">Скачать .xlsx</button>
+    </form>
+  </div>
+
+  {% if is_admin %}
+  <div class="card">
+    <h2>Сводная статистика</h2>
+    <p class="hint">Общее количество событий, групп, финишей, DNF и суммарный километраж — по всей платформе.</p>
+    <a class="btn btn-sm" href="/admin-tools/reports/summary">Скачать .xlsx</a>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  function downloadProtocol(){
+    var sel = document.getElementById('protocol-event');
+    if (!sel || !sel.value) return;
+    window.location.href = '/admin-tools/reports/protocol/' + sel.value;
+  }
+</script>
+{% endblock %}

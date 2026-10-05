@@ -94,3 +94,4 @@ class StaffPermission(enum.StrEnum):
     profile_review = "profile_review"
     results_review = "results_review"
     surveys = "surveys"
+    reports = "reports"
