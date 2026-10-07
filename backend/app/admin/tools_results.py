@@ -1,15 +1,21 @@
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.admin.tools_common import get_tools_user, login_redirect, templates
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus, ModerationStatus, StaffPermission
+from app.models.enums import FinishStatus, ModerationStatus, StaffPermission, UserRole
+from app.models.event import Event
 from app.models.group import Group
 from app.models.result import Result
+from app.models.user import User
+from app.services.name_search import flexible_name_filter
 from app.services.support_service import create_staff_ticket
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"], include_in_schema=False)
@@ -239,4 +245,185 @@ async def reject_result(
         await session.commit()
     return RedirectResponse(
         "/admin-tools/results?flash=Результат отклонён, бегун уведомлён", status_code=303
+    )
+
+
+def _status_fix_message(record: AttendanceRecord, new_status: FinishStatus) -> str:
+    """Sent when an admin corrects finish_status on an already-settled
+    record (e.g. a result that slipped through as "finished" but was
+    actually a DNF) — distinct from _dnf_message above, which only ever
+    fires for a still-pending result. Named by direction rather than always
+    "DNF" since this same action also undoes a wrong DNF back to a finish."""
+    group = record.group
+    event = group.event
+    became = "сход с дистанции (DNF)" if new_status == FinishStatus.dnf else "финиш"
+    lines = [
+        f"Статус вашей пробежки скорректирован — теперь засчитан как {became}.",
+        "",
+        f"Событие: {event.title}",
+        f"Группа: {group.name}",
+        "",
+        "Если это ошибка — напишите в поддержку.",
+    ]
+    return "\n".join(lines)
+
+
+async def _set_finish_status(
+    session: AsyncSession, record: AttendanceRecord, new_status: FinishStatus, admin: User
+) -> bool:
+    """Flips finish_status on an already-settled AttendanceRecord (and its
+    Result, if any — same sync csv_import_service does on a re-import,
+    see CLAUDE.md's one sanctioned exception to "never recomputed"). Unlike
+    approve_result_as_dnf, this doesn't require — or touch — moderation
+    status: the record may already be approved, or have no Result at all
+    (a CSV-only participation), and stays exactly as settled as it was.
+    Returns False (no-op) when the record is already at new_status."""
+    if record.finish_status == new_status:
+        return False
+    record.finish_status = new_status
+    if record.result is not None:
+        record.result.finish_status = new_status
+    if record.runner is not None and not record.runner.is_guest:
+        await create_staff_ticket(
+            session,
+            recipient=record.runner,
+            admin=admin,
+            body=_status_fix_message(record, new_status),
+        )
+    return True
+
+
+@router.get("/results/fix", response_class=HTMLResponse, response_model=None)
+async def results_fix_search(request: Request) -> HTMLResponse | RedirectResponse:
+    """A standalone search-and-correct panel for a record that's already
+    settled (visible in the protocol) rather than still pending — SQLAdmin
+    can edit the same columns, but finding the one row by name among every
+    AttendanceRecord, and keeping Result's finish_status in sync by hand,
+    isn't realistically "easy". Scoped like the rest of admin-tools: an
+    organizer only ever sees/fixes their own events."""
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    if StaffPermission.results_review not in user.granted_permissions:
+        return RedirectResponse("/admin-tools", status_code=303)
+
+    q = request.query_params.get("q", "").strip()
+    raw_event_id = request.query_params.get("event_id")
+    try:
+        event_id = int(raw_event_id) if raw_event_id else None
+    except ValueError:
+        event_id = None
+
+    async with SessionLocal() as session:
+        events_stmt = select(Event).order_by(Event.date.desc())
+        if user.role != UserRole.admin:
+            events_stmt = events_stmt.where(Event.created_by == user.id)
+        events = list(await session.scalars(events_stmt))
+
+        records: list[AttendanceRecord] = []
+        if q:
+            stmt = (
+                select(AttendanceRecord)
+                .join(Group, Group.id == AttendanceRecord.group_id)
+                .join(Event, Event.id == Group.event_id)
+                .outerjoin(User, User.id == AttendanceRecord.runner_id)
+                .where(or_(flexible_name_filter(q), AttendanceRecord.raw_name.ilike(f"%{q}%")))
+                .options(
+                    selectinload(AttendanceRecord.group).selectinload(Group.event),
+                    selectinload(AttendanceRecord.runner),
+                    selectinload(AttendanceRecord.result),
+                )
+                .order_by(Event.date.desc())
+                .limit(50)
+            )
+            if user.role != UserRole.admin:
+                stmt = stmt.where(Event.created_by == user.id)
+            if event_id is not None:
+                stmt = stmt.where(Event.id == event_id)
+            records = list(await session.scalars(stmt))
+
+    return templates.TemplateResponse(
+        request,
+        "results_fix.html",
+        {
+            "active": "results",
+            "tools_user": user,
+            "events": events,
+            "q": q,
+            "event_id": event_id,
+            "records": records,
+            "flash": request.query_params.get("flash"),
+        },
+    )
+
+
+def _fix_redirect(q: str, event_id: str, flash: str) -> RedirectResponse:
+    query: dict[str, str] = {"flash": flash}
+    if q:
+        query["q"] = q
+    if event_id:
+        query["event_id"] = event_id
+    return RedirectResponse(f"/admin-tools/results/fix?{urlencode(query)}", status_code=303)
+
+
+@router.post("/results/fix/{record_id}/set-dnf", response_model=None)
+async def results_fix_set_dnf(
+    request: Request, record_id: int, q: str = Form(""), event_id: str = Form("")
+) -> RedirectResponse:
+    # q/event_id round-trip through hidden form fields (see results_fix.html)
+    # rather than the URL, so the search context survives a POST back to the
+    # same page instead of resetting to an empty, query-less list.
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    if StaffPermission.results_review not in user.granted_permissions:
+        return RedirectResponse("/admin-tools", status_code=303)
+    async with SessionLocal() as session:
+        record = await session.scalar(
+            select(AttendanceRecord)
+            .where(AttendanceRecord.id == record_id)
+            .options(
+                selectinload(AttendanceRecord.group).selectinload(Group.event),
+                selectinload(AttendanceRecord.runner),
+                selectinload(AttendanceRecord.result),
+            )
+        )
+        if record is None or (
+            user.role != UserRole.admin and record.group.event.created_by != user.id
+        ):
+            return _fix_redirect(q, event_id, "Запись не найдена")
+        changed = await _set_finish_status(session, record, FinishStatus.dnf, user)
+        await session.commit()
+    return _fix_redirect(
+        q, event_id, "Статус изменён на DNF, бегун уведомлён" if changed else "Уже DNF"
+    )
+
+
+@router.post("/results/fix/{record_id}/unset-dnf", response_model=None)
+async def results_fix_unset_dnf(
+    request: Request, record_id: int, q: str = Form(""), event_id: str = Form("")
+) -> RedirectResponse:
+    user = await get_tools_user(request)
+    if user is None:
+        return login_redirect()
+    if StaffPermission.results_review not in user.granted_permissions:
+        return RedirectResponse("/admin-tools", status_code=303)
+    async with SessionLocal() as session:
+        record = await session.scalar(
+            select(AttendanceRecord)
+            .where(AttendanceRecord.id == record_id)
+            .options(
+                selectinload(AttendanceRecord.group).selectinload(Group.event),
+                selectinload(AttendanceRecord.runner),
+                selectinload(AttendanceRecord.result),
+            )
+        )
+        if record is None or (
+            user.role != UserRole.admin and record.group.event.created_by != user.id
+        ):
+            return _fix_redirect(q, event_id, "Запись не найдена")
+        changed = await _set_finish_status(session, record, FinishStatus.finished, user)
+        await session.commit()
+    return _fix_redirect(
+        q, event_id, "Статус возвращён на финиш, бегун уведомлён" if changed else "Уже финиш"
     )

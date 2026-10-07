@@ -1,0 +1,85 @@
+{% extends "_base.html" %}
+{% block title %}Исправление статуса — DX Tools{% endblock %}
+{% block content %}
+<div class="row-between">
+  <div>
+    <h1 style="margin:0;">Исправление статуса пробежки</h1>
+    <p class="hint" style="margin-top:4px;">
+      Найдите запись по имени бегуна и поставьте или снимите DNF — для результата,
+      который уже принят и виден в протоколе/рейтинге (для результатов, ещё
+      ожидающих проверки, используйте кнопку «Принять как DNF» на
+      <a href="/admin-tools/results">странице модерации</a>).
+    </p>
+  </div>
+</div>
+
+<form class="inline" method="get" action="/admin-tools/results/fix" style="margin-top:16px; flex-wrap:wrap;">
+  <input type="text" name="q" value="{{ q }}" placeholder="Имя бегуна" style="min-width:220px;" autofocus>
+  <select name="event_id" style="min-width:220px;">
+    <option value="">Все события{% if tools_user.role.value != 'admin' %} (ваши){% endif %}</option>
+    {% for e in events %}
+    <option value="{{ e.id }}" {{ 'selected' if event_id == e.id }}>{{ e.title }} — {{ e.date.strftime('%d.%m.%Y') }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn-sm">Найти</button>
+</form>
+
+{% if flash %}<p class="hint" style="color:var(--ok); margin-top:12px;">{{ flash }}</p>{% endif %}
+
+{% if q %}
+  {% if records %}
+  <div class="table-scroll" style="margin-top:16px;">
+    <table>
+      <thead>
+        <tr>
+          <th>Бегун</th>
+          <th>Событие</th>
+          <th>Группа</th>
+          <th>Результат</th>
+          <th>Статус</th>
+          <th>Модерация</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        {% set res = rec.result %}
+        {% set is_dnf = rec.finish_status.value == 'dnf' %}
+        <tr>
+          <td>{{ (rec.runner.first_name ~ ' ' ~ rec.runner.last_name) if rec.runner else rec.raw_name }}</td>
+          <td>{{ rec.group.event.title }}<br><span class="hint" style="margin:0;">{{ rec.group.event.date.strftime('%d.%m.%Y') }}</span></td>
+          <td>{{ rec.group.name }}</td>
+          <td class="num">
+            {% if res %}{{ '%.2f'|format(res.distance_km) }} км, {{ '%d:%02d:%02d'|format(res.duration_seconds // 3600, (res.duration_seconds % 3600) // 60, res.duration_seconds % 60) }}{% else %}—{% endif %}
+          </td>
+          <td><span class="chip {{ 'chip-bad' if is_dnf else 'chip-muted' }}">{{ 'DNF' if is_dnf else 'финиш' }}</span></td>
+          <td>
+            {% if res %}<span class="chip {{ 'chip-ok' if res.status.value == 'approved' else 'chip-info' if res.status.value == 'pending' else 'chip-muted' }}">
+              {{ {'approved': 'подтверждён', 'pending': 'на проверке', 'rejected': 'отклонён'}[res.status.value] }}
+            </span>{% else %}—{% endif %}
+          </td>
+          <td>
+            {% if is_dnf %}
+            <form class="inline" method="post" action="/admin-tools/results/fix/{{ rec.id }}/unset-dnf">
+              <input type="hidden" name="q" value="{{ q }}">
+              <input type="hidden" name="event_id" value="{{ event_id or '' }}">
+              <button type="submit" class="btn-sm">Вернуть финиш</button>
+            </form>
+            {% else %}
+            <form class="inline" method="post" action="/admin-tools/results/fix/{{ rec.id }}/set-dnf">
+              <input type="hidden" name="q" value="{{ q }}">
+              <input type="hidden" name="event_id" value="{{ event_id or '' }}">
+              <button type="submit" class="danger btn-sm">Поставить DNF</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="margin-top:16px;">Ничего не найдено.</div>
+  {% endif %}
+{% endif %}
+{% endblock %}

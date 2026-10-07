@@ -5,9 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.models.attendance import AttendanceRecord
-from app.models.enums import FinishStatus, ModerationStatus, TicketStatus, UserRole
+from app.models.enums import (
+    FinishStatus,
+    ModerationStatus,
+    StaffPermission,
+    TicketStatus,
+    UserRole,
+)
 from app.models.result import Result
 from app.models.support import SupportMessage, SupportTicket
+from app.services.permissions_service import set_permissions
 from tests.factories import make_attendance_with_result, make_event_group, make_user
 
 
@@ -289,3 +296,240 @@ async def test_approve_as_dnf_twice_sends_only_one_ticket(
         )
     )
     assert len(tickets) == 1
+
+
+# --- /results/fix (correcting an already-settled record) --------------------
+
+
+@pytest.mark.asyncio
+async def test_results_fix_search_finds_record_by_name(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-fix1@example.com", UserRole.admin)
+    org = await make_user(session, "org-fix1@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-fix1@example.com")
+    runner.first_name, runner.last_name = "Иннокентий", "Фиксов"
+    _, group = await make_event_group(session, org)
+    await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    resp = await client.get("/admin-tools/results/fix?q=Фиксов")
+    assert resp.status_code == 200
+    assert "Иннокентий Фиксов" in resp.text
+    assert "Поставить DNF" in resp.text
+    # The action form must round-trip the search term as a hidden field —
+    # otherwise the search resets to empty after the POST (see
+    # test_results_fix_set_dnf_preserves_the_search_query below).
+    assert '<input type="hidden" name="q" value="Фиксов">' in resp.text
+
+
+@pytest.mark.asyncio
+async def test_results_fix_set_dnf_preserves_the_search_query(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Regression guard: the redirect after set-dnf/unset-dnf must land back
+    on the same search, not reset to an empty, record-less list."""
+    admin = await make_user(session, "admin-fixq@example.com", UserRole.admin)
+    org = await make_user(session, "org-fixq@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-fixq@example.com")
+    runner.first_name, runner.last_name = "Поиск", "Выживший"
+    _, group = await make_event_group(session, org)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    rec_id = rec.id
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    resp = await client.post(
+        f"/admin-tools/results/fix/{rec_id}/set-dnf",
+        data={"q": "Выживший"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "q=" in resp.headers["location"]
+
+    followed = await client.get(resp.headers["location"])
+    assert "Поиск Выживший" in followed.text
+
+
+@pytest.mark.asyncio
+async def test_results_fix_set_dnf_syncs_record_and_result_and_notifies(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-fix2@example.com", UserRole.admin)
+    org = await make_user(session, "org-fix2@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-fix2@example.com")
+    _, group = await make_event_group(session, org)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    rec_id, runner_id = rec.id, runner.id
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    resp = await client.post(f"/admin-tools/results/fix/{rec_id}/set-dnf", follow_redirects=False)
+    assert resp.status_code == 303
+    session.expire_all()
+
+    record = await session.get(AttendanceRecord, rec_id)
+    assert record is not None
+    assert record.finish_status == FinishStatus.dnf
+    result = await session.scalar(select(Result).where(Result.attendance_record_id == rec_id))
+    assert result is not None
+    assert result.finish_status == FinishStatus.dnf
+    # Moderation status is left exactly as it was — this is a finish_status
+    # correction, not a re-review of the result's data.
+    assert result.status == ModerationStatus.approved
+
+    ticket = await session.scalar(
+        select(SupportTicket).where(SupportTicket.created_by_user_id == runner_id)
+    )
+    assert ticket is not None
+    msg = await session.scalar(select(SupportMessage).where(SupportMessage.ticket_id == ticket.id))
+    assert msg is not None
+    assert "DNF" in msg.body
+
+
+@pytest.mark.asyncio
+async def test_results_fix_set_dnf_works_without_a_result_row(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A CSV-only participation (finish_status set at import, no uploaded
+    Result at all) must still be fixable — there's nothing to sync on the
+    Result side, just the record itself."""
+    admin = await make_user(session, "admin-fix3@example.com", UserRole.admin)
+    org = await make_user(session, "org-fix3@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-fix3@example.com")
+    _, group = await make_event_group(session, org)
+    rec = AttendanceRecord(
+        group_id=group.id,
+        raw_name=f"{runner.first_name} {runner.last_name}",
+        runner_id=runner.id,
+        finish_status=FinishStatus.finished,
+    )
+    session.add(rec)
+    await session.flush()
+    rec_id = rec.id
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    resp = await client.post(f"/admin-tools/results/fix/{rec_id}/set-dnf", follow_redirects=False)
+    assert resp.status_code == 303
+    session.expire_all()
+    record = await session.get(AttendanceRecord, rec_id)
+    assert record is not None
+    assert record.finish_status == FinishStatus.dnf
+
+
+@pytest.mark.asyncio
+async def test_results_fix_unset_dnf_reverts_to_finished(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-fix4@example.com", UserRole.admin)
+    org = await make_user(session, "org-fix4@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-fix4@example.com")
+    _, group = await make_event_group(session, org)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.dnf,
+        moderation=ModerationStatus.approved,
+    )
+    rec_id = rec.id
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    resp = await client.post(f"/admin-tools/results/fix/{rec_id}/unset-dnf", follow_redirects=False)
+    assert resp.status_code == 303
+    session.expire_all()
+
+    record = await session.get(AttendanceRecord, rec_id)
+    assert record is not None
+    assert record.finish_status == FinishStatus.finished
+    result = await session.scalar(select(Result).where(Result.attendance_record_id == rec_id))
+    assert result is not None
+    assert result.finish_status == FinishStatus.finished
+
+
+@pytest.mark.asyncio
+async def test_results_fix_set_dnf_twice_sends_only_one_ticket(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-fix5@example.com", UserRole.admin)
+    org = await make_user(session, "org-fix5@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-fix5@example.com")
+    _, group = await make_event_group(session, org)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    rec_id, runner_id = rec.id, runner.id
+    admin_id = admin.id
+    await session.commit()
+    await _login(client, admin_id)
+
+    await client.post(f"/admin-tools/results/fix/{rec_id}/set-dnf", follow_redirects=False)
+    await client.post(f"/admin-tools/results/fix/{rec_id}/set-dnf", follow_redirects=False)
+    session.expire_all()
+
+    tickets = list(
+        await session.scalars(
+            select(SupportTicket).where(SupportTicket.created_by_user_id == runner_id)
+        )
+    )
+    assert len(tickets) == 1
+
+
+@pytest.mark.asyncio
+async def test_results_fix_organizer_cannot_fix_another_organizers_event(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-fix6@example.com", UserRole.admin)
+    owner = await make_user(session, "owner-fix6@example.com", UserRole.organizer)
+    other = await make_user(session, "other-fix6@example.com", UserRole.organizer)
+    await set_permissions(session, other, {StaffPermission.results_review}, granted_by=admin)
+    runner = await make_user(session, "runner-fix6@example.com")
+    _, group = await make_event_group(session, owner)
+    rec = await make_attendance_with_result(
+        session,
+        group,
+        runner,
+        finish_status=FinishStatus.finished,
+        moderation=ModerationStatus.approved,
+    )
+    rec_id = rec.id
+    other_id = other.id
+    await session.commit()
+    await _login(client, other_id)
+
+    resp = await client.post(f"/admin-tools/results/fix/{rec_id}/set-dnf", follow_redirects=False)
+    assert resp.status_code == 303
+    session.expire_all()
+    record = await session.get(AttendanceRecord, rec_id)
+    assert record is not None
+    assert record.finish_status == FinishStatus.finished
