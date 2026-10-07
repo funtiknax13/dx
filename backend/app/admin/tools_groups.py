@@ -4,6 +4,8 @@ from typing import Any
 
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.tools_common import (
     can_manage_event,
@@ -83,6 +85,27 @@ def _parse_pace_segments(raw: str) -> list[dict[str, Any]] | None:
     return out or None
 
 
+async def _known_locations(session: AsyncSession) -> dict[str, dict[str, float | None]]:
+    """Every distinct location text ever used on a group, each paired with
+    its coordinates — reused across events/organizers (a start point is a
+    shared physical fact, not owned data) to spare re-typing/re-looking-up
+    lat/lng for a place that's already been entered once. Picks the most
+    recent row that actually has coordinates for a given name, falling
+    back to the most recent row at all when none ever did."""
+    rows = list(
+        await session.scalars(select(Group).where(Group.location != "").order_by(Group.id.desc()))
+    )
+    best: dict[str, Group] = {}
+    for g in rows:
+        key = g.location.strip()
+        if not key:
+            continue
+        existing = best.get(key)
+        if existing is None or (existing.start_lat is None and g.start_lat is not None):
+            best[key] = g
+    return {name: {"lat": g.start_lat, "lng": g.start_lng} for name, g in best.items()}
+
+
 def _next_group_name(name: str) -> str:
     """ "X-33 группа #1" -> "X-33 группа #2"; falls back to a "(копия)" suffix
     for names that don't end in a #N group number."""
@@ -101,10 +124,17 @@ async def group_new_form(request: Request, event_id: int) -> HTMLResponse | Redi
         event = await session.get(Event, event_id)
         if event is None or not can_manage_event(user, event):
             return RedirectResponse("/admin-tools/events", status_code=303)
+        known_locations = await _known_locations(session)
     return templates.TemplateResponse(
         request,
         "group_form.html",
-        {"active": "events", "tools_user": user, "event": event, "group": None},
+        {
+            "active": "events",
+            "tools_user": user,
+            "event": event,
+            "group": None,
+            "known_locations": known_locations,
+        },
     )
 
 
@@ -159,6 +189,7 @@ async def group_edit_form(request: Request, group_id: int) -> HTMLResponse | Red
         event = await session.get(Event, group.event_id)
         if event is None or not can_manage_event(user, event):
             return RedirectResponse("/admin-tools/events", status_code=303)
+        known_locations = await _known_locations(session)
     flash = request.query_params.get("flash")
     return templates.TemplateResponse(
         request,
@@ -169,6 +200,7 @@ async def group_edit_form(request: Request, group_id: int) -> HTMLResponse | Red
             "event": event,
             "group": group,
             "flash": flash,
+            "known_locations": known_locations,
         },
     )
 

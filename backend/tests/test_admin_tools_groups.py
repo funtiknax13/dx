@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
+from app.models.event import Event
 from app.models.group import Group
 from app.services.media_service import media_path_to_fs
 from tests.factories import make_event_group, make_organizer
@@ -490,3 +491,57 @@ async def test_editing_group_can_clear_start_coordinates(
     await session.refresh(group)
     assert group.start_lat is None
     assert group.start_lng is None
+
+
+@pytest.mark.asyncio
+async def test_new_group_form_suggests_coordinates_for_a_known_location(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """A location text already used anywhere (even by a different
+    organizer's event) should offer its coordinates for reuse — typing
+    coordinates by hand every time is exactly the friction this avoids."""
+    org_a = await make_organizer(session, "org-knownloc-a@example.com")
+    org_b = await make_organizer(session, "org-knownloc-b@example.com")
+    event_a, group_a = await make_event_group(session, org_a)
+    group_a.location = "Парк Победы"
+    group_a.start_lat = 56.130352
+    group_a.start_lng = 47.226109
+    event_b, _group_b = await make_event_group(session, org_b)
+    await session.commit()
+    await _login(client, org_b.id)
+
+    resp = await client.get(f"/admin-tools/events/{event_b.id}/groups/new")
+    assert resp.status_code == 200
+    assert '<option value="Парк Победы">' in resp.text
+    # The JS blob escapes non-ASCII (tojson -> json.dumps ensure_ascii=True),
+    # so the Cyrillic key itself can't appear literally in the response.
+    key = json.dumps("Парк Победы")
+    assert f'{key}: {{"lat": 56.130352, "lng": 47.226109}}' in resp.text
+
+
+@pytest.mark.asyncio
+async def test_known_locations_prefers_the_entry_with_coordinates(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """If the most recent use of a location name has no coordinates but an
+    earlier one did, the earlier (useful) coordinates still win — losing
+    them to a later, coordinate-less re-entry of the same place would be
+    worse than not updating at all."""
+    org = await make_organizer(session, "org-knownloc-prefer@example.com")
+    event1, group1 = await make_event_group(session, org)
+    group1.location = "Тачанка"
+    group1.start_lat = 56.1
+    group1.start_lng = 47.2
+    await session.commit()
+    event2 = Event(title="DX #2", date=date(2026, 6, 1), created_by=org.id)
+    session.add(event2)
+    await session.flush()
+    group2 = Group(event_id=event2.id, location="Тачанка", name="X-10", target_distance_km=10.0)
+    session.add(group2)
+    await session.commit()
+    await _login(client, org.id)
+
+    resp = await client.get(f"/admin-tools/events/{event2.id}/groups/new")
+    assert resp.status_code == 200
+    key = json.dumps("Тачанка")
+    assert f'{key}: {{"lat": 56.1, "lng": 47.2}}' in resp.text
