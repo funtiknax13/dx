@@ -12,10 +12,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.security import hash_password
 from app.models.attendance import AttendanceRecord
 from app.models.enums import ClaimStatus, UserRole
+from app.models.group import Group
 from app.models.guest_claim import GuestClaim
 from app.models.runner_baseline import RunnerBaseline
 from app.models.signup import Signup
@@ -166,23 +168,80 @@ async def create_guest(session: AsyncSession, raw_name: str) -> User:
     return guest
 
 
+async def _reconcile_or_move_record(
+    session: AsyncSession, guest_record: AttendanceRecord, real_user: User
+) -> None:
+    """A guest's AttendanceRecord can't just always move onto the real
+    account: the platform now lets a runner self-report a result *before*
+    any CSV protocol exists, so by the time this guest (created from someone
+    else's/a later CSV row for the same event) gets claimed and merged, the
+    real account may already have its own record for that same event —
+    exactly the state "one group per runner per event" forbids everywhere
+    else (see participation_service.get_group_participation, the 409 in
+    submit_group_result). Moving the guest's record over as-is would
+    duplicate the person in that event's protocol/rating.
+
+    Reconcile instead: a guest record is always CSV-sourced (a guest can
+    never log in to self-report), so it wins the same way a direct CSV
+    match does in csv_import_service — its finish_status/raw_* fields and
+    group placement overwrite the existing record, which stays
+    self_reported=False, while the account's own already-uploaded Result
+    (if any) is preserved rather than discarded."""
+    conflict = await session.scalar(
+        select(AttendanceRecord)
+        .join(Group, Group.id == AttendanceRecord.group_id)
+        .where(
+            AttendanceRecord.runner_id == real_user.id,
+            Group.event_id == guest_record.group.event_id,
+        )
+        .options(selectinload(AttendanceRecord.result))
+    )
+    if conflict is None:
+        guest_record.runner_id = real_user.id
+        return
+
+    conflict.group_id = guest_record.group_id
+    conflict.raw_name = guest_record.raw_name
+    conflict.raw_email = guest_record.raw_email
+    conflict.raw_phone = guest_record.raw_phone
+    conflict.finish_status = guest_record.finish_status
+    conflict.self_reported = False
+    if conflict.result is not None:
+        conflict.result.finish_status = guest_record.finish_status
+    elif guest_record.result is not None:
+        # Essentially never happens in practice (a guest can't log in to
+        # upload anything itself), but don't silently drop real data if a
+        # guest record somehow ended up with its own Result.
+        moved_result = guest_record.result
+        guest_record.result = None
+        conflict.result = moved_result
+    await session.delete(guest_record)
+
+
 async def merge_guest_into(session: AsyncSession, guest: User, real_user: User) -> None:
     """Reassign a guest's history onto a real account and mark the guest merged.
 
     The guest row is kept (not deleted) for audit, per product decision — its
-    AttendanceRecords/Signups move to `real_user`, so the guest's own protocol/
-    rating/profile naturally go empty rather than needing special-casing elsewhere.
+    AttendanceRecords/Signups move to `real_user` (or reconcile into an
+    existing record of theirs for the same event — see
+    _reconcile_or_move_record), so the guest's own protocol/rating/profile
+    naturally go empty rather than needing special-casing elsewhere.
     """
     if guest.id == real_user.id or not guest.is_guest:
         raise ValueError("Not a mergeable guest account")
 
     guest_records = list(
         await session.scalars(
-            select(AttendanceRecord).where(AttendanceRecord.runner_id == guest.id)
+            select(AttendanceRecord)
+            .where(AttendanceRecord.runner_id == guest.id)
+            .options(
+                selectinload(AttendanceRecord.group),
+                selectinload(AttendanceRecord.result),
+            )
         )
     )
     for record in guest_records:
-        record.runner_id = real_user.id
+        await _reconcile_or_move_record(session, record, real_user)
 
     # A guest never signs itself up, but handle it defensively: move signups,
     # dropping any that would collide with one the real user already has. A
@@ -194,9 +253,7 @@ async def merge_guest_into(session: AsyncSession, guest: User, real_user: User) 
             select(Signup.event_id).where(Signup.runner_id == real_user.id)
         )
     }
-    guest_signups = list(
-        await session.scalars(select(Signup).where(Signup.runner_id == guest.id))
-    )
+    guest_signups = list(await session.scalars(select(Signup).where(Signup.runner_id == guest.id)))
     for signup in guest_signups:
         if signup.event_id in existing_event_ids:
             await session.delete(signup)

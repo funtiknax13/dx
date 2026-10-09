@@ -5,8 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import ClaimStatus, FinishStatus, UserRole
+from app.models.enums import ClaimStatus, FinishStatus, ModerationStatus, ResultSource, UserRole
+from app.models.group import Group
 from app.models.guest_claim import GuestClaim
+from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
 from app.models.user import User
 from app.services.guest_service import (
@@ -58,6 +60,87 @@ async def test_merge_guest_into_reassigns_attendance(session: AsyncSession) -> N
     assert rec.runner_id == real_user.id
     assert guest.merged_into_id == real_user.id
     assert guest.is_guest is True  # kept for audit, per product decision
+
+
+@pytest.mark.asyncio
+async def test_merge_guest_into_reconciles_a_duplicate_event_participation(
+    session: AsyncSession,
+) -> None:
+    """A runner who self-reported a result *before* ever being claimed from
+    a guest profile (e.g. a later CSV import for the same event created the
+    guest, under a different distance group) must not end up with two
+    AttendanceRecords for the same event after the merge — the guest's
+    CSV-sourced finish_status/group win (a guest can never have self-
+    reported itself), but the account's own already-uploaded Result is kept."""
+    org = await make_user(session, "org-reconcile@example.com", UserRole.organizer)
+    real_user = await make_user(session, "real-reconcile@example.com")
+    _, group_a = await make_event_group(session, org, target_km=21.0)
+    group_b = Group(
+        event_id=group_a.event_id, location="City", name="X-30", target_distance_km=30.0
+    )
+    session.add(group_b)
+    await session.flush()
+
+    own_record = AttendanceRecord(
+        group_id=group_a.id,
+        raw_name="Иван Самоотчёт",
+        runner_id=real_user.id,
+        finish_status=FinishStatus.finished,
+        self_reported=True,
+    )
+    session.add(own_record)
+    await session.flush()
+    own_result = Result(
+        attendance_record_id=own_record.id,
+        distance_km=21.0,
+        duration_seconds=6000,
+        pace_seconds_per_km=285.7,
+        source=ResultSource.manual,
+        finish_status=FinishStatus.finished,
+        status=ModerationStatus.approved,
+    )
+    session.add(own_result)
+    own_record_id = own_record.id
+
+    guest = await create_guest(session, "Иван Самоотчётов")
+    guest_record = AttendanceRecord(
+        group_id=group_b.id,
+        raw_name="Иван Самоотчётов",
+        runner_id=guest.id,
+        finish_status=FinishStatus.dnf,
+    )
+    session.add(guest_record)
+    await session.flush()
+    guest_record_id = guest_record.id
+
+    await merge_guest_into(session, guest, real_user)
+    await session.commit()
+
+    remaining = list(
+        await session.scalars(
+            select(AttendanceRecord).where(AttendanceRecord.runner_id == real_user.id)
+        )
+    )
+    assert len(remaining) == 1
+    merged = remaining[0]
+    assert merged.id == own_record_id  # the account's own record survives, not a new one
+    assert merged.group_id == group_b.id  # CSV's (guest's) group placement wins
+    assert merged.finish_status == FinishStatus.dnf  # CSV's finish_status wins
+    assert merged.self_reported is False
+
+    # The guest's own record is gone — not left behind as a second row.
+    assert await session.get(AttendanceRecord, guest_record_id) is None
+
+    # The account's own uploaded Result survives untouched (distance/pace/
+    # moderation), only its finish_status is kept in sync.
+    result = await session.scalar(
+        select(Result).where(Result.attendance_record_id == own_record_id)
+    )
+    assert result is not None
+    assert result.distance_km == 21.0
+    assert result.duration_seconds == 6000
+    assert result.status == ModerationStatus.approved
+    assert result.finish_status == FinishStatus.dnf
 
 
 @pytest.mark.asyncio
@@ -188,9 +271,7 @@ async def test_merge_guest_into_sums_this_year_baseline_when_years_match(
     await make_baseline(
         session, real_user, dx_count_this_year=10, km_this_year=100.0, baseline_year=2026
     )
-    await make_baseline(
-        session, guest, dx_count_this_year=5, km_this_year=50.0, baseline_year=2026
-    )
+    await make_baseline(session, guest, dx_count_this_year=5, km_this_year=50.0, baseline_year=2026)
 
     await merge_guest_into(session, guest, real_user)
     await session.commit()
@@ -243,9 +324,7 @@ async def test_merge_guest_into_drops_mismatched_year_baseline(
     await make_baseline(
         session, real_user, dx_count_this_year=10, km_this_year=100.0, baseline_year=2026
     )
-    await make_baseline(
-        session, guest, dx_count_this_year=5, km_this_year=50.0, baseline_year=2025
-    )
+    await make_baseline(session, guest, dx_count_this_year=5, km_this_year=50.0, baseline_year=2025)
 
     await merge_guest_into(session, guest, real_user)
     await session.commit()
