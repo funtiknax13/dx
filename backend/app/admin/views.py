@@ -6,8 +6,9 @@ from sqladmin.widgets import BooleanInputWidget
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Select
 from starlette.requests import Request
-from wtforms import PasswordField
+from wtforms import Field, PasswordField
 from wtforms.validators import Length
+from wtforms.widgets import TextInput
 
 from app.core.db import SessionLocal
 from app.core.security import hash_password
@@ -31,6 +32,43 @@ from app.models.user import User
 # widgets already define their own `validation_attrs` and are unaffected.
 if not hasattr(BooleanInputWidget, "validation_attrs"):
     BooleanInputWidget.validation_attrs = []
+
+
+def _format_duration(seconds: int | None) -> str:
+    if seconds is None:
+        return ""
+    h, rem = divmod(int(seconds), 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+class DurationSecondsField(Field):  # type: ignore[misc]
+    """Edits an Integer-seconds column (Result.duration_seconds) as "ч:мм:сс"
+    (or "мм:сс") instead of a raw number of seconds — seconds-only is
+    accurate but unusable for a human typing a race time by hand."""
+
+    widget = TextInput()
+
+    def _value(self) -> str:
+        return _format_duration(self.data) if self.data is not None else ""
+
+    def process_formdata(self, valuelist: list[str]) -> None:
+        if not valuelist or not valuelist[0].strip():
+            raise ValueError("Введите время как ч:мм:сс или мм:сс")
+        parts = valuelist[0].strip().split(":")
+        try:
+            numbers = [int(p) for p in parts]
+        except ValueError as exc:
+            raise ValueError("Введите время как ч:мм:сс или мм:сс, например 1:23:45") from exc
+        if len(numbers) == 3:
+            h, m, s = numbers
+        elif len(numbers) == 2:
+            h, m, s = 0, *numbers
+        elif len(numbers) == 1:
+            h, m, s = 0, 0, numbers[0]
+        else:
+            raise ValueError("Введите время как ч:мм:сс или мм:сс")
+        self.data = h * 3600 + m * 60 + s
 
 
 class BaseAdmin(ModelView):
@@ -115,6 +153,7 @@ class EventPhotoAdmin(BaseAdmin, model=EventPhoto):
     name_plural = "Фотографии событий"
     icon = "fa-solid fa-image"
     column_list = [EventPhoto.id, EventPhoto.event, EventPhoto.image, EventPhoto.thumbnail]
+    column_searchable_list = ["event.title"]
 
 
 class GroupAdmin(BaseAdmin, model=Group):
@@ -131,7 +170,7 @@ class GroupAdmin(BaseAdmin, model=Group):
         Group.start_time,
         Group.counts_toward_rating,
     ]
-    column_searchable_list = [Group.name, Group.location]
+    column_searchable_list = [Group.name, Group.location, "event.title"]
     column_filters = [BooleanFilter(Group.counts_toward_rating, title="Учитывается в рейтинге")]
 
 
@@ -140,6 +179,7 @@ class SignupAdmin(BaseAdmin, model=Signup):
     name_plural = "Записи на группы"
     icon = "fa-solid fa-clipboard-check"
     column_list = [Signup.id, Signup.runner, Signup.group, Signup.created_at]
+    column_searchable_list = ["runner.first_name", "runner.last_name", "group.name"]
     column_filters = [OperationColumnFilter(Signup.created_at, title="Дата записи")]
 
 
@@ -154,7 +194,16 @@ class AttendanceRecordAdmin(BaseAdmin, model=AttendanceRecord):
         AttendanceRecord.runner,
         AttendanceRecord.finish_status,
     ]
-    column_searchable_list = [AttendanceRecord.raw_name, AttendanceRecord.raw_email]
+    # raw_* is what the CSV row said at import time; runner.* catches a
+    # search by the account's *current* name too (e.g. after a guest-merge
+    # rename, raw_name can read stale — see ParticipationHistory's own
+    # "always show the current account name" rule).
+    column_searchable_list = [
+        AttendanceRecord.raw_name,
+        AttendanceRecord.raw_email,
+        "runner.first_name",
+        "runner.last_name",
+    ]
     column_filters = [
         StaticValuesFilter(
             AttendanceRecord.finish_status,
@@ -188,6 +237,12 @@ class GuestClaimAdmin(BaseAdmin, model=GuestClaim):
         GuestClaim.decided_at,
     ]
     column_sortable_list = [GuestClaim.id, GuestClaim.status]
+    column_searchable_list = [
+        "guest.first_name",
+        "guest.last_name",
+        "claimant.first_name",
+        "claimant.last_name",
+    ]
     column_filters = [
         StaticValuesFilter(
             GuestClaim.status,
@@ -217,6 +272,7 @@ class OrganizerPermissionAdmin(BaseAdmin, model=OrganizerPermission):
         OrganizerPermission.created_at,
     ]
     column_sortable_list = [OrganizerPermission.id, OrganizerPermission.permission]
+    column_searchable_list = ["user.first_name", "user.last_name"]
     # Normal handling is the /admin-tools/permissions page (checkbox grid,
     # one save per organizer) — this view is a fallback for inspecting/
     # correcting a stray grant by hand, not the everyday path.
@@ -237,6 +293,11 @@ class ResultAdmin(BaseAdmin, model=Result):
         Result.source,
     ]
     column_sortable_list = [Result.id, Result.status, Result.finish_status]
+    column_searchable_list = [
+        "attendance_record.raw_name",
+        "attendance_record.runner.first_name",
+        "attendance_record.runner.last_name",
+    ]
     column_filters = [
         StaticValuesFilter(
             Result.status,
@@ -249,6 +310,10 @@ class ResultAdmin(BaseAdmin, model=Result):
             values=[("finished", "Пробежал"), ("dnf", "DNF")],
         ),
     ]
+    column_formatters = {Result.duration_seconds: lambda m, a: _format_duration(m.duration_seconds)}
+    column_formatters_detail = {
+        Result.duration_seconds: lambda m, a: _format_duration(m.duration_seconds)
+    }
     # Admin approves results by editing the `status` field here.
     form_columns = [
         Result.distance_km,
@@ -258,6 +323,8 @@ class ResultAdmin(BaseAdmin, model=Result):
         Result.finish_status,
         Result.status,
     ]
+    form_overrides = {"duration_seconds": DurationSecondsField}
+    form_args = {"duration_seconds": {"label": "Время (ч:мм:сс)"}}
 
 
 class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
@@ -275,6 +342,7 @@ class RunnerBaselineAdmin(BaseAdmin, model=RunnerBaseline):
         RunnerBaseline.km_this_year,
         RunnerBaseline.baseline_year,
     ]
+    column_searchable_list = ["runner.first_name", "runner.last_name"]
     # Carry-over totals from before this platform existed (e.g. a runner's
     # community history that predates CSV imports) — admin-only, never
     # editable by the runner themselves. Folded into lifetime totals and the
