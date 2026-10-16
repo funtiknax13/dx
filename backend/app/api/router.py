@@ -5,6 +5,7 @@ from app.api import (
     auth,
     baselines,
     cities,
+    contests,
     events,
     groups,
     guests,
@@ -36,3 +37,4 @@ api_router.include_router(support.router)
 api_router.include_router(staff.router)
 api_router.include_router(cities.router)
 api_router.include_router(running_clubs.router)
+api_router.include_router(contests.router)

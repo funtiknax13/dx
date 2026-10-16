@@ -202,6 +202,15 @@ async def vote_tally(session: AsyncSession, contest_id: int) -> dict[int, int]:
     return {entry_id: count for entry_id, count in rows.all()}
 
 
+async def get_my_vote_entry_id(session: AsyncSession, contest_id: int, voter_id: int) -> int | None:
+    entry_id: int | None = await session.scalar(
+        select(ContestVote.entry_id).where(
+            ContestVote.contest_id == contest_id, ContestVote.voter_id == voter_id
+        )
+    )
+    return entry_id
+
+
 async def set_placement(session: AsyncSession, entry: ContestEntry, placement: int | None) -> None:
     """Final ranking is always a human call (see Contest.results_published_at
     docstring) — this just records it, publish_results below is the separate
