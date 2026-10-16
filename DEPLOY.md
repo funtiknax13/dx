@@ -116,8 +116,23 @@ sudo certbot --nginx -d CHANGE_ME.example
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Certbot настраивает автопродление сам (systemd timer), ничего дополнительно
-делать не нужно.
+Certbot настраивает автопродление сам (systemd timer), но **сам nginx не
+перезагружает** (сертификат здесь выпускается через `webroot`, а не через
+`--nginx`-плагин) — продлённый файл на диске без этого так и останется
+непрочитанным рабочими процессами nginx до следующего ручного `reload`,
+пока не наступит реальный простой из-за просроченного in-memory
+сертификата (ровно так уже разово ловили на проде). Поставить hook —
+обязательный, разовый шаг:
+
+```bash
+sudo cp nginx/certbot-deploy-hooks/reload-nginx.sh \
+  /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+```
+
+Проверить, что сработает: `sudo certbot renew --dry-run` — в выводе/логе
+(`/var/log/letsencrypt/letsencrypt.log`) должен появиться hook
+`reload-nginx.sh` (dry-run его не выполняет, только находит).
 
 ⚠️ Сразу после этого — поставить `SECURE_COOKIES=true` в `.env` (в корне,
 рядом с `docker-compose.prod.yml`) и `docker compose -f
