@@ -429,3 +429,86 @@ export interface SupportTicketDetail {
   created_at: string
   messages: SupportMessage[]
 }
+
+// --- Contests -----------------------------------------------------
+
+export type ContestFieldType = 'text' | 'long_text' | 'number' | 'url' | 'image' | 'gpx'
+
+/** draft is never seen by the frontend (an unpublished contest 404s) —
+ * listed for completeness, matching the backend's contest_phase values. */
+export type ContestPhase =
+  | 'draft'
+  | 'upcoming'
+  | 'submissions_open'
+  | 'submissions_closed'
+  | 'voting_open'
+  | 'voting_closed'
+
+export interface ContestField {
+  id: number
+  position: number
+  label: string
+  description: string | null
+  field_type: ContestFieldType
+  required: boolean
+  visible_to_voters: boolean
+}
+
+export interface ContestSummary {
+  id: number
+  title: string
+  cover_image: string | null
+  phase: ContestPhase
+  submissions_open_at: string | null
+  submissions_close_at: string | null
+  voting_open_at: string | null
+  voting_close_at: string | null
+}
+
+export interface ContestDetail {
+  id: number
+  title: string
+  description: string | null
+  cover_image: string | null
+  phase: ContestPhase
+  submissions_open_at: string | null
+  submissions_close_at: string | null
+  voting_open_at: string | null
+  voting_close_at: string | null
+  votes_visible_live: boolean
+  results_published: boolean
+  // null while the phase is still "upcoming" — a pure teaser, see backend.
+  fields: ContestField[] | null
+}
+
+export interface ContestEntryValue {
+  field_id: number
+  value: string | null
+}
+
+export type ContestEntryStatus = 'pending' | 'approved' | 'rejected'
+
+export interface MyContestEntry {
+  id: number
+  status: ContestEntryStatus
+  rejection_reason: string | null
+  submitted_at: string
+  placement: number | null
+  values: ContestEntryValue[]
+}
+
+export interface PublicContestEntry {
+  id: number
+  runner_id: number
+  runner_name: string
+  avatar: string | null
+  placement: number | null
+  vote_count: number | null
+  values: ContestEntryValue[]
+}
+
+export interface ContestEntriesResponse {
+  entries: PublicContestEntry[]
+  votes_visible: boolean
+  my_vote_entry_id: number | null
+}

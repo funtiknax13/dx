@@ -6,6 +6,8 @@ import { EventsPage } from './pages/EventsPage'
 import { EventDetailPage } from './pages/EventDetailPage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
 import { RatingPage } from './pages/RatingPage'
+import { ContestsListPage } from './pages/ContestsListPage'
+import { ContestDetailPage } from './pages/ContestDetailPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
@@ -61,6 +63,8 @@ export default function App() {
           <Route path="/events/:id" element={<EventDetailPage />} />
           <Route path="/groups/:id" element={<GroupDetailPage />} />
           <Route path="/rating" element={<RatingPage />} />
+          <Route path="/contests" element={<ContestsListPage />} />
+          <Route path="/contests/:id" element={<ContestDetailPage />} />
           <Route path="/users/:id" element={<PublicProfilePage />} />
           <Route path="/support" element={<SupportPage />} />
 

@@ -21,6 +21,7 @@ function isStaff(role?: string) {
 const NAV = [
   { to: '/events', label: 'События' },
   { to: '/rating', label: 'Рейтинг' },
+  { to: '/contests', label: 'Конкурсы' },
 ]
 
 /** Polls for unread staff replies while logged in — the "user sees if
