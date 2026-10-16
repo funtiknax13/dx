@@ -14,7 +14,10 @@ import {
   formatDate,
   formatTime,
   fullName,
+  isoToRuDate,
+  nextRuDateValue,
   nextRuPhoneValue,
+  ruDateToISO,
   ruPhoneDigits,
   todayMsk,
 } from '../lib/format'
@@ -522,6 +525,11 @@ function ProfileForm({
   const pendingClub = pendingOrCurrent(user, 'running_club', user?.running_club ?? null)
   const [noClub, setNoClub] = useState(pendingClub === '')
   const [club, setClub] = useState(pendingClub || '')
+  // Typed "ДД.ММ.ГГГГ" text, separate from form.birthday (which stays ISO,
+  // the canonical form everything else here reads) — needed because a
+  // half-typed date ("15.0") isn't valid ISO yet but must still show on
+  // screen as the user types it. See the field below for how the two sync.
+  const [birthdayText, setBirthdayText] = useState(() => isoToRuDate(form.birthday))
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
@@ -646,6 +654,12 @@ function ProfileForm({
     form.birthday && form.birthday > todayMsk()
       ? 'Дата рождения не может быть в будущем'
       : null
+  // A fully-typed ("ДД.ММ.ГГГГ", 10 chars) date that still didn't resolve to
+  // form.birthday is a real mistake (31.02, a typo'd year's day count), not
+  // just "not finished typing yet" — worth its own message rather than
+  // reading as "field empty".
+  const invalidBirthdayError =
+    !form.birthday && birthdayText.length === 10 ? 'Проверьте дату — такой даты не существует' : null
   const missing = {
     city: !form.city.trim(),
     gender: !form.gender,
@@ -746,11 +760,21 @@ function ProfileForm({
           <Field
             label="Дата рождения"
             name="birthday"
-            type="date"
-            max={todayMsk()}
-            value={form.birthday ?? ''}
-            onChange={set('birthday')}
-            error={futureBirthdayError ?? (missing.birthday ? REQUIRED_HINT : undefined)}
+            type="text"
+            inputMode="numeric"
+            placeholder="ДД.ММ.ГГГГ"
+            value={birthdayText}
+            onChange={(e) => {
+              const next = nextRuDateValue(birthdayText, e.target.value)
+              setBirthdayText(next)
+              setForm((f) => ({ ...f, birthday: ruDateToISO(next) }))
+              setSaved(false)
+            }}
+            error={
+              futureBirthdayError ??
+              invalidBirthdayError ??
+              (missing.birthday ? REQUIRED_HINT : undefined)
+            }
           />
           <Field
             label="Телефон"

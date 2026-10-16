@@ -159,3 +159,63 @@ export function nextRuPhoneValue(oldFormatted: string, rawNewValue: string): str
       : digits
   return renderRuPhoneMask(finalDigits)
 }
+
+// ---- ДД.ММ.ГГГГ date mask (a typeable alternative to <input type="date">,
+// whose native widget is a wheel-picker with no manual entry on iOS/iPadOS —
+// unusable for a birthdate decades back) — same progressive-mask shape as
+// the phone helpers above. ----
+
+function ruDateDigits(input: string): string {
+  return input.replace(/\D/g, '').slice(0, 8) // DDMMYYYY
+}
+
+function renderRuDateMask(d: string): string {
+  if (!d) return ''
+  let out = d.slice(0, 2)
+  if (d.length > 2) out += `.${d.slice(2, 4)}`
+  if (d.length > 4) out += `.${d.slice(4, 8)}`
+  return out
+}
+
+/** Progressive mask: turns raw input into DD.MM.YYYY as you type. */
+export function formatRuDate(input: string): string {
+  return renderRuDateMask(ruDateDigits(input))
+}
+
+/** Same backspace-aware logic as nextRuPhoneValue — see there for why. */
+export function nextRuDateValue(oldFormatted: string, rawNewValue: string): string {
+  const digits = ruDateDigits(rawNewValue)
+  const oldDigits = ruDateDigits(oldFormatted)
+  const isShrinking = rawNewValue.length < oldFormatted.length
+  const finalDigits =
+    isShrinking && digits.length === oldDigits.length && digits.length > 0
+      ? digits.slice(0, -1)
+      : digits
+  return renderRuDateMask(finalDigits)
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+/** ISO (YYYY-MM-DD) -> "DD.MM.YYYY" for display; '' when there's nothing
+ * valid to show (a fresh/empty profile field, mid-edit on the picker). */
+export function isoToRuDate(iso?: string | null): string {
+  if (!iso || !DATE_ONLY.test(iso)) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
+/** "DD.MM.YYYY" -> ISO, '' when the text isn't a complete, calendar-valid
+ * date yet (still typing, or a day that doesn't exist like 31.02) — the
+ * caller treats '' the same as "nothing entered" rather than erroring on
+ * every keystroke. */
+export function ruDateToISO(ruDate: string): string {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(ruDate.trim())
+  if (!m) return ''
+  const d = Number(m[1])
+  const mo = Number(m[2])
+  const y = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth(y, mo)) return ''
+  return `${m[3]}-${m[2]}-${m[1]}`
+}
