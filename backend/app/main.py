@@ -14,6 +14,7 @@ from app.admin.moderation import router as moderation_router
 from app.admin.tools_avatars import router as tools_avatars_router
 from app.admin.tools_baselines import router as tools_baselines_router
 from app.admin.tools_birthdays import router as tools_birthdays_router
+from app.admin.tools_contests import router as tools_contests_router
 from app.admin.tools_dashboard import router as tools_dashboard_router
 from app.admin.tools_events import router as tools_events_router
 from app.admin.tools_groups import router as tools_groups_router
@@ -70,6 +71,7 @@ app.include_router(tools_dashboard_router)
 app.include_router(tools_events_router)
 app.include_router(tools_groups_router)
 app.include_router(tools_results_router)
+app.include_router(tools_contests_router)
 app.include_router(tools_reports_router)
 app.include_router(tools_guests_router)
 app.include_router(tools_baselines_router)

@@ -269,6 +269,7 @@
   'message': '<path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/>',
   'upload': '<path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
   'download': '<path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="16" x2="12" y2="4"/>',
+  'trophy': '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 5H4.5A2.5 2.5 0 0 0 4 9.9 4 4 0 0 0 7 11"/><path d="M17 5h2.5A2.5 2.5 0 0 1 20 9.9 4 4 0 0 1 17 11"/>',
   'database': '<ellipse cx="12" cy="5.5" rx="8" ry="2.7"/><path d="M20 5.5v6.2c0 1.5-3.6 2.7-8 2.7s-8-1.2-8-2.7V5.5"/><path d="M4 11.7v6.2c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7v-6.2"/>',
   'check-circle': '<path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><polyline points="22 4 12 14 9 11"/>',
   'users': '<path d="M16 20v-1.8a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 18.2V20"/><circle cx="9.3" cy="7.6" r="3.4"/><path d="M21.5 20v-1.8a3.6 3.6 0 0 0-2.7-3.5"/><path d="M15.2 3.3a3.4 3.4 0 0 1 0 6.6"/>',
@@ -312,6 +313,11 @@
         {% if 'reports' in tools_user.granted_permissions %}
         <div class="nav-section">
           <a href="/admin-tools/reports" class="nav-link {{ 'active' if active == 'reports' }}">{{ nav_icon('download') }}Отчёты</a>
+        </div>
+        {% endif %}
+        {% if 'contests' in tools_user.granted_permissions %}
+        <div class="nav-section">
+          <a href="/admin-tools/contests" class="nav-link {{ 'active' if active == 'contests' }}">{{ nav_icon('trophy') }}Конкурсы</a>
         </div>
         {% endif %}
         {% if 'csv_import' in tools_user.granted_permissions or 'baselines' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions or 'results_review' in tools_user.granted_permissions or 'avatars' in tools_user.granted_permissions or 'profile_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions %}

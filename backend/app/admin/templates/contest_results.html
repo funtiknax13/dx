@@ -1,0 +1,47 @@
+{% extends "_base.html" %}
+{% block title %}Итоги — {{ contest.title }} — DX Tools{% endblock %}
+{% block content %}
+<p><a href="/admin-tools/contests/{{ contest.id }}/edit" class="hint">← {{ contest.title }}</a></p>
+<div class="row-between">
+  <h1 style="margin:0;">Итоги конкурса</h1>
+  {% if contest.results_published_at %}
+  <span class="chip chip-ok">итоги опубликованы {{ contest.results_published_at|local_dt }}</span>
+  {% else %}
+  <form method="post" action="/admin-tools/contests/{{ contest.id }}/results/publish">
+    <button type="submit" class="btn btn-sm">Опубликовать итоги</button>
+  </form>
+  {% endif %}
+</div>
+<p class="hint">
+  Места ниже — только то, что вы сами проставите; счёт голосов — лишь
+  подсказка для принятия решения, система никого не объявляет победителем
+  автоматически. Пока итоги не опубликованы, места и число голосов (если
+  скрыты в конструкторе) никому, кроме вас, не видны.
+</p>
+
+{% if entries %}
+<div class="table-scroll" style="margin-top:16px;">
+  <table>
+    <thead>
+      <tr><th>Участник</th><th class="num">Голосов</th><th style="width:140px;">Место</th></tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ (e.runner.first_name ~ ' ' ~ e.runner.last_name) if e.runner else 'без аккаунта' }}</td>
+        <td class="num">{{ tally.get(e.id, 0) }}</td>
+        <td>
+          <form class="inline" method="post" action="/admin-tools/contests/{{ contest.id }}/results/{{ e.id }}/placement">
+            <input type="number" name="placement" min="1" value="{{ e.placement if e.placement is not none else '' }}" style="width:70px;">
+            <button type="submit" class="btn secondary btn-sm">OK</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty" style="margin-top:16px;">Нет принятых заявок — голосовать не за что.</div>
+{% endif %}
+{% endblock %}

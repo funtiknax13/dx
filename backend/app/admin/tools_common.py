@@ -20,6 +20,7 @@ from starlette.requests import Request
 from app.core.db import SessionLocal
 from app.core.security import verify_password
 from app.core.timezone import EVENT_TZ
+from app.models.contest import Contest
 from app.models.enums import StaffPermission, UserRole
 from app.models.event import Event
 from app.models.user import User
@@ -40,6 +41,13 @@ templates.env.filters["local_date"] = lambda dt: (
 templates.env.filters["local_dt"] = lambda dt: (
     dt.astimezone(EVENT_TZ).strftime("%d.%m.%Y %H:%M") if dt else ""
 )
+# For an <input type="datetime-local"> value attribute — same wall-clock
+# conversion as the others, just in the format that input type expects
+# (no seconds, "T" separator). See combine_local_datetime below for the
+# reverse direction on submit.
+templates.env.filters["local_input"] = lambda dt: (
+    dt.astimezone(EVENT_TZ).strftime("%Y-%m-%dT%H:%M") if dt else ""
+)
 
 
 def login_redirect() -> RedirectResponse:
@@ -49,6 +57,11 @@ def login_redirect() -> RedirectResponse:
 def can_manage_event(user: User, event: Event) -> bool:
     """Admin manages every event; an organizer only their own."""
     return user.role == UserRole.admin or event.created_by == user.id
+
+
+def can_manage_contest(user: User, contest: Contest) -> bool:
+    """Same rule as can_manage_event, for the separate Contest entity."""
+    return user.role == UserRole.admin or contest.created_by == user.id
 
 
 def combine_event_date_and_time(event_date: date_type, time_str: str) -> datetime | None:
@@ -61,6 +74,19 @@ def combine_event_date_and_time(event_date: date_type, time_str: str) -> datetim
     if not time_str:
         return None
     local = datetime.combine(event_date, time_type.fromisoformat(time_str), tzinfo=EVENT_TZ)
+    return local.astimezone(UTC)
+
+
+def combine_local_datetime(value: str) -> datetime | None:
+    """An <input type="datetime-local"> value ("YYYY-MM-DDTHH:MM", no
+    timezone) is what the admin sees and types in Cheboksary wall-clock time
+    — same reasoning as combine_event_date_and_time above, just for a form
+    that collects the date itself too (a contest's window timestamps, not a
+    group's start time pinned to its event's date)."""
+    value = value.strip()
+    if not value:
+        return None
+    local = datetime.fromisoformat(value).replace(tzinfo=EVENT_TZ)
     return local.astimezone(UTC)
 
 

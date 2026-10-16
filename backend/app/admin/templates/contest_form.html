@@ -1,0 +1,196 @@
+{% extends "_base.html" %}
+{% block title %}{{ 'Конкурс' if contest else 'Новый конкурс' }} — DX Tools{% endblock %}
+{% block content %}
+  <style>
+    .cf-table { width:100%; border-collapse:collapse; background:transparent; box-shadow:none; }
+    .cf-table th { text-align:left; font-size:11px; color:var(--clay); font-weight:600; padding:2px 6px; background:transparent; text-transform:none; letter-spacing:0; }
+    .cf-table td { padding:4px 6px; vertical-align:middle; border-bottom:0; }
+    .cf-table input[type=text] { width:100%; box-sizing:border-box; }
+    .cf-check { display:flex; align-items:center; gap:4px; font-size:12px; font-weight:normal; white-space:nowrap; }
+    .cf-del { padding:4px 9px; line-height:1.2; }
+  </style>
+
+  <div class="row-between">
+    <h1 style="margin:0;">{{ contest.title if contest else 'Новый конкурс' }}</h1>
+    {% if contest %}
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span class="chip chip-info">{{ phase }}</span>
+      {% if contest.is_published %}
+      <form method="post" action="/admin-tools/contests/{{ contest.id }}/unpublish">
+        <button type="submit" class="btn secondary btn-sm">Снять с публикации</button>
+      </form>
+      {% else %}
+      <form method="post" action="/admin-tools/contests/{{ contest.id }}/publish">
+        <button type="submit" class="btn btn-sm">Запустить конкурс</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% if flash %}<p class="hint" style="color:var(--ok);">{{ flash }}</p>{% endif %}
+  {% if not contest %}
+  <p class="hint">
+    Пока не нажата «Запустить конкурс», участники его не видят вообще. После
+    запуска — до даты начала приёма заявок видна только заставка с надписью
+    «Событие скоро начнётся».
+  </p>
+  {% elif contest.is_published %}
+  <p class="hint">Конкурс опубликован — виден на сайте с учётом текущей фазы.</p>
+  {% endif %}
+
+  {% if contest %}
+  <div class="card">
+    <h2>Заставка</h2>
+    {% if contest.cover_image %}<p class="hint">Текущая: <code>{{ contest.cover_image }}</code></p>{% endif %}
+    <form class="inline" method="post" action="/admin-tools/contests/{{ contest.id }}/cover" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".jpg,.jpeg,.png,.webp" required />
+      <button type="submit">Загрузить</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" action="{{ '/admin-tools/contests/%d/edit' % contest.id if contest else '/admin-tools/contests/new' }}">
+      <div class="field">
+        <label for="title">Название</label>
+        <input id="title" type="text" name="title" value="{{ contest.title if contest else '' }}" required />
+      </div>
+      <div class="field">
+        <label for="description">Описание и условия</label>
+        <textarea id="description" name="description" rows="5">{{ contest.description if contest else '' }}</textarea>
+        <p class="hint">Видно участникам вместе с полями заявки, как только приём открыт (или раньше, пока идёт голосование/подводятся итоги).</p>
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="field">
+          <label for="submissions_open_at">Приём заявок — начало</label>
+          <input id="submissions_open_at" type="datetime-local" name="submissions_open_at" value="{{ contest.submissions_open_at|local_input if contest else '' }}" />
+        </div>
+        <div class="field">
+          <label for="submissions_close_at">Приём заявок — конец</label>
+          <input id="submissions_close_at" type="datetime-local" name="submissions_close_at" value="{{ contest.submissions_close_at|local_input if contest else '' }}" />
+        </div>
+        <div class="field">
+          <label for="voting_open_at">Голосование — начало</label>
+          <input id="voting_open_at" type="datetime-local" name="voting_open_at" value="{{ contest.voting_open_at|local_input if contest else '' }}" />
+        </div>
+        <div class="field">
+          <label for="voting_close_at">Голосование — конец</label>
+          <input id="voting_close_at" type="datetime-local" name="voting_close_at" value="{{ contest.voting_close_at|local_input if contest else '' }}" />
+        </div>
+      </div>
+      <p class="hint">
+        Любое поле можно оставить пустым — тогда соответствующая фаза просто
+        длится, пока дата не будет проставлена. Время — по Чебоксарам.
+      </p>
+
+      <div class="field">
+        <label class="cf-check" style="font-size:13px;">
+          <input type="checkbox" name="votes_visible_live" {% if contest and contest.votes_visible_live %}checked{% endif %} style="width:auto;" />
+          Показывать количество голосов прямо во время голосования
+        </label>
+        <p class="hint">Выключено — счётчики скрыты до публикации итогов, чтобы ранний лидер не собирал голоса по инерции.</p>
+      </div>
+
+      <div class="field">
+        <label>Поля заявки (конструктор)</label>
+        <p class="hint">
+          Что участник должен заполнить/загрузить. Чекбокс «на странице
+          голосования» — показывать ли это поле публично тем, кто голосует
+          (администратор видит все поля в любом случае, в очереди модерации).
+        </p>
+        <table class="cf-table">
+          <thead>
+            <tr><th>Подпись</th><th>Описание</th><th style="width:120px;">Тип</th><th style="width:70px;">Обяз.</th><th style="width:90px;">Публично</th><th style="width:36px;"></th></tr>
+          </thead>
+          <tbody id="cf-rows"></tbody>
+        </table>
+        <button type="button" class="btn secondary btn-sm" id="cf-add" style="margin-top:8px;">+ Добавить поле</button>
+      </div>
+
+      <input type="hidden" name="fields" id="fields" />
+      <button type="submit" style="margin-top:16px;">{{ 'Сохранить' if contest else 'Создать' }}</button>
+    </form>
+  </div>
+
+  {% if contest %}
+  <p class="hint">
+    <a href="/admin-tools/contests/{{ contest.id }}/entries">Заявки и модерация →</a>
+    &nbsp;·&nbsp;
+    <a href="/admin-tools/contests/{{ contest.id }}/results">Итоги и голоса →</a>
+  </p>
+  {% endif %}
+
+  <script>
+  (function(){
+    var INITIAL = {{ (fields | map(attribute='id') | list) | tojson }};
+    var FIELD_TYPES = [
+      ['text', 'Короткий текст'],
+      ['long_text', 'Длинный текст'],
+      ['number', 'Число'],
+      ['url', 'Ссылка'],
+      ['image', 'Изображение'],
+      ['gpx', 'GPX-файл']
+    ];
+    var EXISTING = [
+      {% for f in fields %}
+      {id: {{ f.id }}, label: {{ f.label|tojson }}, description: {{ (f.description or '')|tojson }}, field_type: {{ f.field_type.value|tojson }}, required: {{ f.required|tojson }}, visible_to_voters: {{ f.visible_to_voters|tojson }}},
+      {% endfor %}
+    ];
+
+    var rows = document.getElementById('cf-rows');
+    var hidden = document.getElementById('fields');
+    var addBtn = document.getElementById('cf-add');
+
+    function makeRow(f){
+      f = f || {};
+      var tr = document.createElement('tr');
+      tr.dataset.id = f.id || '';
+      var typeOptions = FIELD_TYPES.map(function(t){
+        return '<option value="' + t[0] + '"' + (f.field_type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>';
+      }).join('');
+      tr.innerHTML =
+        '<td><input class="cf-label" type="text" placeholder="Ссылка на маршрут (Strava)"></td>' +
+        '<td><input class="cf-desc" type="text" placeholder="необязательно"></td>' +
+        '<td><select class="cf-type">' + typeOptions + '</select></td>' +
+        '<td><label class="cf-check"><input type="checkbox" class="cf-required"></label></td>' +
+        '<td><label class="cf-check"><input type="checkbox" class="cf-visible"></label></td>' +
+        '<td><button type="button" class="btn secondary cf-del" title="Убрать">✕</button></td>';
+      tr.querySelector('.cf-label').value = f.label || '';
+      tr.querySelector('.cf-desc').value = f.description || '';
+      tr.querySelector('.cf-required').checked = f.required !== false;
+      tr.querySelector('.cf-visible').checked = f.visible_to_voters !== false;
+      tr.querySelector('.cf-del').addEventListener('click', function(){ tr.remove(); sync(); });
+      Array.prototype.forEach.call(tr.querySelectorAll('input, select'), function(el){
+        el.addEventListener('input', sync);
+        el.addEventListener('change', sync);
+      });
+      return tr;
+    }
+    function addRow(f){ rows.appendChild(makeRow(f)); }
+
+    function collect(){
+      var out = [];
+      Array.prototype.forEach.call(rows.querySelectorAll('tr'), function(tr){
+        var label = tr.querySelector('.cf-label').value.trim();
+        if (!label) return;
+        out.push({
+          id: tr.dataset.id ? parseInt(tr.dataset.id, 10) : null,
+          label: label,
+          description: tr.querySelector('.cf-desc').value.trim(),
+          field_type: tr.querySelector('.cf-type').value,
+          required: tr.querySelector('.cf-required').checked,
+          visible_to_voters: tr.querySelector('.cf-visible').checked
+        });
+      });
+      return out;
+    }
+    function sync(){ hidden.value = JSON.stringify(collect()); }
+
+    EXISTING.forEach(addRow);
+    if (EXISTING.length === 0) addRow();
+    addBtn.addEventListener('click', function(){ addRow(); sync(); });
+    sync();
+  })();
+  </script>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "_base.html" %}
+{% block title %}Конкурсы — DX Tools{% endblock %}
+{% block content %}
+<div class="row-between">
+  <h1 style="margin:0;">Конкурсы</h1>
+  <a class="btn" href="/admin-tools/contests/new">+ Новый конкурс</a>
+</div>
+{% if flash %}<p class="hint" style="color:var(--ok);">{{ flash }}</p>{% endif %}
+
+{% if contests %}
+<div class="table-scroll" style="margin-top:16px;">
+  <table>
+    <thead>
+      <tr><th>Название</th><th>Статус</th><th>Фаза</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for c in contests %}
+      <tr>
+        <td><a href="/admin-tools/contests/{{ c.id }}/edit">{{ c.title }}</a></td>
+        <td>
+          {% if c.is_published %}<span class="chip chip-ok">опубликован</span>
+          {% else %}<span class="chip chip-muted">черновик</span>{% endif %}
+        </td>
+        <td><span class="chip chip-info">{{ phases[c.id] }}</span></td>
+        <td>
+          <a href="/admin-tools/contests/{{ c.id }}/entries" class="hint">Заявки</a>
+          &nbsp;·&nbsp;
+          <a href="/admin-tools/contests/{{ c.id }}/results" class="hint">Итоги</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty" style="margin-top:16px;">Пока нет ни одного конкурса.</div>
+{% endif %}
+{% endblock %}
