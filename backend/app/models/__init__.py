@@ -1,8 +1,10 @@
 from app.models.attendance import AttendanceRecord
 from app.models.base import Base
 from app.models.city import City
+from app.models.contest import Contest, ContestEntry, ContestEntryValue, ContestField, ContestVote
 from app.models.enums import (
     ClaimStatus,
+    ContestFieldType,
     FinishStatus,
     Gender,
     ModerationStatus,
@@ -20,6 +22,7 @@ from app.models.organizer_permission import OrganizerPermission
 from app.models.profile_edit_request import ProfileEditRequest
 from app.models.result import Result
 from app.models.runner_baseline import RunnerBaseline
+from app.models.running_club import RunningClub
 from app.models.signup import Signup
 from app.models.support import SupportMessage, SupportTicket
 from app.models.survey import Survey, SurveyAnswer, SurveyQuestion, SurveyResponse
@@ -39,12 +42,18 @@ __all__ = [
     "OrganizerPermission",
     "ProfileEditRequest",
     "RunnerBaseline",
+    "RunningClub",
     "Survey",
     "SurveyQuestion",
     "SurveyResponse",
     "SurveyAnswer",
     "SupportTicket",
     "SupportMessage",
+    "Contest",
+    "ContestField",
+    "ContestEntry",
+    "ContestEntryValue",
+    "ContestVote",
     "UserRole",
     "Gender",
     "FinishStatus",
@@ -55,4 +64,5 @@ __all__ = [
     "SurveyQuestionType",
     "TicketStatus",
     "StaffPermission",
+    "ContestFieldType",
 ]

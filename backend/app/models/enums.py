@@ -95,3 +95,18 @@ class StaffPermission(enum.StrEnum):
     results_review = "results_review"
     surveys = "surveys"
     reports = "reports"
+    contests = "contests"
+
+
+class ContestFieldType(enum.StrEnum):
+    """One entry in a contest's constructor (ContestField) — a deliberately
+    short, fixed list rather than an open-ended type system: each value maps
+    to a specific input widget and storage/validation rule in
+    contest_service, so a new type is a real feature, not just a new string."""
+
+    text = "text"
+    long_text = "long_text"
+    number = "number"
+    url = "url"
+    image = "image"
+    gpx = "gpx"

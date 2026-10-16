@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.attendance import AttendanceRecord
+from app.models.contest import Contest, ContestField
 from app.models.enums import (
+    ContestFieldType,
     FinishStatus,
     Gender,
     ModerationStatus,
@@ -113,6 +115,56 @@ async def make_attendance_with_result(
     session.add(result)
     await session.flush()
     return rec
+
+
+async def make_contest(
+    session: AsyncSession,
+    organizer: User,
+    *,
+    is_published: bool = False,
+    submissions_open_at: datetime | None = None,
+    submissions_close_at: datetime | None = None,
+    voting_open_at: datetime | None = None,
+    voting_close_at: datetime | None = None,
+    votes_visible_live: bool = False,
+) -> Contest:
+    contest = Contest(
+        title="DX маршруты",
+        description="Конкурс маршрутов",
+        created_by=organizer.id,
+        is_published=is_published,
+        submissions_open_at=submissions_open_at,
+        submissions_close_at=submissions_close_at,
+        voting_open_at=voting_open_at,
+        voting_close_at=voting_close_at,
+        votes_visible_live=votes_visible_live,
+    )
+    session.add(contest)
+    await session.flush()
+    return contest
+
+
+async def add_contest_field(
+    session: AsyncSession,
+    contest: Contest,
+    *,
+    position: int = 0,
+    label: str = "Ссылка на маршрут",
+    field_type: ContestFieldType = ContestFieldType.url,
+    required: bool = True,
+    visible_to_voters: bool = True,
+) -> ContestField:
+    field = ContestField(
+        contest_id=contest.id,
+        position=position,
+        label=label,
+        field_type=field_type,
+        required=required,
+        visible_to_voters=visible_to_voters,
+    )
+    session.add(field)
+    await session.flush()
+    return field
 
 
 async def make_baseline(

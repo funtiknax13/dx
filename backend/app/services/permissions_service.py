@@ -60,6 +60,10 @@ PERMISSION_META: dict[StaffPermission, PermissionMeta] = {
         "Отчёты",
         "Выгрузка протокола события и списка результатов в XLSX (только по своим событиям).",
     ),
+    StaffPermission.contests: PermissionMeta(
+        "Конкурсы",
+        "Конструктор конкурсов, модерация заявок, подведение итогов.",
+    ),
 }
 
 
