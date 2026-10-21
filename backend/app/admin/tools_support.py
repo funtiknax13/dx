@@ -11,6 +11,7 @@ from app.models.user import User
 from app.services.staff_attention_service import (
     pending_avatar_count,
     pending_claims_count,
+    pending_contest_entries_count,
     pending_moderation_count,
     pending_profile_review_count,
 )
@@ -171,6 +172,7 @@ async def badge_counts(request: Request) -> dict[str, int]:
         "moderation": 0,
         "avatars": 0,
         "profile_review": 0,
+        "contest_entries": 0,
     }
     if user is None:
         return empty
@@ -195,6 +197,11 @@ async def badge_counts(request: Request) -> dict[str, int]:
             if StaffPermission.profile_review in perms
             else 0
         )
+        contest_entries = (
+            await pending_contest_entries_count(session)
+            if StaffPermission.contests_review in perms
+            else 0
+        )
     return {
         "tickets": tickets,
         "surveys": surveys,
@@ -202,4 +209,5 @@ async def badge_counts(request: Request) -> dict[str, int]:
         "moderation": moderation,
         "avatars": avatars,
         "profile_review": profile_review,
+        "contest_entries": contest_entries,
     }

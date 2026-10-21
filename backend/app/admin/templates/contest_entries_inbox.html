@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block title %}Заявки на конкурсы — DX Tools{% endblock %}
+{% block content %}
+<h1 style="margin:0;">Заявки на конкурсы</h1>
+<p class="hint">
+  Все заявки на проверке, по всем конкурсам сразу. Админ видит все поля заявки
+  независимо от чекбокса «публично» в конструкторе — он определяет только
+  что покажется голосующим.
+</p>
+{% if flash %}<p class="hint" style="color:var(--ok);">{{ flash }}</p>{% endif %}
+
+{% if entries %}
+<div class="mod-list" style="display:grid; gap:12px; margin-top:16px;">
+  {% for e in entries %}
+  {% set contest = e.contest %}
+  {% set fields = contest.fields %}
+  {% set values = values_by_entry[e.id] %}
+  <details class="mod-card" style="background:#fff; border-radius:var(--radius-lg); box-shadow:var(--shadow-card); overflow:hidden;">
+    <summary class="mod-top" style="display:flex; align-items:center; gap:10px; padding:14px 16px; cursor:pointer; list-style:none;">
+      <div class="mod-who" style="min-width:0; flex:1 1 auto;">
+        <div class="name" style="font-weight:700;">
+          {{ (e.runner.first_name ~ ' ' ~ e.runner.last_name) if e.runner else 'без аккаунта' }}
+          <span class="chip chip-muted">на проверке</span>
+        </div>
+        <div class="sub" style="font-size:12px; color:var(--clay);">
+          «{{ contest.title }}» · отправлено {{ e.submitted_at|local_dt }}
+        </div>
+      </div>
+      <span class="chev">▶</span>
+    </summary>
+
+    <div style="padding:16px; border-top:1px solid var(--paper-soft);">
+      <dl class="kv-row-list" style="margin:0;">
+        {% for f in fields %}
+        <div class="kv-row">
+          <dt>{{ f.label }}{% if not f.visible_to_voters %} <span class="hint">(скрыто от голосующих)</span>{% endif %}</dt>
+          <dd>
+            {% set v = values.get(f.id) %}
+            {% if not v %}—
+            {% elif f.field_type.value == 'url' %}<a href="{{ v }}" target="_blank" rel="noreferrer">{{ v }}</a>
+            {% elif f.field_type.value == 'image' %}<img src="{{ v }}" alt="" style="max-width:220px; border-radius:var(--radius);">
+            {% elif f.field_type.value == 'gpx' %}<a href="{{ v }}" target="_blank" rel="noreferrer">Скачать GPX</a>
+            {% else %}{{ v }}
+            {% endif %}
+          </dd>
+        </div>
+        {% endfor %}
+      </dl>
+
+      <div class="mod-actions" style="display:flex; gap:8px; margin-top:14px;">
+        <form class="inline" method="post" action="/admin-tools/contests/{{ contest.id }}/entries/{{ e.id }}/approve">
+          <button type="submit" class="btn-sm">Принять</button>
+        </form>
+        <button
+          type="button"
+          class="danger btn-sm"
+          data-reason-modal
+          data-action="/admin-tools/contests/{{ contest.id }}/entries/{{ e.id }}/reject"
+          data-title="Отклонить заявку"
+          data-hint="Участник получит закрытый тикет в поддержке с этим текстом и сможет доработать и отправить заявку заново, пока приём открыт."
+          data-submit-label="Отклонить и уведомить"
+          data-presets='["Не выполнены условия конкурса.", "Нет обязательных данных.", "Ссылка недоступна или не открывается."]'
+        >Отклонить</button>
+      </div>
+    </div>
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty" style="margin-top:16px;">Пока нет заявок на проверке.</div>
+{% endif %}
+{% endblock %}

@@ -244,6 +244,131 @@ async def test_approve_entry(session: AsyncSession, client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
+async def test_contests_review_only_user_can_approve_entry_not_owned(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """contests_review is deliberately global (not ownership-scoped, unlike
+    `contests`) — see _get_contest_for_moderation — so a reviewer can
+    moderate a contest someone else created without being granted
+    `contests` at all."""
+    admin = await make_user(session, "admin-mod3@example.com", UserRole.admin)
+    owner = await _organizer_with_contests(session, "owner-mod3@example.com", admin)
+    reviewer = await make_user(session, "reviewer-mod3@example.com", UserRole.organizer)
+    await set_permissions(session, reviewer, {StaffPermission.contests_review}, granted_by=admin)
+    runner = await make_user(session, "runner-mod3@example.com")
+    contest = await make_contest(session, owner)
+    entry = ContestEntry(
+        contest_id=contest.id,
+        runner_id=runner.id,
+        status=ModerationStatus.pending,
+        submitted_at=contest.created_at,
+    )
+    session.add(entry)
+    await session.commit()
+    await _login(client, reviewer.id)
+
+    resp = await client.post(
+        f"/admin-tools/contests/{contest.id}/entries/{entry.id}/approve", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    await session.refresh(entry)
+    assert entry.status == ModerationStatus.approved
+
+
+@pytest.mark.asyncio
+async def test_user_with_neither_contests_permission_is_blocked(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-mod4@example.com", UserRole.admin)
+    owner = await _organizer_with_contests(session, "owner-mod4@example.com", admin)
+    bystander = await make_user(session, "bystander-mod4@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-mod4@example.com")
+    contest = await make_contest(session, owner)
+    entry = ContestEntry(
+        contest_id=contest.id,
+        runner_id=runner.id,
+        status=ModerationStatus.pending,
+        submitted_at=contest.created_at,
+    )
+    session.add(entry)
+    await session.commit()
+    await _login(client, bystander.id)
+
+    resp = await client.post(
+        f"/admin-tools/contests/{contest.id}/entries/{entry.id}/approve", follow_redirects=False
+    )
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/admin-tools/login"
+    await session.refresh(entry)
+    assert entry.status == ModerationStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_contest_entries_inbox_requires_contests_review(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Owning contests (`contests` only, no `contests_review`) is not enough
+    for the cross-contest inbox — that one's reserved for the broad,
+    delegable-to-anyone review right."""
+    admin = await make_user(session, "admin-inbox1@example.com", UserRole.admin)
+    owner = await _organizer_with_contests(session, "owner-inbox1@example.com", admin)
+    await session.commit()
+    await _login(client, owner.id)
+
+    resp = await client.get("/admin-tools/contest-entries", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/admin-tools/login"
+
+
+@pytest.mark.asyncio
+async def test_contest_entries_inbox_lists_pending_across_contests(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-inbox2@example.com", UserRole.admin)
+    owner_a = await _organizer_with_contests(session, "owner-inbox2a@example.com", admin)
+    owner_b = await _organizer_with_contests(session, "owner-inbox2b@example.com", admin)
+    reviewer = await make_user(session, "reviewer-inbox2@example.com", UserRole.organizer)
+    await set_permissions(session, reviewer, {StaffPermission.contests_review}, granted_by=admin)
+    runner = await make_user(session, "runner-inbox2@example.com")
+
+    contest_a = await make_contest(session, owner_a)
+    contest_b = await make_contest(session, owner_b)
+    pending_a = ContestEntry(
+        contest_id=contest_a.id,
+        runner_id=runner.id,
+        status=ModerationStatus.pending,
+        submitted_at=contest_a.created_at,
+    )
+    pending_b = ContestEntry(
+        contest_id=contest_b.id,
+        runner_id=runner.id,
+        status=ModerationStatus.pending,
+        submitted_at=contest_b.created_at,
+    )
+    session.add_all([pending_a, pending_b])
+    await session.flush()
+    # An already-approved entry elsewhere must not show up in this inbox —
+    # it's specifically a pending-only queue, like /admin-tools/results.
+    approved_runner = await make_user(session, "runner-inbox2b@example.com")
+    approved = ContestEntry(
+        contest_id=contest_a.id,
+        runner_id=approved_runner.id,
+        status=ModerationStatus.approved,
+        submitted_at=contest_a.created_at,
+    )
+    session.add(approved)
+    await session.commit()
+    await _login(client, reviewer.id)
+
+    resp = await client.get("/admin-tools/contest-entries")
+    assert resp.status_code == 200
+    assert contest_a.title in resp.text
+    assert f"/admin-tools/contests/{contest_a.id}/entries/{pending_a.id}/approve" in resp.text
+    assert f"/admin-tools/contests/{contest_b.id}/entries/{pending_b.id}/approve" in resp.text
+    assert f"/admin-tools/contests/{contest_a.id}/entries/{approved.id}/approve" not in resp.text
+
+
+@pytest.mark.asyncio
 async def test_reject_entry_sets_reason_and_notifies(
     session: AsyncSession, client: AsyncClient
 ) -> None:

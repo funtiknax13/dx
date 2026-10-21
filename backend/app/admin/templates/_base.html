@@ -320,10 +320,13 @@
           <a href="/admin-tools/contests" class="nav-link {{ 'active' if active == 'contests' }}">{{ nav_icon('trophy') }}Конкурсы</a>
         </div>
         {% endif %}
-        {% if 'csv_import' in tools_user.granted_permissions or 'baselines' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions or 'results_review' in tools_user.granted_permissions or 'avatars' in tools_user.granted_permissions or 'profile_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions %}
+        {% if 'csv_import' in tools_user.granted_permissions or 'baselines' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions or 'results_review' in tools_user.granted_permissions or 'avatars' in tools_user.granted_permissions or 'profile_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions or 'contests_review' in tools_user.granted_permissions %}
         <div class="nav-section">
           {% if 'csv_import' in tools_user.granted_permissions %}
           <a href="/admin-tools/import" class="nav-link {{ 'active' if active == 'import' }}">{{ nav_icon('upload') }}Загрузка протоколов</a>
+          {% endif %}
+          {% if 'contests_review' in tools_user.granted_permissions %}
+          <a href="/admin-tools/contest-entries" class="nav-link {{ 'active' if active == 'contest-entries' }}">{{ nav_icon('trophy') }}Заявки на конкурсы <span id="badge-contest-entries" class="nav-badge" style="display:none;" title="Заявки, ожидающие проверки"></span></a>
           {% endif %}
           {% if 'baselines' in tools_user.granted_permissions %}
           <a href="/admin-tools/import-baselines" class="nav-link {{ 'active' if active == 'import-baselines' }}">{{ nav_icon('database') }}Стартовые данные</a>
@@ -457,7 +460,8 @@
       var moderationBadge = document.getElementById('badge-moderation');
       var avatarsBadge = document.getElementById('badge-avatars');
       var profileReviewBadge = document.getElementById('badge-profile-review');
-      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge || avatarsBadge || profileReviewBadge) {
+      var contestEntriesBadge = document.getElementById('badge-contest-entries');
+      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge || avatarsBadge || profileReviewBadge || contestEntriesBadge) {
         fetch('/admin-tools/badge-counts', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (data) {
@@ -468,6 +472,7 @@
               [moderationBadge, data.moderation],
               [avatarsBadge, data.avatars],
               [profileReviewBadge, data.profile_review],
+              [contestEntriesBadge, data.contest_entries],
             ].forEach(function (pair) {
               var el = pair[0], count = pair[1];
               if (el && count > 0) {

@@ -62,7 +62,11 @@ PERMISSION_META: dict[StaffPermission, PermissionMeta] = {
     ),
     StaffPermission.contests: PermissionMeta(
         "Конкурсы",
-        "Конструктор конкурсов, модерация заявок, подведение итогов.",
+        "Создание и настройка конкурсов, подведение итогов — по своим конкурсам.",
+    ),
+    StaffPermission.contests_review: PermissionMeta(
+        "Модерация заявок на конкурсы",
+        "Проверка заявок участников по всем конкурсам — не обязательно быть их автором.",
     ),
 }
 

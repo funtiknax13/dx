@@ -3,11 +3,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.enums import StaffPermission, TicketStatus, UserRole
+from app.models.contest import ContestEntry
+from app.models.enums import ModerationStatus, StaffPermission, TicketStatus, UserRole
 from app.models.support import SupportMessage, SupportTicket
 from app.services.permissions_service import set_permissions
 from app.services.support_service import create_ticket
-from tests.factories import make_user
+from tests.factories import make_contest, make_user
 
 
 async def _login(client: AsyncClient, user_id: int) -> None:
@@ -178,4 +179,34 @@ async def test_badge_counts_zero_for_anonymous(client: AsyncClient) -> None:
         "moderation": 0,
         "avatars": 0,
         "profile_review": 0,
+        "contest_entries": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_badge_counts_contest_entries_needs_contests_review_grant(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-support7@example.com", UserRole.admin)
+    org = await make_user(session, "org-support2@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-adminsupport7@example.com")
+    contest = await make_contest(session, org)
+    entry = ContestEntry(
+        contest_id=contest.id,
+        runner_id=runner.id,
+        status=ModerationStatus.pending,
+        submitted_at=contest.created_at,
+    )
+    session.add(entry)
+    await session.commit()
+    await _login(client, org.id)
+
+    # Not granted contests_review yet — badge stays zero even with a real
+    # pending entry in the database.
+    before = await client.get("/admin-tools/badge-counts")
+    assert before.json()["contest_entries"] == 0
+
+    await set_permissions(session, org, {StaffPermission.contests_review}, granted_by=admin)
+    await session.commit()
+    after = await client.get("/admin-tools/badge-counts")
+    assert after.json()["contest_entries"] == 1

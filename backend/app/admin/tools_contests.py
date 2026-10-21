@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.admin.tools_common import (
     can_manage_contest,
     combine_local_datetime,
+    get_tools_user,
     login_redirect,
     require_permission,
     templates,
@@ -104,7 +105,10 @@ async def contests_list(request: Request) -> HTMLResponse | RedirectResponse:
         if user.role != UserRole.admin:
             stmt = stmt.where(Contest.created_by == user.id)
         contests = list(await session.scalars(stmt))
-        phases = {c.id: contest_service.contest_phase(c) for c in contests}
+        phases = {
+            c.id: contest_service.PHASE_LABELS_RU[contest_service.contest_phase(c)]
+            for c in contests
+        }
     return templates.TemplateResponse(
         request,
         "contests_list.html",
@@ -171,6 +175,31 @@ async def _get_owned_contest(session: AsyncSession, user: User, contest_id: int)
     return contest
 
 
+async def _require_entries_access(request: Request) -> User | None:
+    """Entry moderation is reachable with either the broad, delegable-to-
+    anyone `contests_review` (any contest, not just your own — same rule
+    results_review already uses, see staff_attention_service) or `contests`
+    (the contest's own creator/admin, checked per-contest below)."""
+    user = await get_tools_user(request)
+    if user is None:
+        return None
+    perms = user.granted_permissions
+    if StaffPermission.contests_review in perms or StaffPermission.contests in perms:
+        return user
+    return None
+
+
+async def _get_contest_for_moderation(
+    session: AsyncSession, user: User, contest_id: int
+) -> Contest | None:
+    contest = await session.get(Contest, contest_id)
+    if contest is None:
+        return None
+    if StaffPermission.contests_review in user.granted_permissions:
+        return contest
+    return contest if can_manage_contest(user, contest) else None
+
+
 @router.get("/contests/{contest_id}/edit", response_class=HTMLResponse, response_model=None)
 async def contest_edit_form(request: Request, contest_id: int) -> HTMLResponse | RedirectResponse:
     user = await require_permission(request, StaffPermission.contests)
@@ -196,7 +225,7 @@ async def contest_edit_form(request: Request, contest_id: int) -> HTMLResponse |
             "tools_user": user,
             "contest": contest,
             "fields": fields,
-            "phase": phase,
+            "phase": contest_service.PHASE_LABELS_RU[phase],
             "flash": request.query_params.get("flash"),
         },
     )
@@ -294,15 +323,54 @@ async def contest_unpublish(request: Request, contest_id: int) -> RedirectRespon
 # --- moderation -----------------------------------------------------
 
 
-@router.get("/contests/{contest_id}/entries", response_class=HTMLResponse, response_model=None)
-async def contest_entries(request: Request, contest_id: int) -> HTMLResponse | RedirectResponse:
-    user = await require_permission(request, StaffPermission.contests)
+@router.get("/contest-entries", response_class=HTMLResponse, response_model=None)
+async def contest_entries_inbox(request: Request) -> HTMLResponse | RedirectResponse:
+    """Cross-contest pending-entries inbox — reachable with just
+    `contests_review` (no `contests` needed), unlike the per-contest /entries
+    page below which also accepts a contest's own owner. Mirrors
+    tools_results.py's cross-event /results inbox."""
+    user = await require_permission(request, StaffPermission.contests_review)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
-        contest = await _get_owned_contest(session, user, contest_id)
+        entries = list(
+            await session.scalars(
+                select(ContestEntry)
+                .where(ContestEntry.status == ModerationStatus.pending)
+                .options(
+                    selectinload(ContestEntry.runner),
+                    selectinload(ContestEntry.values),
+                    selectinload(ContestEntry.contest).selectinload(Contest.fields),
+                )
+                .order_by(ContestEntry.submitted_at.desc())
+            )
+        )
+        values_by_entry = {e.id: {v.field_id: v.value for v in e.values} for e in entries}
+    return templates.TemplateResponse(
+        request,
+        "contest_entries_inbox.html",
+        {
+            "active": "contest-entries",
+            "tools_user": user,
+            "entries": entries,
+            "values_by_entry": values_by_entry,
+            "flash": request.query_params.get("flash"),
+        },
+    )
+
+
+@router.get("/contests/{contest_id}/entries", response_class=HTMLResponse, response_model=None)
+async def contest_entries(request: Request, contest_id: int) -> HTMLResponse | RedirectResponse:
+    user = await _require_entries_access(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        contest = await _get_contest_for_moderation(session, user, contest_id)
         if contest is None:
-            return RedirectResponse("/admin-tools/contests", status_code=303)
+            # Not /admin-tools/contests — a contests_review-only reviewer
+            # (no `contests`) can't reach that list, so bounce somewhere
+            # everyone with entries access can actually load.
+            return RedirectResponse("/admin-tools", status_code=303)
         fields = list(
             await session.scalars(
                 select(ContestField)
@@ -323,7 +391,7 @@ async def contest_entries(request: Request, contest_id: int) -> HTMLResponse | R
         request,
         "contest_entries.html",
         {
-            "active": "contests",
+            "active": "contest-entries",
             "tools_user": user,
             "contest": contest,
             "fields": fields,
@@ -349,13 +417,13 @@ def _entry_decision_message(entry: ContestEntry, contest: Contest, *, accepted: 
 async def approve_contest_entry(
     request: Request, contest_id: int, entry_id: int
 ) -> RedirectResponse:
-    user = await require_permission(request, StaffPermission.contests)
+    user = await _require_entries_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
-        contest = await _get_owned_contest(session, user, contest_id)
+        contest = await _get_contest_for_moderation(session, user, contest_id)
         if contest is None:
-            return RedirectResponse("/admin-tools/contests", status_code=303)
+            return RedirectResponse("/admin-tools", status_code=303)
         entry = await session.get(
             ContestEntry, entry_id, options=[selectinload(ContestEntry.runner)]
         )
@@ -380,13 +448,13 @@ async def approve_contest_entry(
 async def reject_contest_entry(
     request: Request, contest_id: int, entry_id: int, reason: str = Form("")
 ) -> RedirectResponse:
-    user = await require_permission(request, StaffPermission.contests)
+    user = await _require_entries_access(request)
     if user is None:
         return login_redirect()
     async with SessionLocal() as session:
-        contest = await _get_owned_contest(session, user, contest_id)
+        contest = await _get_contest_for_moderation(session, user, contest_id)
         if contest is None:
-            return RedirectResponse("/admin-tools/contests", status_code=303)
+            return RedirectResponse("/admin-tools", status_code=303)
         entry = await session.get(
             ContestEntry, entry_id, options=[selectinload(ContestEntry.runner)]
         )

@@ -7,6 +7,7 @@ handles unconditionally — see app.api.staff / app.admin.tools_support."""
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.contest import ContestEntry
 from app.models.enums import AvatarReview, ClaimStatus, ModerationStatus
 from app.models.guest_claim import GuestClaim
 from app.models.profile_edit_request import ProfileEditRequest
@@ -43,5 +44,12 @@ async def pending_profile_review_count(session: AsyncSession) -> int:
         select(func.count(ProfileEditRequest.id)).where(
             ProfileEditRequest.status == ModerationStatus.pending
         )
+    )
+    return result or 0
+
+
+async def pending_contest_entries_count(session: AsyncSession) -> int:
+    result = await session.scalar(
+        select(func.count(ContestEntry.id)).where(ContestEntry.status == ModerationStatus.pending)
     )
     return result or 0

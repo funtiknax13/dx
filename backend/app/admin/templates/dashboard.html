@@ -15,6 +15,7 @@
     or 'csv_import' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions
     or 'results_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions
     or 'reports' in tools_user.granted_permissions or 'contests' in tools_user.granted_permissions
+    or 'contests_review' in tools_user.granted_permissions
     or tools_user.role.value == 'admin' %}
   {% if not has_any %}
   <div class="empty" style="margin-top:20px;">
@@ -85,8 +86,15 @@
     {% if 'contests' in tools_user.granted_permissions %}
     <div class="card">
       <h2>Конкурсы</h2>
-      <p class="hint">Конструктор конкурса, модерация заявок, голосование, итоги.</p>
+      <p class="hint">Конструктор конкурса, голосование, итоги.</p>
       <a class="btn" href="/admin-tools/contests">Открыть →</a>
+    </div>
+    {% endif %}
+    {% if 'contests_review' in tools_user.granted_permissions %}
+    <div class="card">
+      <h2>Заявки на конкурсы</h2>
+      <p class="hint">Проверка заявок участников по всем конкурсам сразу.</p>
+      <a class="btn" href="/admin-tools/contest-entries">Открыть →</a>
     </div>
     {% endif %}
     {% if tools_user.role.value == 'admin' %}

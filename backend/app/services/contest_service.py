@@ -57,6 +57,19 @@ def contest_phase(contest: Contest, now: datetime | None = None) -> str:
     return "voting_closed"
 
 
+# Human label for an admin-tools chip — the public API/frontend has its own
+# (see frontend/src/pages/ContestsListPage.tsx's PHASE_LABEL), kept separate
+# rather than shared since admin-tools is server-rendered Jinja, not JSON.
+PHASE_LABELS_RU: dict[str, str] = {
+    "draft": "Черновик",
+    "upcoming": "Скоро начнётся",
+    "submissions_open": "Приём заявок открыт",
+    "submissions_closed": "Приём заявок завершён",
+    "voting_open": "Идёт голосование",
+    "voting_closed": "Итоги",
+}
+
+
 def can_submit(contest: Contest, now: datetime | None = None) -> bool:
     return contest_phase(contest, now) == "submissions_open"
 
