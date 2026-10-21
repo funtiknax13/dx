@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { formatDate } from '../lib/format'
 import { Avatar } from '../components/ui/Avatar'
+import { Modal } from '../components/ui/Modal'
 import { PageLoader, Spinner } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconCalendar, IconCheck, IconTrophy } from '../components/ui/icons'
@@ -142,6 +143,7 @@ function SubmissionSection({ contest }: { contest: ContestDetail }) {
     () => (isAuthenticated ? contestsApi.myEntry(contest.id) : Promise.resolve(null)),
     [contest.id, isAuthenticated],
   )
+  const [formOpen, setFormOpen] = useState(false)
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -187,7 +189,21 @@ function SubmissionSection({ contest }: { contest: ContestDetail }) {
             </div>
           )}
           {contest.fields && (
-            <EntryForm contest={contest} myEntry={myEntry ?? null} onSubmitted={reload} />
+            <button type="button" onClick={() => setFormOpen(true)} className="btn-ink">
+              {myEntry ? 'Изменить заявку' : 'Отправить заявку'}
+            </button>
+          )}
+          {formOpen && contest.fields && (
+            <Modal title={myEntry ? 'Изменить заявку' : 'Отправить заявку'} onClose={() => setFormOpen(false)}>
+              <EntryForm
+                contest={contest}
+                myEntry={myEntry ?? null}
+                onSubmitted={() => {
+                  setFormOpen(false)
+                  reload()
+                }}
+              />
+            </Modal>
           )}
         </>
       )}
