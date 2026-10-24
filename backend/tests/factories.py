@@ -127,6 +127,7 @@ async def make_contest(
     voting_open_at: datetime | None = None,
     voting_close_at: datetime | None = None,
     votes_visible_live: bool = False,
+    max_entries_per_runner: int | None = None,
 ) -> Contest:
     contest = Contest(
         title="DX маршруты",
@@ -138,6 +139,7 @@ async def make_contest(
         voting_open_at=voting_open_at,
         voting_close_at=voting_close_at,
         votes_visible_live=votes_visible_live,
+        max_entries_per_runner=max_entries_per_runner,
     )
     session.add(contest)
     await session.flush()
@@ -153,6 +155,7 @@ async def add_contest_field(
     field_type: ContestFieldType = ContestFieldType.url,
     required: bool = True,
     visible_to_voters: bool = True,
+    options: list[str] | None = None,
 ) -> ContestField:
     field = ContestField(
         contest_id=contest.id,
@@ -161,6 +164,7 @@ async def add_contest_field(
         field_type=field_type,
         required=required,
         visible_to_voters=visible_to_voters,
+        options=options,
     )
     session.add(field)
     await session.flush()

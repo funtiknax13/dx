@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -40,9 +40,7 @@ class Contest(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
     voting_open_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    voting_close_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    voting_close_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Whether vote tallies are visible *while voting is still open* — off by
     # default (the common case: reveal only once voting closes, so an early
@@ -59,6 +57,11 @@ class Contest(Base, TimestampMixin):
     results_published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+    # Null = unlimited. A runner may hold several entries on the same
+    # contest (see ContestEntry — no longer unique per runner); this caps
+    # how many, set per-contest by the organizer in the constructor.
+    max_entries_per_runner: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     creator = relationship("User")
     fields = relationship(
@@ -96,6 +99,10 @@ class ContestField(Base, TimestampMixin):
     # this field's value from voters/the public entry list while still
     # collecting and showing it to the admin during moderation.
     visible_to_voters: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Only meaningful for field_type == multi_select — the fixed list of
+    # checkable options an entrant picks from (see contest_service
+    # ._validate_field_value). Null/empty for every other field type.
+    options: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     contest = relationship("Contest", back_populates="fields")
 
@@ -104,14 +111,13 @@ class ContestField(Base, TimestampMixin):
 
 
 class ContestEntry(Base, TimestampMixin):
-    """One participant's submission to one contest — at most one per runner
-    per contest (uq below), re-submittable in place after a rejection rather
-    than creating a second row."""
+    """One participant's submission to one contest. A runner may hold
+    several entries on the same contest (Contest.max_entries_per_runner
+    caps how many — enforced in contest_service, not by a DB constraint);
+    each one is re-submittable in place after a rejection rather than
+    creating a second row for the same attempt."""
 
     __tablename__ = "contest_entries"
-    __table_args__ = (
-        UniqueConstraint("contest_id", "runner_id", name="uq_contest_entry_runner"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     contest_id: Mapped[int] = mapped_column(
@@ -139,9 +145,7 @@ class ContestEntry(Base, TimestampMixin):
 
     contest = relationship("Contest", back_populates="entries")
     runner = relationship("User")
-    values = relationship(
-        "ContestEntryValue", back_populates="entry", cascade="all, delete-orphan"
-    )
+    values = relationship("ContestEntryValue", back_populates="entry", cascade="all, delete-orphan")
     votes = relationship("ContestVote", back_populates="entry", cascade="all, delete-orphan")
 
     def __str__(self) -> str:

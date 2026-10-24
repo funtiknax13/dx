@@ -12,6 +12,8 @@ from app.services.contest_service import (
     can_vote,
     cast_vote,
     contest_phase,
+    get_entries,
+    parse_json_list,
     publish_results,
     set_placement,
     submit_entry,
@@ -261,7 +263,12 @@ async def test_resubmit_after_rejection_clears_status_and_reason(session: AsyncS
     await session.flush()
 
     updated = await submit_entry(
-        session, contest, runner, {link_field.id: "https://example.com/b"}, now=NOW
+        session,
+        contest,
+        runner,
+        {link_field.id: "https://example.com/b"},
+        entry_id=entry.id,
+        now=NOW,
     )
     await session.commit()
 
@@ -286,8 +293,219 @@ async def test_submit_entry_blocked_once_approved(session: AsyncSession) -> None
 
     with pytest.raises(ValueError, match="подтвержд"):
         await submit_entry(
-            session, contest, runner, {link_field.id: "https://example.com/b"}, now=NOW
+            session,
+            contest,
+            runner,
+            {link_field.id: "https://example.com/b"},
+            entry_id=entry.id,
+            now=NOW,
         )
+
+
+# --- multi_select -----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_multi_select_requires_at_least_one_option_when_required(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-ms1@example.com")
+    runner = await make_user(session, "runner-ms1@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(
+        session,
+        contest,
+        field_type=ContestFieldType.multi_select,
+        options=["Зима", "Весна", "Лето", "Осень"],
+    )
+
+    with pytest.raises(ContestValidationError) as exc_info:
+        await submit_entry(session, contest, runner, {field.id: "[]"}, now=NOW)
+    assert field.id in exc_info.value.errors
+
+
+@pytest.mark.asyncio
+async def test_multi_select_rejects_option_not_in_list(session: AsyncSession) -> None:
+    org = await make_user(session, "org-ms2@example.com")
+    runner = await make_user(session, "runner-ms2@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(
+        session, contest, field_type=ContestFieldType.multi_select, options=["Зима", "Лето"]
+    )
+
+    with pytest.raises(ContestValidationError) as exc_info:
+        await submit_entry(session, contest, runner, {field.id: '["Зима", "Невидимка"]'}, now=NOW)
+    assert field.id in exc_info.value.errors
+
+
+@pytest.mark.asyncio
+async def test_multi_select_accepts_valid_selection(session: AsyncSession) -> None:
+    org = await make_user(session, "org-ms3@example.com")
+    runner = await make_user(session, "runner-ms3@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(
+        session,
+        contest,
+        field_type=ContestFieldType.multi_select,
+        options=["Зима", "Весна", "Лето", "Осень"],
+    )
+
+    entry = await submit_entry(session, contest, runner, {field.id: '["Зима", "Лето"]'}, now=NOW)
+    await session.commit()
+    values = {v.field_id: v.value for v in entry.values}
+    assert parse_json_list(values[field.id]) == ["Зима", "Лето"]
+
+
+def test_parse_json_list_handles_legacy_bare_string() -> None:
+    """Before multi-select/multi-image existed, an image field's value was
+    a bare media path — must still read back as a one-item list."""
+    assert parse_json_list(None) == []
+    assert parse_json_list("") == []
+    assert parse_json_list('["a", "b"]') == ["a", "b"]
+    assert parse_json_list("/media/contests/1/old.jpg") == ["/media/contests/1/old.jpg"]
+
+
+# --- multiple entries per runner ---------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_second_entry_creates_a_new_row_when_unlimited(session: AsyncSession) -> None:
+    org = await make_user(session, "org-multi1@example.com")
+    runner = await make_user(session, "runner-multi1@example.com")
+    contest, link_field, _dist_field = await _open_contest_with_fields(session, org)
+
+    first = await submit_entry(
+        session, contest, runner, {link_field.id: "https://example.com/a"}, now=NOW
+    )
+    second = await submit_entry(
+        session, contest, runner, {link_field.id: "https://example.com/b"}, now=NOW
+    )
+    await session.commit()
+
+    assert first.id != second.id
+    entries = await get_entries(session, contest.id, runner.id)
+    assert {e.id for e in entries} == {first.id, second.id}
+
+
+@pytest.mark.asyncio
+async def test_second_entry_blocked_once_cap_reached(session: AsyncSession) -> None:
+    org = await make_user(session, "org-multi2@example.com")
+    runner = await make_user(session, "runner-multi2@example.com")
+    contest = await make_contest(
+        session,
+        org,
+        is_published=True,
+        submissions_open_at=PAST,
+        submissions_close_at=SOON,
+        max_entries_per_runner=1,
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.url)
+
+    await submit_entry(session, contest, runner, {field.id: "https://example.com/a"}, now=NOW)
+
+    with pytest.raises(ValueError, match="не более 1"):
+        await submit_entry(session, contest, runner, {field.id: "https://example.com/b"}, now=NOW)
+
+
+@pytest.mark.asyncio
+async def test_editing_existing_entry_does_not_count_against_the_cap(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-multi3@example.com")
+    runner = await make_user(session, "runner-multi3@example.com")
+    contest = await make_contest(
+        session,
+        org,
+        is_published=True,
+        submissions_open_at=PAST,
+        submissions_close_at=SOON,
+        max_entries_per_runner=1,
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.url)
+
+    entry = await submit_entry(
+        session, contest, runner, {field.id: "https://example.com/a"}, now=NOW
+    )
+    updated = await submit_entry(
+        session, contest, runner, {field.id: "https://example.com/b"}, entry_id=entry.id, now=NOW
+    )
+    await session.commit()
+
+    assert updated.id == entry.id
+    entries = await get_entries(session, contest.id, runner.id)
+    assert len(entries) == 1
+
+
+@pytest.mark.asyncio
+async def test_cast_vote_blocks_self_vote_across_several_entries(session: AsyncSession) -> None:
+    """cast_vote checks the *target* entry's own runner_id, which already
+    generalizes correctly regardless of how many entries that runner has —
+    this just confirms it for a runner holding two."""
+    org = await make_user(session, "org-multi4@example.com")
+    runner = await make_user(session, "runner-multi4@example.com")
+    contest = await _voting_contest(session, org)
+    first = ContestEntry(
+        contest_id=contest.id,
+        runner_id=runner.id,
+        status=ModerationStatus.approved,
+        submitted_at=PAST,
+    )
+    second = ContestEntry(
+        contest_id=contest.id,
+        runner_id=runner.id,
+        status=ModerationStatus.approved,
+        submitted_at=PAST,
+    )
+    session.add_all([first, second])
+    await session.flush()
+
+    with pytest.raises(ValueError, match="свою заявку"):
+        await cast_vote(session, contest, runner, first, now=NOW)
+    with pytest.raises(ValueError, match="свою заявку"):
+        await cast_vote(session, contest, runner, second, now=NOW)
+
+
+# --- grace period --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_submission_accepted_within_grace_window_after_close(
+    session: AsyncSession,
+) -> None:
+    org = await make_user(session, "org-grace1@example.com")
+    runner = await make_user(session, "runner-grace1@example.com")
+    close_at = NOW - timedelta(minutes=5)
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=close_at
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.url)
+
+    # Phase has already flipped to submissions_closed for everyone...
+    assert contest_phase(contest, NOW) == "submissions_closed"
+    assert can_submit(contest, NOW) is False
+    # ...but submit_entry itself still accepts it, undisclosed grace window.
+    entry = await submit_entry(session, contest, runner, {field.id: "https://example.com"}, now=NOW)
+    assert entry.status == ModerationStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_submission_rejected_once_grace_window_elapses(session: AsyncSession) -> None:
+    org = await make_user(session, "org-grace2@example.com")
+    runner = await make_user(session, "runner-grace2@example.com")
+    close_at = NOW - timedelta(minutes=30)
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=close_at
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.url)
+
+    with pytest.raises(ValueError, match="заверш"):
+        await submit_entry(session, contest, runner, {field.id: "https://example.com"}, now=NOW)
 
 
 # --- voting -----------------------------------------------------

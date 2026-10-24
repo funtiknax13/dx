@@ -7,11 +7,13 @@ Event/Group), and entry moderation reuses ModerationStatus/the
 reject-with-reason-then-resubmit flow already built for Result.
 """
 
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.timezone import now_msk
 from app.models.contest import Contest, ContestEntry, ContestEntryValue, ContestField, ContestVote
 from app.models.enums import ContestFieldType, ModerationStatus
@@ -78,9 +80,46 @@ def can_vote(contest: Contest, now: datetime | None = None) -> bool:
     return contest_phase(contest, now) == "voting_open"
 
 
+def _submissions_still_accepted(contest: Contest, now: datetime) -> bool:
+    """Same as can_submit, plus a short *undisclosed* grace window right
+    after the deadline (settings.contest_submission_grace_minutes) to
+    rescue a request already in flight when the clock ran out. Never shown
+    anywhere — the displayed phase/countdown (can_submit, used everywhere
+    else) flips exactly on time; this only widens what the server itself
+    still accepts."""
+    if can_submit(contest, now):
+        return True
+    sc = contest.submissions_close_at
+    if sc is None or contest_phase(contest, now) != "submissions_closed":
+        return False
+    grace = timedelta(minutes=settings.contest_submission_grace_minutes)
+    return now <= _aware(sc) + grace
+
+
+def parse_json_list(value: str | None) -> list[str]:
+    """Shared "JSON array in a text column" convention for multi_select
+    selections and image field values (one or more saved paths) — a bare
+    non-JSON string is a legacy single value from before either existed."""
+    if not value:
+        return []
+    try:
+        data = json.loads(value)
+    except json.JSONDecodeError:
+        return [value]
+    return [str(x) for x in data] if isinstance(data, list) else [value]
+
+
 def _validate_field_value(field: ContestField, raw: str) -> str | None:
     """None on success, else the error message for this field."""
     value = raw.strip()
+    if field.field_type == ContestFieldType.multi_select:
+        selected = parse_json_list(value)
+        if not selected:
+            return "Обязательное поле" if field.required else None
+        allowed = set(field.options or [])
+        if any(s not in allowed for s in selected):
+            return "Выбран вариант, которого нет в списке"
+        return None
     if not value:
         return "Обязательное поле" if field.required else None
     if field.field_type == ContestFieldType.number:
@@ -94,12 +133,24 @@ def _validate_field_value(field: ContestField, raw: str) -> str | None:
     return None
 
 
-async def get_entry(session: AsyncSession, contest_id: int, runner_id: int) -> ContestEntry | None:
-    entry: ContestEntry | None = await session.scalar(
-        select(ContestEntry).where(
-            ContestEntry.contest_id == contest_id, ContestEntry.runner_id == runner_id
+async def get_entries(session: AsyncSession, contest_id: int, runner_id: int) -> list[ContestEntry]:
+    """All of this runner's entries on this contest, newest first — a
+    runner may hold several (see Contest.max_entries_per_runner)."""
+    return list(
+        await session.scalars(
+            select(ContestEntry)
+            .where(ContestEntry.contest_id == contest_id, ContestEntry.runner_id == runner_id)
+            .order_by(ContestEntry.id.desc())
         )
     )
+
+
+async def get_owned_entry(
+    session: AsyncSession, contest_id: int, runner_id: int, entry_id: int
+) -> ContestEntry | None:
+    entry = await session.get(ContestEntry, entry_id)
+    if entry is None or entry.contest_id != contest_id or entry.runner_id != runner_id:
+        return None
     return entry
 
 
@@ -109,15 +160,18 @@ async def submit_entry(
     runner: User,
     raw_values: dict[int, str],
     *,
+    entry_id: int | None = None,
     now: datetime | None = None,
 ) -> ContestEntry:
-    """Create the runner's entry, or update + resubmit it for review if one
-    already exists (and isn't already approved — settled, same as an
-    approved Result). File-type fields (image/gpx) are passed here as
-    already-saved media paths — the caller (the API route) handles the
-    actual upload via media_service before calling this."""
+    """Create a new entry for the runner (subject to
+    Contest.max_entries_per_runner), or update + resubmit one of their
+    existing entries for review if `entry_id` is given (and it isn't
+    already approved — settled, same as an approved Result). File-type
+    fields (image/gpx) are passed here as already-saved media path(s) —
+    the caller (the API route) handles the actual upload via media_service
+    before calling this."""
     now = now or now_msk()
-    if not can_submit(contest, now):
+    if not _submissions_still_accepted(contest, now):
         raise ValueError("Приём конкурсных работ завершён, ожидайте результаты")
 
     fields = list(
@@ -135,11 +189,25 @@ async def submit_entry(
     if errors:
         raise ContestValidationError(errors)
 
-    entry = await get_entry(session, contest.id, runner.id)
-    if entry is not None and entry.status == ModerationStatus.approved:
-        raise ValueError("Заявка уже подтверждена администратором, изменить её нельзя")
+    entry: ContestEntry | None = None
+    if entry_id is not None:
+        entry = await get_owned_entry(session, contest.id, runner.id, entry_id)
+        if entry is None:
+            raise ValueError("Заявка не найдена")
+        if entry.status == ModerationStatus.approved:
+            raise ValueError("Заявка уже подтверждена администратором, изменить её нельзя")
 
     if entry is None:
+        if contest.max_entries_per_runner is not None:
+            count = await session.scalar(
+                select(func.count(ContestEntry.id)).where(
+                    ContestEntry.contest_id == contest.id, ContestEntry.runner_id == runner.id
+                )
+            )
+            if (count or 0) >= contest.max_entries_per_runner:
+                raise ValueError(
+                    f"Можно подать не более {contest.max_entries_per_runner} заявок на этот конкурс"
+                )
         entry = ContestEntry(
             contest_id=contest.id,
             runner_id=runner.id,

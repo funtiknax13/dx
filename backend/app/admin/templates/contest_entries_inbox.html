@@ -38,8 +38,15 @@
             {% set v = values.get(f.id) %}
             {% if not v %}—
             {% elif f.field_type.value == 'url' %}<a href="{{ v }}" target="_blank" rel="noreferrer">{{ v }}</a>
-            {% elif f.field_type.value == 'image' %}<img src="{{ v }}" alt="" style="max-width:220px; border-radius:var(--radius);">
+            {% elif f.field_type.value == 'image' %}
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                {% for path in v|json_list %}
+                <img src="{{ path }}" alt="" style="max-width:160px; border-radius:var(--radius);">
+                {% endfor %}
+              </div>
             {% elif f.field_type.value == 'gpx' %}<a href="{{ v }}" target="_blank" rel="noreferrer">Скачать GPX</a>
+            {% elif f.field_type.value == 'multi_select' %}
+              {% for opt in v|json_list %}<span class="chip chip-muted">{{ opt }}</span>{% endfor %}
             {% else %}{{ v }}
             {% endif %}
           </dd>

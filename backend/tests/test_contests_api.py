@@ -1,9 +1,11 @@
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import create_access_token
 from app.models.contest import ContestEntry
 from app.models.enums import ContestFieldType, ModerationStatus
@@ -16,6 +18,13 @@ PAST = datetime.now(UTC) - timedelta(days=10)
 SOON = datetime.now(UTC) + timedelta(days=1)
 
 _IMG = ("shot.png", b"fake-image-bytes", "image/png")
+_GPX = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>Test</name><trkseg>
+    <trkpt lat="55.7500" lon="37.6200"><ele>150.0</ele><time>2026-05-01T08:00:00Z</time></trkpt>
+    <trkpt lat="55.7510" lon="37.6210"><ele>152.0</ele><time>2026-05-01T08:05:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>"""
 
 
 def _auth(user_id: int) -> dict[str, str]:
@@ -123,7 +132,8 @@ async def test_submit_entry_with_text_and_file_fields(
     assert body["status"] == "pending"
     values = {v["field_id"]: v["value"] for v in body["values"]}
     assert values[link.id] == "https://example.com/route"
-    assert values[photo.id].startswith("/media/contests/")
+    photo_paths = json.loads(values[photo.id])
+    assert photo_paths and all(p.startswith("/media/contests/") for p in photo_paths)
 
 
 @pytest.mark.asyncio
@@ -160,17 +170,126 @@ async def test_resubmit_keeps_file_when_not_reuploaded(
         files={f"field_{photo.id}": _IMG},
     )
     assert first.status_code == 201, first.text
+    entry_id = first.json()["id"]
     first_photo_path = {v["field_id"]: v["value"] for v in first.json()["values"]}[photo.id]
 
     second = await client.post(
         f"/api/v1/contests/{contest.id}/entries",
         headers=_auth(runner.id),
-        data={f"field_{link.id}": "https://example.com/b"},
+        data={"entry_id": str(entry_id), f"field_{link.id}": "https://example.com/b"},
     )
     assert second.status_code == 201, second.text
     second_values = {v["field_id"]: v["value"] for v in second.json()["values"]}
     assert second_values[link.id] == "https://example.com/b"
     assert second_values[photo.id] == first_photo_path  # untouched
+
+
+@pytest.mark.asyncio
+async def test_submit_multi_select_field_stores_selection(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-ms-api1@example.com")
+    runner = await make_user(session, "runner-ms-api1@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(
+        session,
+        contest,
+        field_type=ContestFieldType.multi_select,
+        options=["Зима", "Весна", "Лето", "Осень"],
+    )
+    await session.commit()
+
+    resp = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{field.id}": json.dumps(["Зима", "Лето"])},
+    )
+    assert resp.status_code == 201, resp.text
+    values = {v["field_id"]: v["value"] for v in resp.json()["values"]}
+    assert json.loads(values[field.id]) == ["Зима", "Лето"]
+
+
+@pytest.mark.asyncio
+async def test_submit_several_images_caps_at_configured_max(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-img-api1@example.com")
+    runner = await make_user(session, "runner-img-api1@example.com")
+    contest, link, photo = await _open_contest(session, org)
+    await session.commit()
+
+    too_many = settings.contest_entry_max_images + 2
+    files = [
+        (f"field_{photo.id}", (f"shot{i}.png", b"fake-bytes", "image/png")) for i in range(too_many)
+    ]
+    resp = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{link.id}": "https://example.com/route"},
+        files=files,
+    )
+    assert resp.status_code == 201, resp.text
+    values = {v["field_id"]: v["value"] for v in resp.json()["values"]}
+    paths = json.loads(values[photo.id])
+    assert len(paths) == settings.contest_entry_max_images
+
+
+@pytest.mark.asyncio
+async def test_submit_second_entry_without_cap_creates_a_new_entry(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-multi-api1@example.com")
+    runner = await make_user(session, "runner-multi-api1@example.com")
+    contest, link, _photo = await _open_contest(session, org)
+    await session.commit()
+
+    first = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{link.id}": "https://example.com/a"},
+    )
+    second = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{link.id}": "https://example.com/b"},
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_submit_second_entry_blocked_once_cap_reached(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-multi-api2@example.com")
+    runner = await make_user(session, "runner-multi-api2@example.com")
+    contest = await make_contest(
+        session,
+        org,
+        is_published=True,
+        submissions_open_at=PAST,
+        submissions_close_at=SOON,
+        max_entries_per_runner=1,
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.url)
+    await session.commit()
+
+    first = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{field.id}": "https://example.com/a"},
+    )
+    assert first.status_code == 201
+
+    second = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{field.id}": "https://example.com/b"},
+    )
+    assert second.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -198,7 +317,7 @@ async def test_submit_entry_blocked_outside_window(
 
 
 @pytest.mark.asyncio
-async def test_my_entry_requires_auth_and_returns_null_when_absent(
+async def test_my_entries_requires_auth_and_returns_empty_when_absent(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     org = await make_user(session, "org-capi9@example.com")
@@ -206,12 +325,135 @@ async def test_my_entry_requires_auth_and_returns_null_when_absent(
     contest, _link, _photo = await _open_contest(session, org)
     await session.commit()
 
-    anon = await client.get(f"/api/v1/contests/{contest.id}/my-entry")
+    anon = await client.get(f"/api/v1/contests/{contest.id}/my-entries")
     assert anon.status_code == 401
 
-    resp = await client.get(f"/api/v1/contests/{contest.id}/my-entry", headers=_auth(runner.id))
+    resp = await client.get(f"/api/v1/contests/{contest.id}/my-entries", headers=_auth(runner.id))
     assert resp.status_code == 200
-    assert resp.json() is None
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_my_entries_lists_all_of_a_runners_entries(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-capi9b@example.com")
+    runner = await make_user(session, "runner-capi9b@example.com")
+    contest, link, _photo = await _open_contest(session, org)
+    await session.commit()
+
+    first = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{link.id}": "https://example.com/first"},
+    )
+    assert first.status_code == 201, first.text
+    second = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        data={f"field_{link.id}": "https://example.com/second"},
+    )
+    assert second.status_code == 201, second.text
+
+    resp = await client.get(f"/api/v1/contests/{contest.id}/my-entries", headers=_auth(runner.id))
+    assert resp.status_code == 200
+    ids = {e["id"] for e in resp.json()}
+    assert ids == {first.json()["id"], second.json()["id"]}
+
+
+# --- gpx route map -----------------------------------------------------
+
+
+async def _contest_with_gpx_field(session: AsyncSession, org):
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(
+        session, contest, field_type=ContestFieldType.gpx, required=True, visible_to_voters=True
+    )
+    return contest, field
+
+
+@pytest.mark.asyncio
+async def test_entry_route_map_visible_to_owner_while_pending(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-gpx-api1@example.com")
+    runner = await make_user(session, "runner-gpx-api1@example.com")
+    contest, field = await _contest_with_gpx_field(session, org)
+    await session.commit()
+
+    submit = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        files={f"field_{field.id}": ("route.gpx", _GPX.encode(), "application/gpx+xml")},
+    )
+    assert submit.status_code == 201, submit.text
+    entry_id = submit.json()["id"]
+
+    resp = await client.get(
+        f"/api/v1/contests/{contest.id}/entries/{entry_id}/values/{field.id}/route-map",
+        headers=_auth(runner.id),
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["track_points"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_entry_route_map_hidden_from_others_before_approval(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-gpx-api2@example.com")
+    runner = await make_user(session, "runner-gpx-api2@example.com")
+    other = await make_user(session, "other-gpx-api2@example.com")
+    contest, field = await _contest_with_gpx_field(session, org)
+    await session.commit()
+
+    submit = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(runner.id),
+        files={f"field_{field.id}": ("route.gpx", _GPX.encode(), "application/gpx+xml")},
+    )
+    entry_id = submit.json()["id"]
+
+    resp = await client.get(
+        f"/api/v1/contests/{contest.id}/entries/{entry_id}/values/{field.id}/route-map",
+        headers=_auth(other.id),
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_entry_route_map_visible_to_anyone_once_approved_during_voting(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    org = await make_user(session, "org-gpx-api3@example.com")
+    author = await make_user(session, "author-gpx-api3@example.com")
+    voter = await make_user(session, "voter-gpx-api3@example.com")
+    contest, field = await _contest_with_gpx_field(session, org)
+    await session.commit()
+
+    submit = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_auth(author.id),
+        files={f"field_{field.id}": ("route.gpx", _GPX.encode(), "application/gpx+xml")},
+    )
+    assert submit.status_code == 201, submit.text
+    entry_id = submit.json()["id"]
+
+    entry = await session.get(ContestEntry, entry_id)
+    assert entry is not None
+    entry.status = ModerationStatus.approved
+    contest.submissions_close_at = PAST + timedelta(days=1)
+    contest.voting_open_at = PAST + timedelta(days=2)
+    contest.voting_close_at = SOON
+    await session.commit()
+
+    resp = await client.get(
+        f"/api/v1/contests/{contest.id}/entries/{entry_id}/values/{field.id}/route-map",
+        headers=_auth(voter.id),
+    )
+    assert resp.status_code == 200, resp.text
 
 
 # --- voting -----------------------------------------------------

@@ -24,6 +24,7 @@ from app.models.contest import Contest
 from app.models.enums import StaffPermission, UserRole
 from app.models.event import Event
 from app.models.user import User
+from app.services.contest_service import parse_json_list
 from app.services.permissions_service import permissions_for
 
 SESSION_KEY = "admin_user_id"
@@ -48,6 +49,10 @@ templates.env.filters["local_dt"] = lambda dt: (
 templates.env.filters["local_input"] = lambda dt: (
     dt.astimezone(EVENT_TZ).strftime("%Y-%m-%dT%H:%M") if dt else ""
 )
+# A contest entry value for image/multi_select fields is a JSON-array-in-
+# text-column (see contest_service.parse_json_list) — this lets templates
+# iterate it directly instead of each one re-implementing the parse.
+templates.env.filters["json_list"] = parse_json_list
 
 
 def login_redirect() -> RedirectResponse:

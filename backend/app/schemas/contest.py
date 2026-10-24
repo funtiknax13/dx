@@ -11,6 +11,8 @@ class ContestFieldOut(BaseModel):
     field_type: str
     required: bool
     visible_to_voters: bool
+    # Only meaningful for field_type == "multi_select".
+    options: list[str] | None
 
 
 class ContestSummary(BaseModel):
@@ -36,6 +38,9 @@ class ContestDetail(BaseModel):
     voting_close_at: datetime | None
     votes_visible_live: bool
     results_published: bool
+    # Null = unlimited — lets the frontend show/hide "add another entry"
+    # without a separate request.
+    max_entries_per_runner: int | None
     # Only populated once the phase has moved past "upcoming" — before that
     # a contest is a pure teaser, no conditions shown (see contest_service).
     fields: list[ContestFieldOut] | None

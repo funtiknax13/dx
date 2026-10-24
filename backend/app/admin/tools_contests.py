@@ -55,6 +55,12 @@ def _parse_fields(raw: str) -> list[dict[str, Any]]:
         field_type = str(item.get("field_type") or "text")
         if field_type not in ContestFieldType.__members__:
             field_type = "text"
+        raw_options = item.get("options")
+        options = (
+            [o.strip()[:255] for o in raw_options if isinstance(o, str) and o.strip()]
+            if field_type == "multi_select" and isinstance(raw_options, list)
+            else None
+        )
         out.append(
             {
                 "id": item.get("id"),
@@ -63,6 +69,7 @@ def _parse_fields(raw: str) -> list[dict[str, Any]]:
                 "field_type": field_type,
                 "required": bool(item.get("required", True)),
                 "visible_to_voters": bool(item.get("visible_to_voters", True)),
+                "options": options or None,
             }
         )
     return out
@@ -90,6 +97,7 @@ async def _sync_fields(session: AsyncSession, contest: Contest, raw: str) -> Non
         field.field_type = ContestFieldType(item["field_type"])
         field.required = item["required"]
         field.visible_to_voters = item["visible_to_voters"]
+        field.options = item["options"]
     for field_id, field in existing.items():
         if field_id not in keep_ids:
             await session.delete(field)
@@ -134,6 +142,17 @@ async def contest_new_form(request: Request) -> HTMLResponse | RedirectResponse:
     )
 
 
+def _parse_max_entries(raw: str) -> int | None:
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
 @router.post("/contests/new", response_model=None)
 async def contest_new_submit(
     request: Request,
@@ -144,6 +163,7 @@ async def contest_new_submit(
     voting_open_at: str = Form(""),
     voting_close_at: str = Form(""),
     votes_visible_live: bool = Form(False),
+    max_entries_per_runner: str = Form(""),
     fields: str = Form(""),
 ) -> RedirectResponse:
     user = await require_permission(request, StaffPermission.contests)
@@ -159,6 +179,7 @@ async def contest_new_submit(
             voting_open_at=combine_local_datetime(voting_open_at),
             voting_close_at=combine_local_datetime(voting_close_at),
             votes_visible_live=votes_visible_live,
+            max_entries_per_runner=_parse_max_entries(max_entries_per_runner),
         )
         session.add(contest)
         await session.flush()
@@ -242,6 +263,7 @@ async def contest_edit_submit(
     voting_open_at: str = Form(""),
     voting_close_at: str = Form(""),
     votes_visible_live: bool = Form(False),
+    max_entries_per_runner: str = Form(""),
     fields: str = Form(""),
 ) -> RedirectResponse:
     user = await require_permission(request, StaffPermission.contests)
@@ -258,6 +280,7 @@ async def contest_edit_submit(
         contest.voting_open_at = combine_local_datetime(voting_open_at)
         contest.voting_close_at = combine_local_datetime(voting_close_at)
         contest.votes_visible_live = votes_visible_live
+        contest.max_entries_per_runner = _parse_max_entries(max_entries_per_runner)
         await _sync_fields(session, contest, fields)
         await session.commit()
     return RedirectResponse(
@@ -439,6 +462,9 @@ async def approve_contest_entry(
                 recipient=entry.runner,
                 admin=user,
                 body=_entry_decision_message(entry, contest, accepted=True),
+                email_subject="Итоги по заявке на конкурс — DАЙ ХАРD Чебоксары",
+                email_kicker="Конкурсы",
+                email_intro=f"По вашей заявке на конкурс «{contest.title}»:",
             )
         await session.commit()
     return RedirectResponse(f"/admin-tools/contests/{contest_id}/entries?flash=Заявка принята", 303)
@@ -474,6 +500,9 @@ async def reject_contest_entry(
                 recipient=entry.runner,
                 admin=user,
                 body=_entry_decision_message(entry, contest, accepted=False),
+                email_subject="Итоги по заявке на конкурс — DАЙ ХАРD Чебоксары",
+                email_kicker="Конкурсы",
+                email_intro=f"По вашей заявке на конкурс «{contest.title}»:",
             )
         await session.commit()
     return RedirectResponse(

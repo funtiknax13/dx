@@ -1,3 +1,4 @@
+import json
 from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -7,7 +8,8 @@ from sqlalchemy.orm import selectinload
 from starlette.datastructures import UploadFile
 
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
-from app.models.contest import Contest, ContestEntry, ContestField
+from app.core.config import settings
+from app.models.contest import Contest, ContestEntry, ContestEntryValue, ContestField
 from app.models.enums import ContestFieldType, ModerationStatus
 from app.schemas.contest import (
     ContestDetail,
@@ -18,13 +20,16 @@ from app.schemas.contest import (
     MyEntryOut,
     PublicEntryOut,
 )
+from app.schemas.group import RouteMap
 from app.services import contest_service
 from app.services.avatar_service import visible_avatar
 from app.services.contest_service import ContestValidationError
+from app.services.gpx_service import TrackParseError, parse_gpx
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
     delete_media,
+    media_path_to_fs,
     save_image,
     save_track_file,
 )
@@ -50,6 +55,7 @@ def _field_out(field: ContestField) -> ContestFieldOut:
         field_type=field.field_type.value,
         required=field.required,
         visible_to_voters=field.visible_to_voters,
+        options=field.options,
     )
 
 
@@ -106,19 +112,12 @@ async def contest_detail(contest_id: int, session: SessionDep) -> ContestDetail:
         voting_close_at=contest.voting_close_at,
         votes_visible_live=contest.votes_visible_live,
         results_published=contest.results_published_at is not None,
+        max_entries_per_runner=contest.max_entries_per_runner,
         fields=fields,
     )
 
 
-@router.get("/{contest_id}/my-entry", response_model=MyEntryOut | None)
-async def my_contest_entry(
-    contest_id: int, user: CurrentUser, session: SessionDep
-) -> MyEntryOut | None:
-    await _get_published_contest(session, contest_id)
-    entry = await contest_service.get_entry(session, contest_id, user.id)
-    if entry is None:
-        return None
-    await session.refresh(entry, attribute_names=["values"])
+def _my_entry_out(entry: ContestEntry) -> MyEntryOut:
     return MyEntryOut(
         id=entry.id,
         status=entry.status.value,
@@ -127,6 +126,17 @@ async def my_contest_entry(
         placement=entry.placement,
         values=[ContestEntryValueOut(field_id=v.field_id, value=v.value) for v in entry.values],
     )
+
+
+@router.get("/{contest_id}/my-entries", response_model=list[MyEntryOut])
+async def my_contest_entries(
+    contest_id: int, user: CurrentUser, session: SessionDep
+) -> list[MyEntryOut]:
+    await _get_published_contest(session, contest_id)
+    entries = await contest_service.get_entries(session, contest_id, user.id)
+    for entry in entries:
+        await session.refresh(entry, attribute_names=["values"])
+    return [_my_entry_out(e) for e in entries]
 
 
 @router.post(
@@ -143,37 +153,52 @@ async def submit_contest_entry(
             .order_by(ContestField.position)
         )
     )
-    existing = await contest_service.get_entry(session, contest_id, user.id)
-    if existing is not None:
-        await session.refresh(existing, attribute_names=["values"])
-    existing_values = {v.field_id: v.value for v in existing.values} if existing else {}
 
     form = await request.form()
+    raw_entry_id = form.get("entry_id")
+    entry_id = int(cast(str, raw_entry_id)) if raw_entry_id else None
+
+    existing_values: dict[int, str | None] = {}
+    if entry_id is not None:
+        existing = await contest_service.get_owned_entry(session, contest_id, user.id, entry_id)
+        if existing is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry not found")
+        await session.refresh(existing, attribute_names=["values"])
+        existing_values = {v.field_id: v.value for v in existing.values}
+
     raw_values: dict[int, str] = {}
     saved_paths: list[str] = []
     try:
         for field in fields:
-            part = form.get(f"field_{field.id}")
-            if field.field_type in (ContestFieldType.image, ContestFieldType.gpx):
+            if field.field_type == ContestFieldType.image:
+                uploads = [
+                    cast(FastAPIUploadFile, part)
+                    for part in form.getlist(f"field_{field.id}")
+                    if isinstance(part, UploadFile) and part.filename
+                ][: settings.contest_entry_max_images]
+                if uploads:
+                    paths = [await save_image(u, f"contests/{contest_id}") for u in uploads]
+                    saved_paths.extend(paths)
+                    raw_values[field.id] = json.dumps(paths)
+                else:
+                    # No new files this submit — keep whatever's already
+                    # stored, so fixing a typo in another field doesn't
+                    # force re-uploading photos every time.
+                    raw_values[field.id] = existing_values.get(field.id) or ""
+            elif field.field_type == ContestFieldType.gpx:
+                part = form.get(f"field_{field.id}")
                 if isinstance(part, UploadFile) and part.filename:
                     # request.form() hands back Starlette's base UploadFile,
                     # not fastapi's subclass — structurally identical for
                     # what save_image/save_track_file actually use.
                     upload = cast(FastAPIUploadFile, part)
-                    if field.field_type == ContestFieldType.image:
-                        path = await save_image(upload, f"contests/{contest_id}")
-                    else:
-                        path, _content, _ext = await save_track_file(
-                            upload, f"contests/{contest_id}"
-                        )
+                    path, _content, _ext = await save_track_file(upload, f"contests/{contest_id}")
                     saved_paths.append(path)
                     raw_values[field.id] = path
                 else:
-                    # No new file this submit — keep whatever's already
-                    # stored, so fixing a typo in another field doesn't
-                    # force re-uploading a GPX every time.
                     raw_values[field.id] = existing_values.get(field.id) or ""
             else:
+                part = form.get(f"field_{field.id}")
                 raw_values[field.id] = str(part) if part is not None else ""
     except (FileTooLargeError, InvalidFileTypeError) as exc:
         for path in saved_paths:
@@ -181,7 +206,9 @@ async def submit_contest_entry(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     try:
-        entry = await contest_service.submit_entry(session, contest, user, raw_values)
+        entry = await contest_service.submit_entry(
+            session, contest, user, raw_values, entry_id=entry_id
+        )
     except ContestValidationError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -190,14 +217,7 @@ async def submit_contest_entry(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await session.commit()
-    return MyEntryOut(
-        id=entry.id,
-        status=entry.status.value,
-        rejection_reason=entry.rejection_reason,
-        submitted_at=entry.submitted_at,
-        placement=entry.placement,
-        values=[ContestEntryValueOut(field_id=v.field_id, value=v.value) for v in entry.values],
-    )
+    return _my_entry_out(entry)
 
 
 @router.get("/{contest_id}/entries", response_model=ContestEntriesOut)
@@ -255,6 +275,62 @@ async def list_contest_entries(
     ]
     return ContestEntriesOut(
         entries=out, votes_visible=votes_visible, my_vote_entry_id=my_vote_entry_id
+    )
+
+
+@router.get("/{contest_id}/entries/{entry_id}/values/{field_id}/route-map", response_model=RouteMap)
+async def entry_route_map(
+    contest_id: int,
+    entry_id: int,
+    field_id: int,
+    user: OptionalUser,
+    session: SessionDep,
+) -> RouteMap:
+    """Same parse-and-return-points approach as GET /groups/{id}/route-map —
+    lets a gpx-type entry field render as a map, not just a download link.
+    Visible to the entry's own owner any time (so they can preview their
+    submission before it's moderated), or to anyone once the entry is
+    approved and the field is public — the same visibility list_contest_entries
+    already applies to this field's raw value."""
+    contest = await _get_published_contest(session, contest_id)
+    entry = await session.get(ContestEntry, entry_id)
+    field = await session.get(ContestField, field_id)
+    if (
+        entry is None
+        or field is None
+        or entry.contest_id != contest_id
+        or field.contest_id != contest_id
+        or field.field_type != ContestFieldType.gpx
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry field not found")
+
+    is_owner = user is not None and user.id == entry.runner_id
+    if not is_owner:
+        phase = contest_service.contest_phase(contest)
+        if (
+            entry.status != ModerationStatus.approved
+            or not field.visible_to_voters
+            or phase not in _ENTRIES_VISIBLE_PHASES
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry field not found")
+
+    value = await session.scalar(
+        select(ContestEntryValue.value).where(
+            ContestEntryValue.entry_id == entry_id, ContestEntryValue.field_id == field_id
+        )
+    )
+    if not value:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No route for this field")
+    fs = media_path_to_fs(value)
+    try:
+        with open(fs, "rb") as f:
+            parsed = parse_gpx(f.read())
+    except (FileNotFoundError, TrackParseError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Route file unavailable") from exc
+    return RouteMap(
+        track_points=parsed.track_points,
+        elevation_profile=parsed.elevation_profile,
+        distance_km=parsed.distance_km,
     )
 
 

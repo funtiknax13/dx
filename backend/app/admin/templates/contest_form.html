@@ -93,6 +93,12 @@
       </div>
 
       <div class="field">
+        <label for="max_entries_per_runner">Лимит заявок на одного участника</label>
+        <input id="max_entries_per_runner" type="number" min="1" step="1" name="max_entries_per_runner" value="{{ contest.max_entries_per_runner if contest and contest.max_entries_per_runner else '' }}" style="max-width:160px;" />
+        <p class="hint">Пусто — без ограничений, участник может подать сколько угодно заявок.</p>
+      </div>
+
+      <div class="field">
         <label>Поля заявки (конструктор)</label>
         <p class="hint">
           Что участник должен заполнить/загрузить. Чекбокс «на странице
@@ -130,11 +136,12 @@
       ['number', 'Число'],
       ['url', 'Ссылка'],
       ['image', 'Изображение'],
-      ['gpx', 'GPX-файл']
+      ['gpx', 'GPX-файл'],
+      ['multi_select', 'Выбор из списка (чекбоксы)']
     ];
     var EXISTING = [
       {% for f in fields %}
-      {id: {{ f.id }}, label: {{ f.label|tojson }}, description: {{ (f.description or '')|tojson }}, field_type: {{ f.field_type.value|tojson }}, required: {{ f.required|tojson }}, visible_to_voters: {{ f.visible_to_voters|tojson }}},
+      {id: {{ f.id }}, label: {{ f.label|tojson }}, description: {{ (f.description or '')|tojson }}, field_type: {{ f.field_type.value|tojson }}, required: {{ f.required|tojson }}, visible_to_voters: {{ f.visible_to_voters|tojson }}, options: {{ (f.options or [])|tojson }}},
       {% endfor %}
     ];
 
@@ -145,6 +152,7 @@
     function makeRow(f){
       f = f || {};
       var tr = document.createElement('tr');
+      tr.className = 'cf-field-row';
       tr.dataset.id = f.id || '';
       var typeOptions = FIELD_TYPES.map(function(t){
         return '<option value="' + t[0] + '"' + (f.field_type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>';
@@ -160,28 +168,100 @@
       tr.querySelector('.cf-desc').value = f.description || '';
       tr.querySelector('.cf-required').checked = f.required !== false;
       tr.querySelector('.cf-visible').checked = f.visible_to_voters !== false;
-      tr.querySelector('.cf-del').addEventListener('click', function(){ tr.remove(); sync(); });
+      tr.querySelector('.cf-del').addEventListener('click', function(){
+        tr.remove();
+        if (tr.optionsRow) tr.optionsRow.remove();
+        sync();
+      });
       Array.prototype.forEach.call(tr.querySelectorAll('input, select'), function(el){
         el.addEventListener('input', sync);
         el.addEventListener('change', sync);
       });
       return tr;
     }
-    function addRow(f){ rows.appendChild(makeRow(f)); }
+
+    // Nested "option + delete" rows, shown only while the field's own type
+    // is multi_select — toggled by listening to that same <select>.
+    function makeOptionsRow(f, fieldTr){
+      var tr = document.createElement('tr');
+      tr.className = 'cf-options-row';
+      var td = document.createElement('td');
+      td.colSpan = 6;
+      td.style.padding = '2px 6px 10px 24px';
+      var wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.flexDirection = 'column';
+      wrap.style.gap = '4px';
+      td.appendChild(wrap);
+      tr.appendChild(td);
+
+      function addOption(value){
+        var row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.gap = '6px';
+        row.innerHTML =
+          '<input type="text" class="cf-option" placeholder="Вариант, например «Зима»" style="flex:1 1 auto;">' +
+          '<button type="button" class="btn secondary cf-opt-del" style="padding:2px 9px;">✕</button>';
+        var input = row.querySelector('.cf-option');
+        input.value = value || '';
+        input.addEventListener('input', sync);
+        row.querySelector('.cf-opt-del').addEventListener('click', function(){ row.remove(); sync(); });
+        wrap.appendChild(row);
+      }
+      (f.options && f.options.length ? f.options : ['']).forEach(addOption);
+
+      var addOptBtn = document.createElement('button');
+      addOptBtn.type = 'button';
+      addOptBtn.className = 'btn secondary btn-sm';
+      addOptBtn.style.alignSelf = 'flex-start';
+      addOptBtn.style.marginTop = '4px';
+      addOptBtn.textContent = '+ добавить вариант';
+      addOptBtn.addEventListener('click', function(){ addOption(''); sync(); });
+      td.appendChild(addOptBtn);
+
+      tr.collectOptions = function(){
+        var out = [];
+        Array.prototype.forEach.call(wrap.querySelectorAll('.cf-option'), function(inp){
+          var v = inp.value.trim();
+          if (v) out.push(v);
+        });
+        return out;
+      };
+      function updateVisibility(){
+        tr.style.display = fieldTr.querySelector('.cf-type').value === 'multi_select' ? '' : 'none';
+      }
+      fieldTr.querySelector('.cf-type').addEventListener('change', updateVisibility);
+      updateVisibility();
+      return tr;
+    }
+
+    function addRow(f){
+      f = f || {};
+      var tr = makeRow(f);
+      var optionsTr = makeOptionsRow(f, tr);
+      tr.optionsRow = optionsTr;
+      rows.appendChild(tr);
+      rows.appendChild(optionsTr);
+    }
 
     function collect(){
       var out = [];
-      Array.prototype.forEach.call(rows.querySelectorAll('tr'), function(tr){
+      Array.prototype.forEach.call(rows.querySelectorAll('tr.cf-field-row'), function(tr){
         var label = tr.querySelector('.cf-label').value.trim();
         if (!label) return;
-        out.push({
+        var fieldType = tr.querySelector('.cf-type').value;
+        var item = {
           id: tr.dataset.id ? parseInt(tr.dataset.id, 10) : null,
           label: label,
           description: tr.querySelector('.cf-desc').value.trim(),
-          field_type: tr.querySelector('.cf-type').value,
+          field_type: fieldType,
           required: tr.querySelector('.cf-required').checked,
           visible_to_voters: tr.querySelector('.cf-visible').checked
-        });
+        };
+        if (fieldType === 'multi_select' && tr.optionsRow) {
+          item.options = tr.optionsRow.collectOptions();
+        }
+        out.push(item);
       });
       return out;
     }

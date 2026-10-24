@@ -196,6 +196,85 @@ async def test_edit_contest_syncs_fields_add_update_remove(
 
 
 @pytest.mark.asyncio
+async def test_create_contest_with_multi_select_field_and_entries_cap(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-ctor3@example.com", UserRole.admin)
+    org = await _organizer_with_contests(session, "org-ctor3@example.com", admin)
+    await session.commit()
+    await _login(client, org.id)
+
+    fields_json = json.dumps(
+        [
+            {
+                "id": None,
+                "label": "Сезонность",
+                "description": "",
+                "field_type": "multi_select",
+                "required": True,
+                "visible_to_voters": True,
+                "options": ["Зима", "Весна", "", "Лето", "Осень"],
+            }
+        ]
+    )
+    resp = await client.post(
+        "/admin-tools/contests/new",
+        data={
+            "title": "Конкурс сезонов",
+            "description": "",
+            "submissions_open_at": "",
+            "submissions_close_at": "",
+            "voting_open_at": "",
+            "voting_close_at": "",
+            "max_entries_per_runner": "3",
+            "fields": fields_json,
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+
+    contest = await session.scalar(select(Contest).where(Contest.title == "Конкурс сезонов"))
+    assert contest is not None
+    assert contest.max_entries_per_runner == 3
+    field = await session.scalar(select(ContestField).where(ContestField.contest_id == contest.id))
+    assert field is not None
+    # Blank option dropped, the rest kept in order.
+    assert field.options == ["Зима", "Весна", "Лето", "Осень"]
+
+
+@pytest.mark.asyncio
+async def test_max_entries_per_runner_blank_means_unlimited(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-ctor4@example.com", UserRole.admin)
+    org = await _organizer_with_contests(session, "org-ctor4@example.com", admin)
+    contest = await make_contest(session, org, max_entries_per_runner=5)
+    await session.commit()
+    contest_id, contest_title = contest.id, contest.title
+    await _login(client, org.id)
+
+    resp = await client.post(
+        f"/admin-tools/contests/{contest_id}/edit",
+        data={
+            "title": contest_title,
+            "description": "",
+            "submissions_open_at": "",
+            "submissions_close_at": "",
+            "voting_open_at": "",
+            "voting_close_at": "",
+            "max_entries_per_runner": "",
+            "fields": "",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    session.expire_all()
+    refreshed = await session.get(Contest, contest_id)
+    assert refreshed is not None
+    assert refreshed.max_entries_per_runner is None
+
+
+@pytest.mark.asyncio
 async def test_publish_and_unpublish_toggle(session: AsyncSession, client: AsyncClient) -> None:
     admin = await make_user(session, "admin-pub1@example.com", UserRole.admin)
     org = await _organizer_with_contests(session, "org-pub1@example.com", admin)

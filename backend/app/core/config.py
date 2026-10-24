@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # the moderation queue flags it for the admin's attention.
     result_distance_mismatch_km: float = 1.5
 
+    # Contests: how many extra minutes submit_entry keeps accepting a POST
+    # past Contest.submissions_close_at — not shown anywhere in the UI (the
+    # displayed phase/countdown still flips exactly on time), it only rescues
+    # a request already in flight when the deadline passed.
+    contest_submission_grace_minutes: int = 10
+    contest_entry_max_images: int = 10
+
     # Altcha (self-hosted, proof-of-work) — no external service, no signup. Set
     # a random secret (e.g. `openssl rand -hex 32`) to enable; leave empty to
     # disable captcha entirely (dev/tests). This key both signs challenges and

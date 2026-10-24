@@ -44,19 +44,37 @@ async def create_staff_ticket(
     admin: User | None,
     body: str,
     closed: bool = True,
+    email_subject: str | None = None,
+    email_kicker: str | None = None,
+    email_intro: str | None = None,
 ) -> SupportTicket:
     """A ticket staff opens *to* a runner (the reverse of the usual flow) — e.g.
     to tell them a submitted result wasn't accepted at moderation. Opens already
     resolved (closed) with a single staff message; the runner gets the same
     notification email as any staff reply (see add_message) and can still reply
-    to reopen the thread if they want to discuss it."""
+    to reopen the thread if they want to discuss it.
+
+    The email_* overrides exist because this helper is also used for things
+    that were never a support request the runner opened (a contest entry
+    decision, say) — left unset, the email reads like a generic support
+    reply, which is what every other caller (avatars/results/profile
+    review — genuine moderation-of-a-support-adjacent-action cases) wants."""
     ticket = SupportTicket(
         status=TicketStatus.closed if closed else TicketStatus.open,
         created_by_user_id=recipient.id,
     )
     session.add(ticket)
     await session.flush()
-    await add_message(session, ticket, sender=admin, is_staff=True, body=body)
+    await add_message(
+        session,
+        ticket,
+        sender=admin,
+        is_staff=True,
+        body=body,
+        email_subject=email_subject,
+        email_kicker=email_kicker,
+        email_intro=email_intro,
+    )
     return ticket
 
 
@@ -67,6 +85,9 @@ async def add_message(
     sender: User | None,
     is_staff: bool,
     body: str,
+    email_subject: str | None = None,
+    email_kicker: str | None = None,
+    email_intro: str | None = None,
 ) -> SupportMessage:
     """Append a message. A staff-closed ticket is not reopened here — only staff
     can reopen it (the reporter-reply endpoint blocks replies once closed), so a
@@ -84,15 +105,20 @@ async def add_message(
         recipient = await session.get(User, ticket.created_by_user_id)
         if recipient is not None and not recipient.is_guest:
             link = f"{settings.frontend_origin}/support/tickets/{ticket.id}"
+            subject = email_subject or "Ответ в поддержке — DАЙ ХАРD Чебоксары"
+            kicker = email_kicker or "Поддержка"
+            intro = email_intro or "На ваше обращение в поддержку DАЙ ХАРD пришёл ответ:"
             await send_email(
                 recipient.email,
-                "Ответ в поддержке — DАЙ ХАРD Чебоксары",
+                subject,
                 f"Здравствуйте, {recipient.first_name}!\n\n"
-                f"На ваше обращение в поддержку DАЙ ХАРD пришёл ответ:\n\n{body}\n\n"
+                f"{intro}\n\n{body}\n\n"
                 f"Посмотреть и ответить: {link}",
                 render_email_html(
                     "support_reply.html",
                     first_name=recipient.first_name,
+                    kicker=kicker,
+                    intro=intro,
                     reply_body=body,
                     link=link,
                 ),

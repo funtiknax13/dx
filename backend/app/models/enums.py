@@ -111,3 +111,4 @@ class ContestFieldType(enum.StrEnum):
     url = "url"
     image = "image"
     gpx = "gpx"
+    multi_select = "multi_select"
