@@ -432,7 +432,14 @@ export interface SupportTicketDetail {
 
 // --- Contests -----------------------------------------------------
 
-export type ContestFieldType = 'text' | 'long_text' | 'number' | 'url' | 'image' | 'gpx'
+export type ContestFieldType =
+  | 'text'
+  | 'long_text'
+  | 'number'
+  | 'url'
+  | 'image'
+  | 'gpx'
+  | 'multi_select'
 
 /** draft is never seen by the frontend (an unpublished contest 404s) —
  * listed for completeness, matching the backend's contest_phase values. */
@@ -452,6 +459,8 @@ export interface ContestField {
   field_type: ContestFieldType
   required: boolean
   visible_to_voters: boolean
+  // Only meaningful for field_type === 'multi_select'.
+  options: string[] | null
 }
 
 export interface ContestSummary {
@@ -477,6 +486,8 @@ export interface ContestDetail {
   voting_close_at: string | null
   votes_visible_live: boolean
   results_published: boolean
+  // null = unlimited — lets the UI show/hide "add another entry".
+  max_entries_per_runner: number | null
   // null while the phase is still "upcoming" — a pure teaser, see backend.
   fields: ContestField[] | null
 }

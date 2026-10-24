@@ -1,11 +1,11 @@
 import { api } from './client'
+import { mapRouteMap, type RawRouteMap } from '../lib/routeMap'
 import type {
   Group,
   GroupParticipation,
   GroupSignupState,
   Protocol,
   ProtocolRow,
-  RouteMap,
   SignupRoster,
 } from '../types'
 
@@ -58,18 +58,6 @@ interface RawProtocol {
   dnf: RawProtocolEntry[]
 }
 
-interface RawRoutePoint {
-  lat: number
-  lon: number
-  ele?: number | null
-}
-
-interface RawRouteMap {
-  track_points: RawRoutePoint[]
-  elevation_profile: { distance_km: number; ele: number | null }[]
-  distance_km: number
-}
-
 function mapGroup(raw: RawGroup): Group {
   return {
     id: raw.id,
@@ -117,30 +105,6 @@ function mapProtocol(raw: RawProtocol): Protocol {
   }
 }
 
-function elevationGain(profile: { ele: number | null }[]): { ascent: number; descent: number } {
-  let ascent = 0
-  let descent = 0
-  for (let i = 1; i < profile.length; i++) {
-    const prev = profile[i - 1].ele
-    const cur = profile[i].ele
-    if (prev == null || cur == null) continue
-    const delta = cur - prev
-    if (delta > 0) ascent += delta
-    else descent += -delta
-  }
-  return { ascent, descent }
-}
-
-function mapRouteMap(raw: RawRouteMap): RouteMap {
-  const { ascent, descent } = elevationGain(raw.elevation_profile)
-  return {
-    points: raw.track_points.map((p) => ({ lat: p.lat, lng: p.lon, ele: p.ele })),
-    elevation: raw.elevation_profile.map((p) => ({ distance_km: p.distance_km, ele: p.ele ?? 0 })),
-    distance_km: raw.distance_km,
-    ascent_m: ascent,
-    descent_m: descent,
-  }
-}
 
 interface RawSignupRosterEntry {
   signup_id: number

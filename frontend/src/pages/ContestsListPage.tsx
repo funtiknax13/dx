@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { contestsApi } from '../api/contests'
 import { media } from '../api/client'
 import { useAsync } from '../lib/useAsync'
-import { formatDate } from '../lib/format'
+import { formatDate, formatTime } from '../lib/format'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconArrow, IconTrophy } from '../components/ui/icons'
@@ -98,7 +98,9 @@ function ContestCard({ contest, index }: { contest: ContestSummary; index: numbe
         </h3>
         {contest.submissions_open_at && (
           <p className="mt-2 text-sm text-clay">
-            Приём заявок с {formatDate(contest.submissions_open_at, { day: 'numeric', month: 'long' })}
+            Приём заявок с{' '}
+            {formatDate(contest.submissions_open_at, { day: 'numeric', month: 'long' })}, в{' '}
+            {formatTime(contest.submissions_open_at)}
           </p>
         )}
         <span className="mt-auto inline-flex items-center gap-1.5 pt-5 font-mono text-xs uppercase tracking-[0.16em] text-signal">
