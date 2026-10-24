@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { eventsApi } from '../api/events'
+import { contestsApi } from '../api/contests'
 import { media } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import { formatDate } from '../lib/format'
@@ -9,7 +10,7 @@ import { Pager } from '../components/ui/Pager'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconArrow, IconCalendar, IconPin, IconRunner, IconSpark } from '../components/ui/icons'
-import type { EventSummary } from '../types'
+import type { ContestSummary, EventSummary } from '../types'
 
 type Tab = 'upcoming' | 'past' | 'all'
 const PAGE_SIZE = 20
@@ -33,6 +34,14 @@ export function EventsPage() {
     }
   }, [])
 
+  // The newest contest, if it hasn't fully wrapped up — a link to promote
+  // whatever's currently running, not just the nav's static /contests entry.
+  const contest = useAsync(async () => {
+    const contests = await contestsApi.list()
+    const newest = contests[0]
+    return newest && newest.phase !== 'voting_closed' ? newest : null
+  }, [])
+
   const grid = useAsync(() => {
     const upcoming = tab === 'upcoming' ? true : tab === 'past' ? false : undefined
     return eventsApi.list({ upcoming, page, page_size: PAGE_SIZE })
@@ -51,6 +60,7 @@ export function EventsPage() {
         nextEvent={summary.data?.nextEvent ?? null}
         upcomingCount={summary.data?.upcomingCount ?? 0}
         totalCount={summary.data?.totalCount ?? 0}
+        activeContest={contest.data ?? null}
       />
 
       <section id="events" className="container-page py-12 sm:py-16">
@@ -128,10 +138,12 @@ function Hero({
   nextEvent,
   upcomingCount,
   totalCount,
+  activeContest,
 }: {
   nextEvent: EventSummary | null
   upcomingCount: number
   totalCount: number
+  activeContest: ContestSummary | null
 }) {
   return (
     <section className="relative overflow-hidden bg-ink text-paper">
@@ -175,6 +187,14 @@ function Hero({
               <a href="#events" className="btn-volt btn-lg w-full text-center sm:w-auto">
                 Смотреть события
               </a>
+            )}
+            {activeContest && (
+              <Link
+                to={`/contests/${activeContest.id}`}
+                className="btn btn-lg w-full border border-paper/25 bg-transparent text-center text-paper hover:border-paper/50 hover:bg-paper/[0.06] sm:w-auto"
+              >
+                Текущий конкурс
+              </Link>
             )}
             <a
               href="/rating"

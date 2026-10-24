@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { contestsApi } from '../api/contests'
 import { media } from '../api/client'
 import { useAsync } from '../lib/useAsync'
-import { formatDate, formatTime } from '../lib/format'
+import { formatDate, formatTime, plural } from '../lib/format'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconArrow, IconTrophy } from '../components/ui/icons'
@@ -19,43 +19,68 @@ const PHASE_LABEL: Record<ContestPhase, string> = {
 
 export function ContestsListPage() {
   const { data, loading, error, reload } = useAsync(() => contestsApi.list(), [])
+  const activeCount = data?.filter((c) => c.phase !== 'voting_closed').length ?? 0
 
   return (
-    <div className="container-page py-12 sm:py-16">
-      <div className="mb-8">
-        <span className="eyebrow">
-          <span className="h-1.5 w-1.5 rounded-full bg-signal" /> Активности
-        </span>
-        <h1 className="mt-2 font-display text-3xl sm:text-4xl">Конкурсы</h1>
-      </div>
-
-      {loading ? (
-        <PageLoader />
-      ) : error ? (
-        <StatePanel
-          tone="error"
-          title="Не удалось загрузить конкурсы"
-          description={error}
-          icon={<IconTrophy />}
-          action={
-            <button onClick={reload} className="btn-ink">
-              Повторить
-            </button>
-          }
+    <div>
+      <header className="relative overflow-hidden bg-ink text-paper">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              'radial-gradient(55% 80% at 90% 0%, rgba(255,255,255,0.14), transparent 60%), radial-gradient(50% 70% at 5% 100%, rgba(255,255,255,0.07), transparent 60%)',
+          }}
         />
-      ) : !data || data.length === 0 ? (
-        <StatePanel
-          title="Пока нет ни одного конкурса"
-          description="Загляните позже — сообщество периодически объявляет конкурсы с голосованием."
-          icon={<IconTrophy />}
-        />
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {data.map((c, i) => (
-            <ContestCard key={c.id} contest={c} index={i} />
-          ))}
+        <div className="stripe absolute inset-x-0 top-0 h-1.5" />
+        <div className="container-page relative py-14 sm:py-16">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="eyebrow text-volt">
+              <IconTrophy width={16} height={16} /> Активности
+            </span>
+            {data && data.length > 0 && (
+              <span className="chip border border-paper/15 bg-paper/[0.06] text-paper/60">
+                {activeCount > 0
+                  ? `${activeCount} ${plural(activeCount, 'активный', 'активных', 'активных')}`
+                  : `${data.length} ${plural(data.length, 'конкурс', 'конкурса', 'конкурсов')}`}
+              </span>
+            )}
+          </div>
+          <h1 className="mt-3 font-display text-4xl leading-tight sm:text-5xl">Конкурсы</h1>
+          <p className="mt-3 max-w-xl text-paper/65">
+            Маршруты, фото и другие вызовы от сообщества — с заявками и голосованием участников.
+          </p>
         </div>
-      )}
+      </header>
+
+      <section className="container-page py-12 sm:py-16">
+        {loading ? (
+          <PageLoader />
+        ) : error ? (
+          <StatePanel
+            tone="error"
+            title="Не удалось загрузить конкурсы"
+            description={error}
+            icon={<IconTrophy />}
+            action={
+              <button onClick={reload} className="btn-ink">
+                Повторить
+              </button>
+            }
+          />
+        ) : !data || data.length === 0 ? (
+          <StatePanel
+            title="Пока нет ни одного конкурса"
+            description="Загляните позже — сообщество периодически объявляет конкурсы с голосованием."
+            icon={<IconTrophy />}
+          />
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {data.map((c, i) => (
+              <ContestCard key={c.id} contest={c} index={i} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
