@@ -244,9 +244,7 @@ async def compute_rating(
     return entries
 
 
-async def runner_finished_count(
-    session: AsyncSession, runner_id: int, period: str = "all"
-) -> int:
+async def runner_finished_count(session: AsyncSession, runner_id: int, period: str = "all") -> int:
     row = (await session.execute(_count_query(period, runner_id=runner_id))).first()
     count = int(row.finished_count) if row else 0
     if period == "all":
@@ -254,3 +252,83 @@ async def runner_finished_count(
         if baseline:
             count += baseline.dx_count
     return count
+
+
+def next_milestone(count: int) -> int:
+    """The next round "юбилейный" finish count at or above `count` — 25, 50,
+    then every 50 after that (100, 150, 200, ...), per the organizers'
+    chosen sequence (75/125/175/... are deliberately not milestones). Once
+    a runner clears one by more than a finish, this naturally points at the
+    *next* milestone up, which is why callers never need an explicit
+    "+1, stop showing" cutoff — remaining just jumps back above the
+    "approaching" window on its own."""
+    if count <= 25:
+        return 25
+    if count <= 50:
+        return 50
+    return ((count + 49) // 50) * 50
+
+
+@dataclass
+class MilestoneEntry:
+    runner_id: int
+    first_name: str
+    last_name: str
+    avatar: str | None
+    finished_count: int
+    milestone: int
+    remaining: int
+
+
+async def milestone_candidates(
+    session: AsyncSession, viewer_id: int | None = None
+) -> list[MilestoneEntry]:
+    """Runners within 2 finishes of their next milestone — close enough
+    that an organizer might want to plan something for that DX. Same
+    all-time finished-count metric as the community rating's "all" period
+    (including baseline carry-over), not a period-scoped figure."""
+    rows = await _bulk_ranking_rows(session)
+    nearby = [
+        (runner_id, row.finishes_all, next_milestone(row.finishes_all))
+        for runner_id, row in rows.items()
+        if row.finishes_all > 0
+    ]
+    candidates = [
+        (runner_id, count, milestone, milestone - count)
+        for runner_id, count, milestone in nearby
+        if 0 <= milestone - count <= 2
+    ]
+    if not candidates:
+        return []
+
+    users = {
+        u.id: u
+        for u in await session.scalars(select(User).where(User.id.in_(c[0] for c in candidates)))
+    }
+    entries = [
+        MilestoneEntry(
+            runner_id=runner_id,
+            first_name=users[runner_id].first_name,
+            last_name=users[runner_id].last_name,
+            avatar=visible_avatar(users[runner_id], viewer_id),
+            finished_count=count,
+            milestone=milestone,
+            remaining=remaining,
+        )
+        for runner_id, count, milestone, remaining in candidates
+        if runner_id in users
+    ]
+    entries.sort(key=lambda e: (e.remaining, -e.finished_count, e.last_name, e.first_name))
+    return entries
+
+
+async def milestone_remaining_count(session: AsyncSession, remaining: int) -> int:
+    """Lean count (no User rows loaded) for the admin-tools nav badge — the
+    organizer wants to know how many runners have exactly one finish left
+    before their milestone."""
+    rows = await _bulk_ranking_rows(session)
+    return sum(
+        1
+        for row in rows.values()
+        if row.finishes_all > 0 and next_milestone(row.finishes_all) - row.finishes_all == remaining
+    )

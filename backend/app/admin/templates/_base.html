@@ -320,6 +320,11 @@
           <a href="/admin-tools/contests" class="nav-link {{ 'active' if active == 'contests' }}">{{ nav_icon('trophy') }}Конкурсы</a>
         </div>
         {% endif %}
+        {% if 'milestones' in tools_user.granted_permissions %}
+        <div class="nav-section">
+          <a href="/admin-tools/milestones" class="nav-link {{ 'active' if active == 'milestones' }}">{{ nav_icon('flag') }}Юбилейные финиши <span id="badge-milestones" class="nav-badge" style="display:none;" title="Бегунам, которым остался 1 финиш до юбилея"></span></a>
+        </div>
+        {% endif %}
         {% if 'csv_import' in tools_user.granted_permissions or 'baselines' in tools_user.granted_permissions or 'guest_claims' in tools_user.granted_permissions or 'results_review' in tools_user.granted_permissions or 'avatars' in tools_user.granted_permissions or 'profile_review' in tools_user.granted_permissions or 'surveys' in tools_user.granted_permissions or 'contests_review' in tools_user.granted_permissions %}
         <div class="nav-section">
           {% if 'csv_import' in tools_user.granted_permissions %}
@@ -461,7 +466,8 @@
       var avatarsBadge = document.getElementById('badge-avatars');
       var profileReviewBadge = document.getElementById('badge-profile-review');
       var contestEntriesBadge = document.getElementById('badge-contest-entries');
-      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge || avatarsBadge || profileReviewBadge || contestEntriesBadge) {
+      var milestonesBadge = document.getElementById('badge-milestones');
+      if (ticketsBadge || surveysBadge || claimsBadge || moderationBadge || avatarsBadge || profileReviewBadge || contestEntriesBadge || milestonesBadge) {
         fetch('/admin-tools/badge-counts', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (data) {
@@ -473,6 +479,7 @@
               [avatarsBadge, data.avatars],
               [profileReviewBadge, data.profile_review],
               [contestEntriesBadge, data.contest_entries],
+              [milestonesBadge, data.milestones],
             ].forEach(function (pair) {
               var el = pair[0], count = pair[1];
               if (el && count > 0) {

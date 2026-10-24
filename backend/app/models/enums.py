@@ -97,6 +97,7 @@ class StaffPermission(enum.StrEnum):
     reports = "reports"
     contests = "contests"
     contests_review = "contests_review"
+    milestones = "milestones"
 
 
 class ContestFieldType(enum.StrEnum):

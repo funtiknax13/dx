@@ -1,0 +1,88 @@
+{% extends "_base.html" %}
+{% block title %}Юбилейные финиши — DX Tools{% endblock %}
+{% block content %}
+<style>
+  .ms-hero { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:26px; }
+  @media (max-width: 900px) { .ms-hero { grid-template-columns: 1fr; } }
+  .ms-hero .card { margin-bottom:0; }
+  .ms-hero h2 { display:flex; align-items:center; gap:8px; font-size:16px; margin-bottom:14px; }
+
+  .ms-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--paper-soft); }
+  .ms-row:last-child { border-bottom:none; }
+  .ms-badge {
+    width:42px; height:42px; border-radius:12px; background:var(--paper-soft); color:var(--ink-700);
+    display:grid; place-items:center; font-family:var(--font-mono); font-weight:700; font-size:13px; flex:0 0 auto;
+  }
+  .ms-badge.at-milestone { background:var(--signal); color:#fff; }
+  .ms-name { font-weight:600; text-decoration:none; color:inherit; }
+  .ms-name:hover { color: var(--signal); }
+  .ms-meta { font-size:12px; color:var(--clay); margin-top:1px; }
+</style>
+
+<div class="row-between">
+  <div>
+    <h1>Юбилейные финиши</h1>
+    <p class="hint" style="margin-top:2px;">
+      {{ total }} {{ 'бегун приближается' if total == 1 else 'бегунов приближается' }} к круглому
+      числу финишей (25, 50, 100, 150, 200...).
+    </p>
+  </div>
+</div>
+
+<div class="ms-hero">
+  <div class="card">
+    <h2>🏁 Юбилей — на этом DX</h2>
+    {% if at_milestone %}
+      {% for e in at_milestone %}
+      <div class="ms-row">
+        <span class="ms-badge at-milestone">{{ e.milestone }}</span>
+        <div>
+          <a href="/admin-tools/runners/{{ e.runner_id }}" data-modal-url="/admin-tools/runners/{{ e.runner_id }}?partial=1" class="ms-name">{{ e.first_name }} {{ e.last_name }}</a>
+          <div class="ms-meta">{{ e.finished_count }}-й финиш</div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="hint" style="margin:0;">Сейчас никто не на юбилейной отметке.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Остался 1 финиш</h2>
+    {% if one_left %}
+      {% for e in one_left %}
+      <div class="ms-row">
+        <span class="ms-badge">{{ e.milestone }}</span>
+        <div>
+          <a href="/admin-tools/runners/{{ e.runner_id }}" data-modal-url="/admin-tools/runners/{{ e.runner_id }}?partial=1" class="ms-name">{{ e.first_name }} {{ e.last_name }}</a>
+          <div class="ms-meta">сейчас {{ e.finished_count }} — следующий DX юбилейный</div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="hint" style="margin:0;">Никому не осталось 1 финиш до юбилея.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Осталось 2 финиша</h2>
+    {% if two_left %}
+      {% for e in two_left %}
+      <div class="ms-row">
+        <span class="ms-badge">{{ e.milestone }}</span>
+        <div>
+          <a href="/admin-tools/runners/{{ e.runner_id }}" data-modal-url="/admin-tools/runners/{{ e.runner_id }}?partial=1" class="ms-name">{{ e.first_name }} {{ e.last_name }}</a>
+          <div class="ms-meta">сейчас {{ e.finished_count }} — юбилей через 2 DX</div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="hint" style="margin:0;">Никому не осталось 2 финиша до юбилея.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if not total %}
+<div class="empty">Пока ни один бегун не приближается к юбилейному числу финишей.</div>
+{% endif %}
+{% endblock %}

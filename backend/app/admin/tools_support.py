@@ -8,6 +8,7 @@ from app.core.db import SessionLocal
 from app.models.enums import StaffPermission, TicketStatus
 from app.models.support import SupportTicket
 from app.models.user import User
+from app.services.rating_service import milestone_remaining_count
 from app.services.staff_attention_service import (
     pending_avatar_count,
     pending_claims_count,
@@ -173,6 +174,7 @@ async def badge_counts(request: Request) -> dict[str, int]:
         "avatars": 0,
         "profile_review": 0,
         "contest_entries": 0,
+        "milestones": 0,
     }
     if user is None:
         return empty
@@ -202,6 +204,13 @@ async def badge_counts(request: Request) -> dict[str, int]:
             if StaffPermission.contests_review in perms
             else 0
         )
+        # Specifically "exactly 1 finish left" — the organizer wants to know
+        # about the next session, not everyone within the whole 2-away window.
+        milestones = (
+            await milestone_remaining_count(session, remaining=1)
+            if StaffPermission.milestones in perms
+            else 0
+        )
     return {
         "tickets": tickets,
         "surveys": surveys,
@@ -210,4 +219,5 @@ async def badge_counts(request: Request) -> dict[str, int]:
         "avatars": avatars,
         "profile_review": profile_review,
         "contest_entries": contest_entries,
+        "milestones": milestones,
     }

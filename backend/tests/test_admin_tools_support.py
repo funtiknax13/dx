@@ -180,6 +180,7 @@ async def test_badge_counts_zero_for_anonymous(client: AsyncClient) -> None:
         "avatars": 0,
         "profile_review": 0,
         "contest_entries": 0,
+        "milestones": 0,
     }
 
 

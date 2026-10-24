@@ -7,7 +7,13 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import FinishStatus, Gender, ModerationStatus, UserRole
 from app.models.event import Event
 from app.models.group import Group
-from app.services.rating_service import compute_rating, runner_finished_count
+from app.services.rating_service import (
+    compute_rating,
+    milestone_candidates,
+    milestone_remaining_count,
+    next_milestone,
+    runner_finished_count,
+)
 from tests.factories import (
     make_attendance_with_result,
     make_baseline,
@@ -170,7 +176,7 @@ async def test_rating_excludes_groups_opted_out_of_rating(session: AsyncSession)
 
 @pytest.mark.asyncio
 async def test_rating_splits_by_gender(session: AsyncSession) -> None:
-    """"male"/"female" restrict the ranking to runners of that gender; "all"
+    """ "male"/"female" restrict the ranking to runners of that gender; "all"
     keeps everyone, and runners with no gender set (e.g. guests) show up only
     in "all"."""
     org = await make_user(session, "org-gender@example.com", UserRole.organizer)
@@ -319,9 +325,7 @@ async def test_month_tie_cascades_to_finishes_this_year(session: AsyncSession) -
     # there's no earlier month this year, so use February instead (a plain
     # date field, not restricted to the past).
     other_month_this_year = (
-        date(today.year, today.month - 1, 1)
-        if today.month > 1
-        else date(today.year, 2, 1)
+        date(today.year, today.month - 1, 1) if today.month > 1 else date(today.year, 2, 1)
     )
 
     # Both tied at month level (1 finish, 10km) -> r1 has an extra finish
@@ -517,3 +521,81 @@ async def test_self_reported_counts_once_approved(session: AsyncSession) -> None
     assert await runner_finished_count(session, runner.id, "all") == 1
     rating = await compute_rating(session, "all")
     assert [e.runner_id for e in rating] == [runner.id]
+
+
+# --- milestone finishes -----------------------------------------------------
+
+
+def test_next_milestone_sequence() -> None:
+    """25, 50, then every 50 after — 75/125/175/... are deliberately not
+    milestones, per the organizers' chosen sequence."""
+    assert next_milestone(0) == 25
+    assert next_milestone(23) == 25
+    assert next_milestone(25) == 25
+    assert next_milestone(26) == 50
+    assert next_milestone(49) == 50
+    assert next_milestone(50) == 50
+    assert next_milestone(51) == 100
+    assert next_milestone(75) == 100
+    assert next_milestone(99) == 100
+    assert next_milestone(100) == 100
+    assert next_milestone(101) == 150
+    assert next_milestone(150) == 150
+    assert next_milestone(151) == 200
+
+
+@pytest.mark.asyncio
+async def test_milestone_candidates_within_two_finishes(session: AsyncSession) -> None:
+    two_away = await make_user(session, "two-away-ms1@example.com")
+    one_away = await make_user(session, "one-away-ms1@example.com")
+    at_it = await make_user(session, "at-it-ms1@example.com")
+    far_away = await make_user(session, "far-away-ms1@example.com")
+    none_yet = await make_user(session, "none-yet-ms1@example.com")
+    await make_baseline(session, two_away, dx_count=23)
+    await make_baseline(session, one_away, dx_count=24)
+    await make_baseline(session, at_it, dx_count=25)
+    await make_baseline(session, far_away, dx_count=26)  # just past 25 -> next is 50
+    await session.commit()
+
+    entries = await milestone_candidates(session)
+    by_runner = {e.runner_id: e for e in entries}
+
+    assert set(by_runner) == {two_away.id, one_away.id, at_it.id}
+    assert far_away.id not in by_runner
+    assert none_yet.id not in by_runner
+
+    assert by_runner[two_away.id].remaining == 2
+    assert by_runner[two_away.id].milestone == 25
+    assert by_runner[one_away.id].remaining == 1
+    assert by_runner[at_it.id].remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_milestone_candidates_sorted_soonest_first(session: AsyncSession) -> None:
+    runner_2 = await make_user(session, "sort-ms2a@example.com")
+    runner_0 = await make_user(session, "sort-ms2b@example.com")
+    runner_1 = await make_user(session, "sort-ms2c@example.com")
+    await make_baseline(session, runner_2, dx_count=48)
+    await make_baseline(session, runner_0, dx_count=50)
+    await make_baseline(session, runner_1, dx_count=49)
+    await session.commit()
+
+    entries = await milestone_candidates(session)
+    assert [e.runner_id for e in entries] == [runner_0.id, runner_1.id, runner_2.id]
+
+
+@pytest.mark.asyncio
+async def test_milestone_remaining_count_matches_the_one_away_bucket(
+    session: AsyncSession,
+) -> None:
+    one_away_a = await make_user(session, "ms3-one-a@example.com")
+    one_away_b = await make_user(session, "ms3-one-b@example.com")
+    two_away = await make_user(session, "ms3-two@example.com")
+    await make_baseline(session, one_away_a, dx_count=24)
+    await make_baseline(session, one_away_b, dx_count=99)
+    await make_baseline(session, two_away, dx_count=48)
+    await session.commit()
+
+    assert await milestone_remaining_count(session, remaining=1) == 2
+    assert await milestone_remaining_count(session, remaining=2) == 1
+    assert await milestone_remaining_count(session, remaining=0) == 0
