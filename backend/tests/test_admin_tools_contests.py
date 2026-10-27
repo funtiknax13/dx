@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -7,16 +8,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.models.contest import Contest, ContestEntry, ContestField
-from app.models.enums import ModerationStatus, StaffPermission, UserRole
+from app.models.enums import ContestFieldType, ModerationStatus, StaffPermission, UserRole
 from app.models.support import SupportMessage, SupportTicket
 from app.services.permissions_service import set_permissions
 from tests.factories import add_contest_field, make_contest, make_user
+
+# Real wall-clock-relative, like test_contests_api.py — the public submit
+# endpoint always checks contest_phase() against the real "now".
+PAST = datetime.now(UTC) - timedelta(days=10)
+SOON = datetime.now(UTC) + timedelta(days=1)
+
+_GPX = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><trkseg>
+    <trkpt lat="55.7500" lon="37.6200"><ele>150.0</ele></trkpt>
+    <trkpt lat="55.7510" lon="37.6210"><ele>152.0</ele></trkpt>
+  </trkseg></trk>
+</gpx>"""
 
 
 async def _login(client: AsyncClient, user_id: int) -> None:
     token = create_access_token(user_id)
     resp = await client.get(f"/admin-tools/sso?token={token}", follow_redirects=False)
     assert resp.status_code == 302
+
+
+def _bearer(user_id: int) -> dict[str, str]:
+    return {"Authorization": f"Bearer {create_access_token(user_id)}"}
 
 
 async def _organizer_with_contests(session: AsyncSession, email: str, admin) -> "object":
@@ -522,3 +540,100 @@ async def test_set_placement_and_publish_results(
     assert resp.status_code == 303
     await session.refresh(contest)
     assert contest.results_published_at is not None
+
+
+# --- gpx route map (moderation) -----------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_entry_route_map_requires_entries_access(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-gpx1@example.com", UserRole.admin)
+    org = await _organizer_with_contests(session, "org-gpx1@example.com", admin)
+    bystander = await make_user(session, "bystander-gpx1@example.com", UserRole.organizer)
+    runner = await make_user(session, "runner-gpx1@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.gpx)
+    await session.commit()
+
+    submit = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_bearer(runner.id),
+        files={f"field_{field.id}": ("route.gpx", _GPX.encode(), "application/gpx+xml")},
+    )
+    assert submit.status_code == 201, submit.text
+    entry_id = submit.json()["id"]
+
+    route_map_url = (
+        f"/admin-tools/contests/{contest.id}/entries/{entry_id}/values/{field.id}/route-map"
+    )
+
+    anon = await client.get(route_map_url, follow_redirects=False)
+    assert anon.status_code == 302
+    assert anon.headers["location"] == "/admin-tools/login"
+
+    await _login(client, bystander.id)
+    forbidden = await client.get(route_map_url, follow_redirects=False)
+    assert forbidden.status_code == 302
+    assert forbidden.headers["location"] == "/admin-tools/login"
+
+
+@pytest.mark.asyncio
+async def test_entry_route_map_returns_track_points_for_owner(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-gpx2@example.com", UserRole.admin)
+    org = await _organizer_with_contests(session, "org-gpx2@example.com", admin)
+    runner = await make_user(session, "runner-gpx2@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.gpx)
+    await session.commit()
+
+    submit = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_bearer(runner.id),
+        files={f"field_{field.id}": ("route.gpx", _GPX.encode(), "application/gpx+xml")},
+    )
+    assert submit.status_code == 201, submit.text
+    entry_id = submit.json()["id"]
+
+    await _login(client, org.id)
+    resp = await client.get(
+        f"/admin-tools/contests/{contest.id}/entries/{entry_id}/values/{field.id}/route-map"
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["track_points"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_entry_route_map_reachable_by_contests_review_reviewer(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    admin = await make_user(session, "admin-gpx3@example.com", UserRole.admin)
+    org = await _organizer_with_contests(session, "org-gpx3@example.com", admin)
+    reviewer = await make_user(session, "reviewer-gpx3@example.com", UserRole.organizer)
+    await set_permissions(session, reviewer, {StaffPermission.contests_review}, granted_by=admin)
+    runner = await make_user(session, "runner-gpx3@example.com")
+    contest = await make_contest(
+        session, org, is_published=True, submissions_open_at=PAST, submissions_close_at=SOON
+    )
+    field = await add_contest_field(session, contest, field_type=ContestFieldType.gpx)
+    await session.commit()
+
+    submit = await client.post(
+        f"/api/v1/contests/{contest.id}/entries",
+        headers=_bearer(runner.id),
+        files={f"field_{field.id}": ("route.gpx", _GPX.encode(), "application/gpx+xml")},
+    )
+    entry_id = submit.json()["id"]
+
+    await _login(client, reviewer.id)
+    resp = await client.get(
+        f"/admin-tools/contests/{contest.id}/entries/{entry_id}/values/{field.id}/route-map"
+    )
+    assert resp.status_code == 200, resp.text

@@ -1,5 +1,8 @@
 {% extends "_base.html" %}
 {% block title %}Заявки — {{ contest.title }} — DX Tools{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.3.0/dist/maplibre-gl.css">
+{% endblock %}
 {% block content %}
 <p><a href="/admin-tools/contests/{{ contest.id }}/edit" class="hint">← {{ contest.title }}</a></p>
 <h1 style="margin:0;">Заявки на конкурс</h1>
@@ -39,10 +42,12 @@
             {% elif f.field_type.value == 'image' %}
               <div style="display:flex; flex-wrap:wrap; gap:6px;">
                 {% for path in v|json_list %}
-                <img src="{{ path }}" alt="" style="max-width:160px; border-radius:var(--radius);">
+                <img src="{{ path }}" data-lightbox="{{ path }}" alt="" style="max-width:160px; border-radius:var(--radius);">
                 {% endfor %}
               </div>
-            {% elif f.field_type.value == 'gpx' %}<a href="{{ v }}" target="_blank" rel="noreferrer">Скачать GPX</a>
+            {% elif f.field_type.value == 'gpx' %}
+              <a href="{{ v }}" target="_blank" rel="noreferrer">Скачать GPX</a>
+              <div class="gpx-map" data-gpx-map-url="/admin-tools/contests/{{ contest.id }}/entries/{{ e.id }}/values/{{ f.id }}/route-map" style="height:240px; margin-top:8px; border-radius:var(--radius); background:var(--paper-soft);"></div>
             {% elif f.field_type.value == 'multi_select' %}
               {% for opt in v|json_list %}<span class="chip chip-muted">{{ opt }}</span>{% endfor %}
             {% else %}{{ v }}
@@ -84,4 +89,76 @@
 {% else %}
 <div class="empty" style="margin-top:16px;">Пока нет заявок.</div>
 {% endif %}
+
+<script type="module">
+// Same raster OSM tiles + MapLibre GL as the public frontend's own RouteMap
+// (see frontend/src/components/mapStyle.ts) — one mapping library for the
+// whole app, not Leaflet here and MapLibre there. MapLibre 6.x only ships
+// an ES module build (no UMD/global script any more), hence the module
+// script + bare import instead of a classic <script src>. A closed
+// <details> renders none of its children at all, so each map only
+// initializes the first time its own <details> is actually opened.
+import { Map as MapLibreMap, LngLatBounds } from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.3.0/dist/maplibre-gl.mjs';
+(function(){
+  function initGpxMap(el){
+    if (el.dataset.inited) return;
+    el.dataset.inited = '1';
+    fetch(el.dataset.gpxMapUrl, { credentials: 'same-origin' })
+      .then(function(r){ if (!r.ok) throw new Error('bad status'); return r.json(); })
+      .then(function(data){
+        var pts = data.track_points || [];
+        if (!pts.length) { el.textContent = 'Трек недоступен'; return; }
+        var coords = pts.map(function(p){ return [p.lon, p.lat]; });
+        var map = new MapLibreMap({
+          container: el,
+          style: {
+            version: 8,
+            sources: {
+              osm: {
+                type: 'raster',
+                tiles: [
+                  'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                ],
+                tileSize: 256,
+                attribution: '© OpenStreetMap'
+              }
+            },
+            layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+          }
+        });
+        map.scrollZoom.disable();
+        map.dragRotate.disable();
+        map.touchZoomRotate.disableRotation();
+        map.on('load', function(){
+          map.addSource('route', {
+            type: 'geojson',
+            data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }
+          });
+          map.addLayer({
+            id: 'route-casing', type: 'line', source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#0E0E0D', 'line-width': 7, 'line-opacity': 0.9 }
+          });
+          map.addLayer({
+            id: 'route-line', type: 'line', source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#F7F7F5', 'line-width': 3 }
+          });
+          var bounds = new LngLatBounds();
+          coords.forEach(function(c){ bounds.extend(c); });
+          map.fitBounds(bounds, { padding: 24, animate: false });
+        });
+      })
+      .catch(function(){ el.textContent = 'Не удалось загрузить маршрут'; });
+  }
+  document.querySelectorAll('details.mod-card').forEach(function(details){
+    details.addEventListener('toggle', function(){
+      if (!details.open) return;
+      details.querySelectorAll('.gpx-map[data-gpx-map-url]').forEach(initGpxMap);
+    });
+  });
+})();
+</script>
 {% endblock %}

@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, Form, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,14 +17,16 @@ from app.admin.tools_common import (
 )
 from app.core.db import SessionLocal
 from app.core.timezone import now_msk
-from app.models.contest import Contest, ContestEntry, ContestField
+from app.models.contest import Contest, ContestEntry, ContestEntryValue, ContestField
 from app.models.enums import ContestFieldType, ModerationStatus, StaffPermission, UserRole
 from app.models.user import User
 from app.services import contest_service
+from app.services.gpx_service import TrackParseError, parse_gpx
 from app.services.media_service import (
     FileTooLargeError,
     InvalidFileTypeError,
     delete_media,
+    media_path_to_fs,
     save_image,
 )
 from app.services.support_service import create_staff_ticket
@@ -423,6 +425,55 @@ async def contest_entries(request: Request, contest_id: int) -> HTMLResponse | R
             "flash": request.query_params.get("flash"),
         },
     )
+
+
+@router.get(
+    "/contests/{contest_id}/entries/{entry_id}/values/{field_id}/route-map",
+    response_model=None,
+)
+async def contest_entry_route_map(
+    request: Request, contest_id: int, entry_id: int, field_id: int
+) -> dict[str, Any] | RedirectResponse:
+    """Same session-cookie auth as the rest of entry moderation, so a gpx
+    field's track can render as a map right in the moderation view — the
+    public API's own .../route-map endpoint only trusts a JWT bearer token
+    and won't show a *pending* entry to anyone but its own runner, which
+    doesn't help an admin reviewing it here."""
+    user = await _require_entries_access(request)
+    if user is None:
+        return login_redirect()
+    async with SessionLocal() as session:
+        contest = await _get_contest_for_moderation(session, user, contest_id)
+        if contest is None:
+            return RedirectResponse("/admin-tools", status_code=303)
+        entry = await session.get(ContestEntry, entry_id)
+        field = await session.get(ContestField, field_id)
+        if (
+            entry is None
+            or field is None
+            or entry.contest_id != contest_id
+            or field.contest_id != contest_id
+            or field.field_type != ContestFieldType.gpx
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry field not found")
+        value = await session.scalar(
+            select(ContestEntryValue.value).where(
+                ContestEntryValue.entry_id == entry_id, ContestEntryValue.field_id == field_id
+            )
+        )
+        if not value:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No route for this field")
+        fs = media_path_to_fs(value)
+        try:
+            with open(fs, "rb") as f:
+                parsed = parse_gpx(f.read())
+        except (FileNotFoundError, TrackParseError) as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Route file unavailable") from exc
+    return {
+        "track_points": parsed.track_points,
+        "elevation_profile": parsed.elevation_profile,
+        "distance_km": parsed.distance_km,
+    }
 
 
 def _entry_decision_message(entry: ContestEntry, contest: Contest, *, accepted: bool) -> str:

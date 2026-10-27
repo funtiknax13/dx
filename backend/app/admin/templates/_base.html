@@ -261,6 +261,7 @@
       .bare-main { margin: 24px auto; }
     }
   </style>
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
 {% macro nav_icon(name) %}{% set icons = {
@@ -424,6 +425,13 @@
     </div>
   </dialog>
 
+  <dialog class="modal" id="image-modal">
+    <div class="modal-box" style="padding:0; max-width:90vw; background:transparent; box-shadow:none;">
+      <button type="button" class="modal-close" data-modal-close aria-label="Закрыть" style="position:absolute; top:-14px; right:-14px; background:#fff;">×</button>
+      <img id="image-modal-img" src="" alt="" style="display:block; max-width:90vw; max-height:85vh; width:auto; height:auto; border-radius:var(--radius-lg);">
+    </div>
+  </dialog>
+
   <script>
     (function () {
       var shell = document.getElementById('shell');
@@ -564,6 +572,18 @@
               detailDialog.showModal();
             })
             .catch(function () { window.location = link.href; });
+        });
+      });
+
+      // ---- generic image lightbox: click any img[data-lightbox] to see it
+      // full-size, instead of only the small inline thumbnail. ----
+      var imageDialog = document.getElementById('image-modal');
+      var imageModalImg = document.getElementById('image-modal-img');
+      document.querySelectorAll('[data-lightbox]').forEach(function (img) {
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', function () {
+          imageModalImg.src = img.getAttribute('data-lightbox') || img.src;
+          imageDialog.showModal();
         });
       });
     })();
