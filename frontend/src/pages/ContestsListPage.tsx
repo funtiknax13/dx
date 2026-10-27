@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { contestsApi } from '../api/contests'
 import { media } from '../api/client'
@@ -17,9 +18,16 @@ const PHASE_LABEL: Record<ContestPhase, string> = {
   voting_closed: 'Итоги',
 }
 
+type Tab = 'upcoming' | 'past' | 'all'
+
 export function ContestsListPage() {
   const { data, loading, error, reload } = useAsync(() => contestsApi.list(), [])
+  const [tab, setTab] = useState<Tab>('upcoming')
   const activeCount = data?.filter((c) => c.phase !== 'voting_closed').length ?? 0
+  const pastCount = data?.filter((c) => c.phase === 'voting_closed').length ?? 0
+  const visible = (data ?? []).filter((c) =>
+    tab === 'upcoming' ? c.phase !== 'voting_closed' : tab === 'past' ? c.phase === 'voting_closed' : true,
+  )
 
   return (
     <div>
@@ -74,11 +82,39 @@ export function ContestsListPage() {
             icon={<IconTrophy />}
           />
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {data.map((c, i) => (
-              <ContestCard key={c.id} contest={c} index={i} />
-            ))}
-          </div>
+          <>
+            <div className="mb-8 inline-flex rounded-full border border-ink/10 bg-white p-1 text-sm font-semibold">
+              {(
+                [
+                  ['upcoming', `Запланировано ${activeCount ? `· ${activeCount}` : ''}`],
+                  ['past', `Прошедшие ${pastCount ? `· ${pastCount}` : ''}`],
+                  ['all', 'Все'],
+                ] as [Tab, string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`rounded-full px-4 py-1.5 transition ${
+                    tab === key ? 'bg-ink text-paper' : 'text-ink-600 hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {visible.length === 0 ? (
+              <StatePanel
+                title={tab === 'past' ? 'Прошедших конкурсов пока нет' : 'Запланированных конкурсов нет'}
+                icon={<IconTrophy />}
+              />
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {visible.map((c, i) => (
+                  <ContestCard key={c.id} contest={c} index={i} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

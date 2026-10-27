@@ -5,7 +5,7 @@ import { media } from '../api/client'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
-import { formatDate, formatTime } from '../lib/format'
+import { formatDate, formatTime, plural } from '../lib/format'
 import { parseJsonList } from '../lib/jsonList'
 import { Avatar } from '../components/ui/Avatar'
 import { ElevationProfile } from '../components/ElevationProfile'
@@ -452,9 +452,10 @@ function ContestFieldInput({
   )
 }
 
-/** Click to lazily fetch and reveal the gpx field's route as a map —
- * avoids loading MapLibre GL (and the parse request) for every field by
- * default. */
+/** Click to lazily fetch and reveal the gpx field's route as a map — used
+ * in EntryForm's own existing-file preview, where someone is filling out a
+ * form and doesn't necessarily want a map popping in. Voting shows the map
+ * immediately instead (see GpxMap below) — more informative at a glance. */
 function GpxMapToggle({
   contestId,
   entryId,
@@ -484,6 +485,38 @@ function GpxMapToggle({
     <div className="mt-2 space-y-2">
       <Suspense fallback={<div className="h-[200px] animate-pulse rounded-xl2 bg-ink/5" />}>
         <RouteMap points={data.points} className="h-[200px]" />
+      </Suspense>
+      {data.elevation.length > 1 && (
+        <ElevationProfile data={data.elevation} ascent={data.ascent_m} descent={data.descent_m} />
+      )}
+    </div>
+  )
+}
+
+/** Always-visible variant for voting/results — the map renders right away
+ * instead of behind a "показать" click, more informative for comparing
+ * entries at a glance. The download link stays alongside it. */
+function GpxMap({
+  contestId,
+  entryId,
+  fieldId,
+}: {
+  contestId: number
+  entryId: number
+  fieldId: number
+}) {
+  const { data, loading, error } = useAsync(
+    () => contestsApi.routeMap(contestId, entryId, fieldId),
+    [contestId, entryId, fieldId],
+  )
+
+  if (loading) return <div className="mt-2 h-[220px] animate-pulse rounded-xl2 bg-ink/5" />
+  if (error || !data) return <p className="mt-2 text-xs text-danger-600">Не удалось загрузить маршрут</p>
+
+  return (
+    <div className="mt-2 space-y-2">
+      <Suspense fallback={<div className="h-[220px] animate-pulse rounded-xl2 bg-ink/5" />}>
+        <RouteMap points={data.points} className="h-[220px]" />
       </Suspense>
       {data.elevation.length > 1 && (
         <ElevationProfile data={data.elevation} ascent={data.ascent_m} descent={data.descent_m} />
@@ -523,6 +556,22 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
 
   const fieldsById = new Map((contest.fields ?? []).map((f) => [f.id, f]))
 
+  // Once results are in, rank by the admin-assigned placement; while voting
+  // is still open, rank by vote count if it's actually visible (otherwise
+  // leave submission order alone — there's nothing meaningful to sort by).
+  const sorted = [...data.entries].sort((a, b) => {
+    if (contest.results_published) return (a.placement ?? Infinity) - (b.placement ?? Infinity)
+    if (data.votes_visible) return (b.vote_count ?? 0) - (a.vote_count ?? 0)
+    return 0
+  })
+  const podiumEntries = contest.results_published
+    ? ([1, 2, 3]
+        .map((p) => sorted.find((e) => e.placement === p))
+        .filter((e): e is PublicContestEntry => !!e) as PublicContestEntry[])
+    : []
+  const podiumIds = new Set(podiumEntries.map((e) => e.id))
+  const restEntries = sorted.filter((e) => !podiumIds.has(e.id))
+
   return (
     <div>
       {contest.phase === 'voting_closed' && !contest.results_published ? (
@@ -541,21 +590,90 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
           , чтобы проголосовать.
         </p>
       )}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {data.entries.map((entry) => (
-          <EntryCard
-            key={entry.id}
-            contestId={contest.id}
-            entry={entry}
-            fieldsById={fieldsById}
-            canVote={isAuthenticated && contest.phase === 'voting_open'}
-            isMyVote={data.my_vote_entry_id === entry.id}
-            showPlacement={contest.results_published}
-            onVote={() => vote(entry.id)}
-            voting={votingFor === entry.id}
+      {podiumEntries.length > 0 && (
+        <ContestPodium entries={podiumEntries} fieldsById={fieldsById} contestId={contest.id} />
+      )}
+      {restEntries.length > 0 && (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {restEntries.map((entry) => (
+            <EntryCard
+              key={entry.id}
+              contestId={contest.id}
+              entry={entry}
+              fieldsById={fieldsById}
+              canVote={isAuthenticated && contest.phase === 'voting_open'}
+              isMyVote={data.my_vote_entry_id === entry.id}
+              showPlacement={contest.results_published}
+              onVote={() => vote(entry.id)}
+              voting={votingFor === entry.id}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Top-3 by admin-assigned placement, styled like the community rating's
+ * own podium (1st/2nd/3rd, ranked by value shade not hue) — once results
+ * are published a small corner number isn't prominent enough. */
+function ContestPodium({
+  entries,
+  fieldsById,
+  contestId,
+}: {
+  entries: PublicContestEntry[]
+  fieldsById: Map<number, ContestField>
+  contestId: number
+}) {
+  const order = ['sm:order-2', 'sm:order-1', 'sm:order-3']
+  const heights = ['', 'sm:mt-8', 'sm:mt-14']
+  const rings = ['ring-ink', 'ring-[#B4B4AF]', 'ring-[#D6D6D2]']
+  const badges = ['bg-ink', 'bg-[#B4B4AF]', 'bg-[#D6D6D2]']
+  const badgeText = ['text-paper', 'text-ink', 'text-ink']
+
+  return (
+    <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      {entries.map((entry, i) => (
+        <div
+          key={entry.id}
+          className={`relative flex flex-col rounded-xl2 border border-ink/[0.08] bg-white p-5 text-center shadow-card ${order[i]} ${heights[i]}`}
+        >
+          <span
+            className={`absolute -top-3 left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full font-display text-sm ${badges[i]} ${badgeText[i]}`}
+          >
+            {entry.placement}
+          </span>
+          <Avatar
+            first={entry.runner_name.split(' ')[0]}
+            last={entry.runner_name.split(' ')[1]}
+            src={entry.avatar}
+            size="lg"
+            className={`mx-auto ring-2 ${rings[i]}`}
+            zoomable
           />
-        ))}
-      </div>
+          <h3 className="mt-3 truncate font-display text-lg text-ink">{entry.runner_name}</h3>
+          {entry.vote_count != null && (
+            <div className="mt-2 flex items-baseline justify-center gap-1.5">
+              <span className="font-display text-2xl tabular text-signal">{entry.vote_count}</span>
+              <span className="font-mono text-xs text-clay">
+                {plural(entry.vote_count, 'голос', 'голоса', 'голосов')}
+              </span>
+            </div>
+          )}
+          <div className="mt-4 space-y-2 text-left">
+            {entry.values.map((v) => (
+              <EntryValueDisplay
+                key={v.field_id}
+                value={v}
+                field={fieldsById.get(v.field_id)}
+                contestId={contestId}
+                entryId={entry.id}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -608,7 +726,12 @@ function EntryCard({
       </div>
       <div className="mt-auto flex items-center justify-between pt-5">
         {entry.vote_count != null && (
-          <span className="font-mono text-xs text-clay">{entry.vote_count} голосов</span>
+          <span className="inline-flex items-baseline gap-1">
+            <span className="font-display text-lg tabular text-signal">{entry.vote_count}</span>
+            <span className="font-mono text-xs text-clay">
+              {plural(entry.vote_count, 'голос', 'голоса', 'голосов')}
+            </span>
+          </span>
         )}
         {canVote && (
           <button
@@ -668,7 +791,7 @@ function EntryValueDisplay({
         >
           Скачать GPX
         </a>
-        {field && <GpxMapToggle contestId={contestId} entryId={entryId} fieldId={field.id} />}
+        {field && <GpxMap contestId={contestId} entryId={entryId} fieldId={field.id} />}
       </div>
     )
   }
