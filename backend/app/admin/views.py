@@ -3,7 +3,7 @@ from typing import Any
 from sqladmin import ModelView
 from sqladmin.filters import BooleanFilter, OperationColumnFilter, StaticValuesFilter
 from sqladmin.widgets import BooleanInputWidget
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.sql.expression import Select
 from starlette.requests import Request
 from wtforms import Field, PasswordField
@@ -258,6 +258,18 @@ class GuestClaimAdmin(BaseAdmin, model=GuestClaim):
     # merge on approval) — this view is a fallback for inspecting/correcting
     # stray records, not the everyday moderation path.
     form_columns = [GuestClaim.status, GuestClaim.decided_at]
+
+    def search_query(self, stmt: Select[Any], term: str) -> Select[Any]:
+        # Both relationships target users. SQLAdmin's default dotted-field
+        # search joins that table twice without aliases, producing invalid SQL.
+        # Independent EXISTS predicates also keep the list/count free of duplicates.
+        name_matches = or_(
+            User.first_name.ilike(f"%{term}%"),
+            User.last_name.ilike(f"%{term}%"),
+        )
+        return stmt.where(
+            or_(GuestClaim.guest.has(name_matches), GuestClaim.claimant.has(name_matches))
+        )
 
 
 class OrganizerPermissionAdmin(BaseAdmin, model=OrganizerPermission):
