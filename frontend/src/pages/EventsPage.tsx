@@ -6,11 +6,12 @@ import { media } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import { formatDate } from '../lib/format'
 import { EventCard } from '../components/EventCard'
+import { ContestCard } from '../components/ContestCard'
 import { Pager } from '../components/ui/Pager'
 import { PageLoader } from '../components/ui/Spinner'
 import { StatePanel } from '../components/ui/StatePanel'
 import { IconArrow, IconCalendar, IconPin, IconRunner, IconSpark } from '../components/ui/icons'
-import type { ContestSummary, EventSummary } from '../types'
+import type { EventSummary } from '../types'
 
 type Tab = 'upcoming' | 'past' | 'all'
 const PAGE_SIZE = 20
@@ -34,12 +35,11 @@ export function EventsPage() {
     }
   }, [])
 
-  // The newest contest, if it hasn't fully wrapped up — a link to promote
-  // whatever's currently running, not just the nav's static /contests entry.
+  // Every published upcoming or active contest belongs on the homepage.
   const contest = useAsync(async () => {
     const contests = await contestsApi.list()
-    const newest = contests[0]
-    return newest && newest.phase !== 'voting_closed' ? newest : null
+    return contests.filter((c) => c.phase !== 'voting_closed' && c.phase !== 'draft')
+      .sort((a, b) => (a.submissions_open_at ?? '9999').localeCompare(b.submissions_open_at ?? '9999') || a.id - b.id)
   }, [])
 
   const grid = useAsync(() => {
@@ -60,7 +60,7 @@ export function EventsPage() {
         nextEvent={summary.data?.nextEvent ?? null}
         upcomingCount={summary.data?.upcomingCount ?? 0}
         totalCount={summary.data?.totalCount ?? 0}
-        activeContest={contest.data ?? null}
+        activeContestCount={contest.data?.length ?? 0}
       />
 
       <section id="events" className="container-page py-12 sm:py-16">
@@ -130,6 +130,17 @@ export function EventsPage() {
           </>
         )}
       </section>
+      <section id="contests" className="container-page pb-12 sm:pb-16">
+        <h2 className="mb-6 font-display text-3xl sm:text-4xl">Предстоящие и действующие конкурсы</h2>
+        {contest.loading ? <PageLoader /> : contest.error ? (
+          <StatePanel tone="error" title="Не удалось загрузить конкурсы" description={contest.error}
+            action={<button onClick={contest.reload} className="btn-ink">Повторить</button>} />
+        ) : contest.data?.length ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {contest.data.map((item, i) => <ContestCard key={item.id} contest={item} index={i} />)}
+          </div>
+        ) : <p className="text-sm text-clay">Предстоящих и действующих конкурсов пока нет.</p>}
+      </section>
     </div>
   )
 }
@@ -138,12 +149,12 @@ function Hero({
   nextEvent,
   upcomingCount,
   totalCount,
-  activeContest,
+  activeContestCount,
 }: {
   nextEvent: EventSummary | null
   upcomingCount: number
   totalCount: number
-  activeContest: ContestSummary | null
+  activeContestCount: number
 }) {
   return (
     <section className="relative overflow-hidden bg-ink text-paper">
@@ -188,13 +199,13 @@ function Hero({
                 Смотреть события
               </a>
             )}
-            {activeContest && (
-              <Link
-                to={`/contests/${activeContest.id}`}
+            {activeContestCount > 0 && (
+              <a
+                href="#contests"
                 className="btn btn-lg w-full border border-paper/25 bg-transparent text-center text-paper hover:border-paper/50 hover:bg-paper/[0.06] sm:w-auto"
               >
-                Текущий конкурс
-              </Link>
+                Конкурсы сообщества · {activeContestCount}
+              </a>
             )}
             <a
               href="/rating"

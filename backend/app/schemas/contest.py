@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ContestFieldOut(BaseModel):
@@ -44,6 +44,8 @@ class ContestDetail(BaseModel):
     # Only populated once the phase has moved past "upcoming" — before that
     # a contest is a pure teaser, no conditions shown (see contest_service).
     fields: list[ContestFieldOut] | None
+    lock_reason: str | None = None
+    missing_fields: list[str] = Field(default_factory=list)
 
 
 class ContestEntryValueOut(BaseModel):
@@ -71,7 +73,14 @@ class PublicEntryOut(BaseModel):
     values: list[ContestEntryValueOut]
 
 
+class ContestStatistics(BaseModel):
+    participants: int
+    entries: int
+    voters: int
+
+
 class ContestEntriesOut(BaseModel):
     entries: list[PublicEntryOut]
     votes_visible: bool
     my_vote_entry_id: int | None
+    statistics: ContestStatistics | None = None

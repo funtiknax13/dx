@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -596,7 +597,7 @@ async def test_cast_vote_rejects_self_vote(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cast_vote_switches_existing_vote_instead_of_duplicating(
+async def test_cast_vote_rejects_repeated_and_changed_vote(
     session: AsyncSession,
 ) -> None:
     org = await make_user(session, "org-vote5@example.com")
@@ -608,7 +609,9 @@ async def test_cast_vote_switches_existing_vote_instead_of_duplicating(
     entry2 = await _approved_entry(session, contest, author2)
 
     await cast_vote(session, contest, voter, entry1, now=NOW)
-    await cast_vote(session, contest, voter, entry2, now=NOW)
+    for target in (entry1, entry2):
+        with pytest.raises(ValueError, match="Изменить голос нельзя"):
+            await cast_vote(session, contest, voter, target, now=NOW)
     await session.commit()
 
     votes = list(
@@ -619,7 +622,30 @@ async def test_cast_vote_switches_existing_vote_instead_of_duplicating(
         )
     )
     assert len(votes) == 1
-    assert votes[0].entry_id == entry2.id
+    assert votes[0].entry_id == entry1.id
+
+
+@pytest.mark.asyncio
+async def test_cast_vote_handles_unique_conflict_without_replacing_first_vote(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    author = await make_user(session, "race-author@example.com")
+    voter = await make_user(session, "race-voter@example.com")
+    contest = await _voting_contest(session, author)
+    first = await _approved_entry(session, contest, author)
+    second = await _approved_entry(session, contest, author)
+    await cast_vote(session, contest, voter, first, now=NOW)
+    await session.commit()
+
+    # Simulate a request whose preliminary SELECT saw no vote before another
+    # request committed one. The real INSERT must hit the unique constraint.
+    with monkeypatch.context() as patch:
+        patch.setattr(session, "scalar", AsyncMock(side_effect=[None, first.id]))
+        with pytest.raises(ValueError, match="Изменить голос нельзя"):
+            await cast_vote(session, contest, voter, second, now=NOW)
+    votes = list(await session.scalars(select(ContestVote)))
+    assert len(votes) == 1
+    assert votes[0].entry_id == first.id
 
 
 @pytest.mark.asyncio

@@ -175,9 +175,8 @@ class ContestEntryValue(Base, TimestampMixin):
 
 
 class ContestVote(Base, TimestampMixin):
-    """One runner's vote for one entry — at most one vote per runner per
-    contest (uq below), not per entry, so switching your pick before voting
-    closes just moves the same row rather than adding a second vote."""
+    """One final vote per runner per contest; the unique constraint also
+    prevents concurrent requests from recording a second choice."""
 
     __tablename__ = "contest_votes"
     __table_args__ = (UniqueConstraint("contest_id", "voter_id", name="uq_contest_vote_voter"),)

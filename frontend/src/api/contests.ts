@@ -18,10 +18,9 @@ export const contestsApi = {
     api.get<MyContestEntry[]>(`/contests/${id}/my-entries`),
 
   // `values` keys are "field_<id>" — a string for text/number/url/
-  // multi_select fields, a File (or File[], for image fields that take
-  // several photos) for image/gpx ones not being replaced this submit
-  // (omit the key entirely to keep whatever's already on record, see the
-  // backend). `entryId` targets an existing entry to edit; omitted creates
+  // multi_select fields, a File for GPX or File[] for additional photos.
+  // keep_field_<id> is the JSON list of existing photo paths to retain;
+  // omitting it keeps all existing photos. `entryId` targets an entry to edit; omitted creates
   // a new one (subject to Contest.max_entries_per_runner).
   submit: (
     id: number | string,

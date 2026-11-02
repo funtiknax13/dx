@@ -490,6 +490,8 @@ export interface ContestDetail {
   max_entries_per_runner: number | null
   // null while the phase is still "upcoming" — a pure teaser, see backend.
   fields: ContestField[] | null
+  lock_reason: StatsLockReason
+  missing_fields: string[]
 }
 
 export interface ContestEntryValue {
@@ -522,4 +524,5 @@ export interface ContestEntriesResponse {
   entries: PublicContestEntry[]
   votes_visible: boolean
   my_vote_entry_id: number | null
+  statistics: { participants: number; entries: number; voters: number } | null
 }

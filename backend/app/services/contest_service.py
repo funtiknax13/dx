@@ -11,6 +11,7 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -246,10 +247,7 @@ async def cast_vote(
     *,
     now: datetime | None = None,
 ) -> ContestVote:
-    """One vote per voter per contest — casting again just moves the same
-    row to the new entry (see ContestVote). Rejects voting for your own
-    entry, a sensible contest default even though it wasn't spelled out in
-    the brief."""
+    """One final vote per voter per contest, including concurrent requests."""
     now = now or now_msk()
     if not can_vote(contest, now):
         raise ValueError("Голосование сейчас недоступно")
@@ -264,13 +262,18 @@ async def cast_vote(
         )
     )
     if existing is not None:
-        existing.entry_id = entry.id
-        await session.flush()
-        return existing
+        raise ValueError("Вы уже проголосовали. Изменить голос нельзя.")
 
     vote = ContestVote(contest_id=contest.id, voter_id=voter.id, entry_id=entry.id)
-    session.add(vote)
-    await session.flush()
+    try:
+        # The unique constraint arbitrates two tabs voting at the same time.
+        async with session.begin_nested():
+            session.add(vote)
+            await session.flush()
+    except IntegrityError as exc:
+        if await get_my_vote_entry_id(session, contest.id, voter.id) is None:
+            raise
+        raise ValueError("Вы уже проголосовали. Изменить голос нельзя.") from exc
     return vote
 
 

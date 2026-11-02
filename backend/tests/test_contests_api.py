@@ -1,14 +1,19 @@
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import create_access_token
-from app.models.contest import ContestEntry
-from app.models.enums import ContestFieldType, ModerationStatus
+from app.models.contest import ContestEntry, ContestVote
+from app.models.enums import ContestFieldType, ModerationStatus, PriorExperience
+from app.models.profile_edit_request import ProfileEditRequest
+from app.models.survey import Survey
+from app.services.media_service import media_path_to_fs
 from tests.factories import add_contest_field, make_contest, make_user
 
 # Unlike test_contest_service.py (which injects `now=` directly), the API
@@ -212,7 +217,7 @@ async def test_submit_multi_select_field_stores_selection(
 
 
 @pytest.mark.asyncio
-async def test_submit_several_images_caps_at_configured_max(
+async def test_submit_several_images_rejects_more_than_configured_max(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     org = await make_user(session, "org-img-api1@example.com")
@@ -230,10 +235,7 @@ async def test_submit_several_images_caps_at_configured_max(
         data={f"field_{link.id}": "https://example.com/route"},
         files=files,
     )
-    assert resp.status_code == 201, resp.text
-    values = {v["field_id"]: v["value"] for v in resp.json()["values"]}
-    paths = json.loads(values[photo.id])
-    assert len(paths) == settings.contest_entry_max_images
+    assert resp.status_code == 400, resp.text
 
 
 @pytest.mark.asyncio
@@ -589,3 +591,174 @@ async def test_cast_vote_requires_complete_profile(
         headers=_auth(incomplete_voter.id),
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.parametrize("reason", [
+    "profile_incomplete", "email_unverified", "profile_pending_review", "survey_required",
+])
+async def test_contest_submission_and_voting_use_rating_access_rules(
+    session: AsyncSession, client: AsyncClient, reason: str,
+) -> None:
+    org = await make_user(session, "access-org@example.com")
+    runner = await make_user(session, "access-runner@example.com")
+    contest, link, _photo = await _open_contest(session, org)
+    voting, entry, _, _ = await _voting_contest_with_approved_entry(session, org, org)
+    if reason == "profile_incomplete":
+        runner.phone = None
+    elif reason == "email_unverified":
+        runner.email_verified = False
+    elif reason == "profile_pending_review":
+        session.add(ProfileEditRequest(user_id=runner.id, changes={"first_name": "Новое"}))
+    else:
+        runner.prior_experience = PriorExperience.never
+        session.add(Survey(
+            title="Опрос", created_by=org.id, is_active=True, is_required_for_access=True,
+        ))
+    await session.commit()
+    headers = _auth(runner.id)
+    rating = await client.get("/api/v1/rating", headers=headers)
+    detail = await client.get(f"/api/v1/contests/{contest.id}", headers=headers)
+    assert detail.json()["lock_reason"] == rating.json()["lock_reason"]
+    assert detail.json()["lock_reason"] is not None
+    response = await client.post(
+        f"/api/v1/contests/{contest.id}/entries", headers=headers,
+        data={f"field_{link.id}": "https://example.com"},
+    )
+    assert response.status_code == 403
+    response = await client.post(
+        f"/api/v1/contests/{voting.id}/entries/{entry.id}/vote", headers=headers,
+    )
+    assert response.status_code == 403
+
+
+async def test_vote_is_final_and_does_not_reorder_works(
+    session: AsyncSession, client: AsyncClient,
+) -> None:
+    org = await make_user(session, "final-org@example.com")
+    voter = await make_user(session, "final-voter@example.com")
+    contest, first, _, _ = await _voting_contest_with_approved_entry(session, org, org)
+    second = ContestEntry(
+        contest_id=contest.id, runner_id=org.id, status=ModerationStatus.approved,
+        submitted_at=PAST,
+    )
+    session.add(second)
+    contest.votes_visible_live = True
+    await session.commit()
+    url = f"/api/v1/contests/{contest.id}/entries"
+    headers = _auth(voter.id)
+    assert (await client.post(f"{url}/{second.id}/vote", headers=headers)).status_code == 204
+    for target in (first, second):
+        response = await client.post(f"{url}/{target.id}/vote", headers=headers)
+        assert response.status_code == 400
+        assert "Изменить голос нельзя" in response.json()["detail"]
+    body = (await client.get(url, headers=headers)).json()
+    assert [e["id"] for e in body["entries"]] == [first.id, second.id]
+    assert [e["vote_count"] for e in body["entries"]] == [0, 1]
+    assert body["my_vote_entry_id"] == second.id
+    assert body["statistics"] is None
+
+
+async def test_statistics_only_after_voting_count_approved_works_and_unique_people(
+    session: AsyncSession, client: AsyncClient,
+) -> None:
+    org = await make_user(session, "stats-org@example.com")
+    other = await make_user(session, "stats-author@example.com")
+    voter = await make_user(session, "stats-voter@example.com")
+    contest, first, _, _ = await _voting_contest_with_approved_entry(session, org, org)
+    second = ContestEntry(contest_id=contest.id, runner_id=org.id,
+                          status=ModerationStatus.approved, submitted_at=PAST)
+    third = ContestEntry(contest_id=contest.id, runner_id=other.id,
+                         status=ModerationStatus.approved, submitted_at=PAST)
+    rejected = ContestEntry(contest_id=contest.id, runner_id=voter.id,
+                            status=ModerationStatus.rejected, submitted_at=PAST)
+    session.add_all([second, third, rejected])
+    await session.flush()
+    session.add_all([
+        ContestVote(contest_id=contest.id, voter_id=voter.id, entry_id=first.id),
+        ContestVote(contest_id=contest.id, voter_id=other.id, entry_id=second.id),
+        ContestVote(contest_id=contest.id, voter_id=org.id, entry_id=rejected.id),
+    ])
+    await session.commit()
+    url = f"/api/v1/contests/{contest.id}/entries"
+    assert (await client.get(url)).json()["statistics"] is None
+    contest.voting_close_at = datetime.now(UTC) - timedelta(seconds=1)
+    await session.commit()
+    body = (await client.get(url)).json()
+    assert body["statistics"] == {"participants": 2, "entries": 3, "voters": 2}
+    assert body["votes_visible"] is False  # totals do not expose per-work votes
+
+
+async def test_images_append_remove_and_cannot_change_after_approval(
+    session: AsyncSession, client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "media_root", str(tmp_path))
+    org = await make_user(session, "photos-org@example.com")
+    runner = await make_user(session, "photos-runner@example.com")
+    contest, link, photo = await _open_contest(session, org)
+    await session.commit()
+    url = f"/api/v1/contests/{contest.id}/entries"
+    headers = _auth(runner.id)
+    data = {f"field_{link.id}": "https://example.com"}
+    first = await client.post(url, headers=headers, data=data, files={f"field_{photo.id}": _IMG})
+    assert first.status_code == 201
+    entry_id = first.json()["id"]
+    data["entry_id"] = str(entry_id)
+
+    def paths(response):
+        return json.loads(next(v["value"] for v in response.json()["values"]
+                               if v["field_id"] == photo.id))
+
+    original = paths(first)[0]
+    second = await client.post(url, headers=headers, data=data, files={f"field_{photo.id}": _IMG})
+    assert second.status_code == 201
+    assert len(paths(second)) == 2
+    assert paths(second)[0] == original
+    retained = paths(second)[1]
+    data[f"keep_field_{photo.id}"] = json.dumps([retained])
+    removed = await client.post(url, headers=headers, data=data)
+    assert removed.status_code == 201
+    assert paths(removed) == [retained]
+    assert not media_path_to_fs(original).exists()
+    assert media_path_to_fs(retained).exists()
+
+    entry = await session.get(ContestEntry, entry_id)
+    entry.status = ModerationStatus.approved
+    await session.commit()
+    data[f"keep_field_{photo.id}"] = "[]"
+    blocked = await client.post(url, headers=headers, data=data, files={f"field_{photo.id}": _IMG})
+    assert blocked.status_code == 400
+    assert media_path_to_fs(retained).exists()
+    assert list(Path(settings.media_root).rglob("*.png")) == [media_path_to_fs(retained)]
+
+
+async def test_image_removal_validation_does_not_delete_saved_files_or_leak_new_files(
+    session: AsyncSession, client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "media_root", str(tmp_path))
+    org = await make_user(session, "keep-org@example.com")
+    contest, link, photo = await _open_contest(session, org)
+    photo.required = True
+    await session.commit()
+    url = f"/api/v1/contests/{contest.id}/entries"
+    headers = _auth(org.id)
+    data = {f"field_{link.id}": "https://example.com"}
+    first = await client.post(url, headers=headers, data=data, files={f"field_{photo.id}": _IMG})
+    assert first.status_code == 201
+    data["entry_id"] = str(first.json()["id"])
+    original = json.loads(next(v["value"] for v in first.json()["values"]
+                               if v["field_id"] == photo.id))[0]
+    for invalid in ('["/media/someone-elses.png"]', '{}', 'not-json'):
+        data[f"keep_field_{photo.id}"] = invalid
+        assert (await client.post(url, headers=headers, data=data)).status_code == 400
+    data[f"keep_field_{photo.id}"] = "[]"
+    assert (await client.post(url, headers=headers, data=data)).status_code == 422
+    data[f"field_{link.id}"] = ""  # new image saved, but another required field fails
+    response = await client.post(url, headers=headers, data=data, files={f"field_{photo.id}": _IMG})
+    assert response.status_code == 422
+    assert media_path_to_fs(original).exists()
+    assert list(Path(settings.media_root).rglob("*.png")) == [media_path_to_fs(original)]
+    values = await session.scalar(
+        select(ContestEntry).where(ContestEntry.id == int(data["entry_id"]))
+    )
+    await session.refresh(values, attribute_names=["values"])
+    assert json.loads(next(v.value for v in values.values if v.field_id == photo.id)) == [original]

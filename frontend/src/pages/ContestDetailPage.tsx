@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, type FormEvent } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { contestsApi } from '../api/contests'
 import { media } from '../api/client'
@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useAsync } from '../lib/useAsync'
 import { formatDate, formatTime, plural } from '../lib/format'
 import { parseJsonList } from '../lib/jsonList'
+import { FIELD_LABELS } from '../lib/profileFieldLabels'
 import { Avatar } from '../components/ui/Avatar'
 import { ElevationProfile } from '../components/ElevationProfile'
 import { ImageLightbox } from '../components/ui/ImageLightbox'
@@ -46,7 +47,8 @@ function windowText(openAt: string | null, closeAt: string | null): string | nul
 
 export function ContestDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { data, loading, error, reload } = useAsync(() => contestsApi.detail(id!), [id])
+  const { user } = useAuth()
+  const { data, loading, error, reload } = useAsync(() => contestsApi.detail(id!), [id, user])
 
   if (loading) return <PageLoader />
   if (error || !data) {
@@ -151,6 +153,29 @@ function ClosedNotice() {
 
 type Editing = { entry: MyContestEntry | null } | null
 
+function ContestAccessNotice({ contest }: { contest: ContestDetail }) {
+  const reason = contest.lock_reason
+  if (!reason) return null
+  const survey = reason === 'survey_required'
+  const anonymous = reason === 'anonymous'
+  const pending = reason === 'profile_pending_review'
+  return (
+    <StatePanel
+      title={anonymous ? 'Войдите, чтобы участвовать' : pending ? 'Анкета на проверке' : survey ? 'Пройдите анкету новичка' : 'Заполните профиль на 100%'}
+      description={pending
+        ? 'Отправка работ и голосование станут доступны после проверки профиля.'
+        : survey
+          ? 'Для участия в конкурсе нужно пройти анкету новичка после первой тренировки.'
+          : contest.missing_fields.length
+            ? `Осталось: ${contest.missing_fields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}.`
+            : 'Для отправки работ и голосования действуют те же условия, что и для рейтинга.'}
+      action={<Link to={anonymous ? '/login' : survey ? '/survey' : '/profile'} className="btn-ink">
+        {anonymous ? 'Войти' : survey ? 'К анкете' : 'В профиль'}
+      </Link>}
+    />
+  )
+}
+
 function SubmissionSection({ contest }: { contest: ContestDetail }) {
   const { isAuthenticated } = useAuth()
   const {
@@ -189,6 +214,8 @@ function SubmissionSection({ contest }: { contest: ContestDetail }) {
             </Link>
           }
         />
+      ) : contest.lock_reason ? (
+        <ContestAccessNotice contest={contest} />
       ) : loading ? (
         <PageLoader />
       ) : (
@@ -275,6 +302,10 @@ function EntryForm({
     return out
   })
   const [files, setFiles] = useState<Record<number, File[]>>({})
+  const [retainedImages, setRetainedImages] = useState<Record<number, string[]>>(() =>
+    Object.fromEntries((contest.fields ?? []).filter((f) => f.field_type === 'image')
+      .map((f) => [f.id, parseJsonList(existingValues.get(f.id))])),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({})
@@ -289,6 +320,7 @@ function EntryForm({
       for (const f of contest.fields ?? []) {
         if (f.field_type === 'image') {
           if (files[f.id]?.length) values[`field_${f.id}`] = files[f.id]
+          values[`keep_field_${f.id}`] = JSON.stringify(retainedImages[f.id] ?? [])
         } else if (f.field_type === 'gpx') {
           if (files[f.id]?.[0]) values[`field_${f.id}`] = files[f.id][0]
         } else {
@@ -306,7 +338,7 @@ function EntryForm({
           for (const [k, v] of Object.entries(errs)) mapped[Number(k)] = v
           setFieldErrors(mapped)
         }
-        setError('Проверьте поля ниже')
+        setError('Заполните все обязательные поля')
       } else {
         setError(err instanceof Error ? err.message : 'Не удалось отправить заявку')
       }
@@ -319,18 +351,29 @@ function EntryForm({
     <form onSubmit={submit} className="space-y-5">
       {(contest.fields ?? []).map((f) => (
         <div key={f.id}>
-          <ContestFieldInput
-            field={f}
-            value={texts[f.id] ?? ''}
-            onTextChange={(v) => setTexts((t) => ({ ...t, [f.id]: v }))}
-            onFilesChange={(fl) => setFiles((cur) => ({ ...cur, [f.id]: fl }))}
-            existingFileUrls={
-              f.field_type === 'image' || f.field_type === 'gpx'
-                ? parseJsonList(existingValues.get(f.id)).map((p) => media(p)!).filter(Boolean)
-                : undefined
-            }
-            error={fieldErrors[f.id]}
-          />
+          {f.field_type === 'image' ? (
+            <ContestImages
+              field={f}
+              files={files[f.id] ?? []}
+              retained={retainedImages[f.id] ?? []}
+              onFilesChange={(fl) => setFiles((cur) => ({ ...cur, [f.id]: fl }))}
+              onRetainedChange={(paths) => setRetainedImages((cur) => ({ ...cur, [f.id]: paths }))}
+              error={fieldErrors[f.id]}
+            />
+          ) : (
+            <ContestFieldInput
+              field={f}
+              value={texts[f.id] ?? ''}
+              onTextChange={(v) => setTexts((t) => ({ ...t, [f.id]: v }))}
+              onFilesChange={(fl) => setFiles((cur) => ({ ...cur, [f.id]: fl }))}
+              existingFileUrls={
+                f.field_type === 'gpx'
+                  ? parseJsonList(existingValues.get(f.id)).map((p) => media(p)!).filter(Boolean)
+                  : undefined
+              }
+              error={fieldErrors[f.id]}
+            />
+          )}
           {f.field_type === 'gpx' && entry && existingValues.get(f.id) && (
             <GpxMapToggle contestId={contest.id} entryId={entry.id} fieldId={f.id} />
           )}
@@ -341,6 +384,55 @@ function EntryForm({
         {busy ? <Spinner /> : entry ? 'Отправить заново' : 'Отправить на проверку'}
       </button>
     </form>
+  )
+}
+
+function NewPhoto({ file }: { file: File }) {
+  const [url, setUrl] = useState<string>()
+  useEffect(() => {
+    const next = URL.createObjectURL(file)
+    setUrl(next)
+    return () => URL.revokeObjectURL(next)
+  }, [file])
+  return <img src={url} alt={file.name} className="h-24 w-full rounded-lg object-cover" />
+}
+
+function ContestImages({ field, files, retained, onFilesChange, onRetainedChange, error }: {
+  field: ContestField
+  files: File[]
+  retained: string[]
+  onFilesChange: (files: File[]) => void
+  onRetainedChange: (paths: string[]) => void
+  error?: string
+}) {
+  return (
+    <div>
+      <label htmlFor={`photos-${field.id}`} className="field-label">{field.label}{field.required ? ' *' : ''}</label>
+      {field.description && <p className="mb-1.5 text-xs text-clay">{field.description}</p>}
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {retained.map((path, i) => (
+          <div key={path}>
+            <img src={media(path)} alt={`Фото ${i + 1}`} className="h-24 w-full rounded-lg object-cover" />
+            <button type="button" className="btn-ghost btn-sm mt-1 w-full" aria-label={`Удалить фото ${i + 1}`}
+              onClick={() => onRetainedChange(retained.filter((p) => p !== path))}>Удалить</button>
+          </div>
+        ))}
+        {files.map((file, i) => (
+          <div key={`${file.name}-${i}`}>
+            <NewPhoto file={file} />
+            <button type="button" className="btn-ghost btn-sm mt-1 w-full" aria-label={`Удалить ${file.name}`}
+              onClick={() => onFilesChange(files.filter((_, index) => index !== i))}>Удалить</button>
+          </div>
+        ))}
+      </div>
+      <input id={`photos-${field.id}`} type="file" multiple accept="image/png,image/jpeg,image/webp" className="field"
+        onChange={(e) => {
+          onFilesChange([...files, ...Array.from(e.target.files ?? [])])
+          e.target.value = ''
+        }} />
+      <p className="mt-1 text-xs text-clay">Новые фотографии добавляются к выбранным. Изменения сохранятся при отправке заявки.</p>
+      {error && <p className="mt-1.5 text-xs text-danger-600">{error}</p>}
+    </div>
   )
 }
 
@@ -407,31 +499,21 @@ function ContestFieldInput({
             </label>
           ))}
         </div>
-      ) : field.field_type === 'image' || field.field_type === 'gpx' ? (
+      ) : field.field_type === 'gpx' ? (
         <div>
           {existingFileUrls && existingFileUrls.length > 0 && (
             <div className="mb-2">
-              {field.field_type === 'image' ? (
-                <div className="flex flex-wrap gap-2">
-                  {existingFileUrls.map((url) => (
-                    <img key={url} src={url} alt="" className="h-16 w-16 rounded-lg object-cover" />
-                  ))}
-                </div>
-              ) : (
-                <a href={existingFileUrls[0]} target="_blank" rel="noreferrer" className="text-sm text-signal">
-                  Открыть текущий GPX
-                </a>
-              )}
+              <a href={existingFileUrls[0]} target="_blank" rel="noreferrer" className="text-sm text-signal">
+                Открыть текущий GPX
+              </a>
               <p className="mt-1 text-xs text-clay">
-                Уже загружено — выберите новый файл{field.field_type === 'image' ? 'ы' : ''}, только
-                если хотите заменить.
+                Уже загружено — выберите новый файл, только если хотите заменить.
               </p>
             </div>
           )}
           <input
             type="file"
-            multiple={field.field_type === 'image'}
-            accept={field.field_type === 'image' ? 'image/png,image/jpeg,image/webp' : '.gpx'}
+            accept=".gpx"
             className="field"
             onChange={(e) => {
               const list = Array.from(e.target.files ?? [])
@@ -528,46 +610,50 @@ function GpxMap({
 // --- voting -----------------------------------------------------
 
 function VotingSection({ contest }: { contest: ContestDetail }) {
-  const { isAuthenticated } = useAuth()
-  const { data, loading, error, reload } = useAsync(() => contestsApi.entries(contest.id), [
-    contest.id,
+  const { isAuthenticated, user } = useAuth()
+  const { data, loading, error, setData } = useAsync(() => contestsApi.entries(contest.id), [
+    contest.id, user?.id,
   ])
-  const [voteError, setVoteError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [votingFor, setVotingFor] = useState<number | null>(null)
+  const voteInFlight = useRef(false)
 
   const vote = async (entryId: number) => {
-    setVoteError(null)
+    if (voteInFlight.current || !data || data.my_vote_entry_id != null) return
+    voteInFlight.current = true
     setVotingFor(entryId)
     try {
       await contestsApi.vote(contest.id, entryId)
-      await reload()
+      setData({ ...data, my_vote_entry_id: entryId,
+        entries: data.entries.map((entry) => entry.id === entryId && entry.vote_count != null
+          ? { ...entry, vote_count: entry.vote_count + 1 } : entry),
+      })
+      setNotice('Ваш голос учтен')
     } catch (err) {
-      setVoteError(err instanceof Error ? err.message : 'Не удалось проголосовать')
+      setNotice(err instanceof Error ? err.message : 'Не удалось проголосовать')
+      // Another tab may have cast the final vote already.
+      try { setData(await contestsApi.entries(contest.id)) } catch { /* keep current works visible */ }
     } finally {
       setVotingFor(null)
+      voteInFlight.current = false
     }
   }
 
   if (loading) return <PageLoader />
   if (error) return <StatePanel tone="error" title="Не удалось загрузить заявки" description={error} />
-  if (!data || data.entries.length === 0) {
+  if (!data) {
     return <StatePanel title="Заявок, прошедших проверку, пока нет" icon={<IconTrophy />} />
   }
 
   const fieldsById = new Map((contest.fields ?? []).map((f) => [f.id, f]))
 
-  // Once results are in, rank by the admin-assigned placement; while voting
-  // is still open, rank by vote count if it's actually visible (otherwise
-  // leave submission order alone — there's nothing meaningful to sort by).
+  // Submission order stays fixed until the published results.
   const sorted = [...data.entries].sort((a, b) => {
     if (contest.results_published) return (a.placement ?? Infinity) - (b.placement ?? Infinity)
-    if (data.votes_visible) return (b.vote_count ?? 0) - (a.vote_count ?? 0)
-    return 0
+    return a.id - b.id
   })
   const podiumEntries = contest.results_published
-    ? ([1, 2, 3]
-        .map((p) => sorted.find((e) => e.placement === p))
-        .filter((e): e is PublicContestEntry => !!e) as PublicContestEntry[])
+    ? sorted.filter((entry) => entry.placement != null && entry.placement >= 1 && entry.placement <= 3)
     : []
   const podiumIds = new Set(podiumEntries.map((e) => e.id))
   const restEntries = sorted.filter((e) => !podiumIds.has(e.id))
@@ -581,7 +667,29 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
           Итоги подведены
         </p>
       ) : null}
-      {voteError && <p className="mb-4 text-sm text-danger-600">{voteError}</p>}
+      {notice && <Modal title={notice} onClose={() => setNotice(null)}>
+        <button type="button" className="btn-ink" onClick={() => setNotice(null)}>Понятно</button>
+      </Modal>}
+      {data.statistics && (
+        <dl className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {([
+            ['Участников', data.statistics.participants],
+            ['Конкурсных работ', data.statistics.entries],
+            ['Проголосовавших', data.statistics.voters],
+          ] as const).map(([label, count]) => (
+            <div key={label} className="rounded-xl2 border border-ink/[0.08] bg-white p-5 shadow-card">
+              <dt className="text-sm text-clay">{label}</dt>
+              <dd className="mt-2 font-display text-3xl tabular text-ink">{count}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {contest.phase === 'voting_open' && data.my_vote_entry_id != null && (
+        <p className="mb-6 rounded-xl2 bg-paper-deep p-4 text-sm text-ink">Ваш голос учтен. Изменить голос нельзя. Вы можете продолжить просмотр работ.</p>
+      )}
+      {isAuthenticated && contest.lock_reason && contest.phase === 'voting_open' && data.my_vote_entry_id == null && (
+        <div className="mb-6"><ContestAccessNotice contest={contest} /></div>
+      )}
       {!isAuthenticated && contest.phase === 'voting_open' && (
         <p className="mb-6 text-sm text-clay">
           <Link to="/login" className="text-signal">
@@ -591,8 +699,13 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
         </p>
       )}
       {podiumEntries.length > 0 && (
-        <ContestPodium entries={podiumEntries} fieldsById={fieldsById} contestId={contest.id} />
+        <>
+          <h2 className="mb-6 font-display text-2xl text-ink">Победители:</h2>
+          <ContestPodium entries={podiumEntries} fieldsById={fieldsById} contestId={contest.id} />
+        </>
       )}
+      {contest.results_published && <h2 className="mb-6 font-display text-2xl text-ink">Все конкурсные работы:</h2>}
+      {restEntries.length === 0 && <p className="text-sm text-clay">{podiumEntries.length ? 'Других конкурсных работ нет.' : 'Заявок, прошедших проверку, пока нет.'}</p>}
       {restEntries.length > 0 && (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {restEntries.map((entry) => (
@@ -601,11 +714,11 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
               contestId={contest.id}
               entry={entry}
               fieldsById={fieldsById}
-              canVote={isAuthenticated && contest.phase === 'voting_open'}
+              canVote={isAuthenticated && !contest.lock_reason && contest.phase === 'voting_open' && data.my_vote_entry_id == null}
               isMyVote={data.my_vote_entry_id === entry.id}
               showPlacement={contest.results_published}
               onVote={() => vote(entry.id)}
-              voting={votingFor === entry.id}
+              voting={votingFor != null}
             />
           ))}
         </div>
@@ -634,46 +747,49 @@ function ContestPodium({
 
   return (
     <div className="mb-8 grid gap-4 sm:grid-cols-3">
-      {entries.map((entry, i) => (
-        <div
-          key={entry.id}
-          className={`relative flex flex-col rounded-xl2 border border-ink/[0.08] bg-white p-5 text-center shadow-card ${order[i]} ${heights[i]}`}
-        >
-          <span
-            className={`absolute -top-3 left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full font-display text-sm ${badges[i]} ${badgeText[i]}`}
+      {entries.map((entry) => {
+        const i = (entry.placement ?? 1) - 1
+        return (
+          <div
+            key={entry.id}
+            className={`relative flex flex-col rounded-xl2 border border-ink/[0.08] bg-white p-5 text-center shadow-card ${order[i]} ${heights[i]}`}
           >
-            {entry.placement}
-          </span>
-          <Avatar
-            first={entry.runner_name.split(' ')[0]}
-            last={entry.runner_name.split(' ')[1]}
-            src={entry.avatar}
-            size="lg"
-            className={`mx-auto ring-2 ${rings[i]}`}
-            zoomable
-          />
-          <h3 className="mt-3 truncate font-display text-lg text-ink">{entry.runner_name}</h3>
-          {entry.vote_count != null && (
-            <div className="mt-2 flex items-baseline justify-center gap-1.5">
-              <span className="font-display text-2xl tabular text-signal">{entry.vote_count}</span>
-              <span className="font-mono text-xs text-clay">
-                {plural(entry.vote_count, 'голос', 'голоса', 'голосов')}
-              </span>
+            <span
+              className={`absolute -top-3 left-1/2 grid h-8 -translate-x-1/2 place-items-center whitespace-nowrap rounded-full px-3 font-display text-sm ${badges[i]} ${badgeText[i]}`}
+            >
+              {entry.placement} место
+            </span>
+            <Avatar
+              first={entry.runner_name.split(' ')[0]}
+              last={entry.runner_name.split(' ')[1]}
+              src={entry.avatar}
+              size="lg"
+              className={`mx-auto ring-2 ${rings[i]}`}
+              zoomable
+            />
+            <h3 className="mt-3 truncate font-display text-lg text-ink">{entry.runner_name}</h3>
+            {entry.vote_count != null && (
+              <div className="mt-2 flex items-baseline justify-center gap-1.5">
+                <span className="font-display text-2xl tabular text-signal">{entry.vote_count}</span>
+                <span className="font-mono text-xs text-clay">
+                  {plural(entry.vote_count, 'голос', 'голоса', 'голосов')}
+                </span>
+              </div>
+            )}
+            <div className="mt-4 space-y-2 text-left">
+              {entry.values.map((v) => (
+                <EntryValueDisplay
+                  key={v.field_id}
+                  value={v}
+                  field={fieldsById.get(v.field_id)}
+                  contestId={contestId}
+                  entryId={entry.id}
+                />
+              ))}
             </div>
-          )}
-          <div className="mt-4 space-y-2 text-left">
-            {entry.values.map((v) => (
-              <EntryValueDisplay
-                key={v.field_id}
-                value={v}
-                field={fieldsById.get(v.field_id)}
-                contestId={contestId}
-                entryId={entry.id}
-              />
-            ))}
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -710,7 +826,7 @@ function EntryCard({
           <p className="truncate font-semibold text-ink">{entry.runner_name}</p>
         </div>
         {showPlacement && entry.placement && (
-          <span className="ml-auto chip bg-volt text-ink">#{entry.placement}</span>
+          <span className="ml-auto chip bg-volt text-ink">{entry.placement} место</span>
         )}
       </div>
       <div className="mt-4 space-y-2">
@@ -733,7 +849,7 @@ function EntryCard({
             </span>
           </span>
         )}
-        {canVote && (
+        {isMyVote ? <span className="chip bg-volt text-ink">Ваш голос</span> : canVote && (
           <button
             onClick={onVote}
             disabled={voting || isMyVote}

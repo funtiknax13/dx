@@ -3,19 +3,20 @@ from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import UploadFile as FastAPIUploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from starlette.datastructures import UploadFile
 
 from app.api.deps import CurrentUser, OptionalUser, SessionDep
 from app.core.config import settings
-from app.models.contest import Contest, ContestEntry, ContestEntryValue, ContestField
+from app.models.contest import Contest, ContestEntry, ContestEntryValue, ContestField, ContestVote
 from app.models.enums import ContestFieldType, ModerationStatus
 from app.schemas.contest import (
     ContestDetail,
     ContestEntriesOut,
     ContestEntryValueOut,
     ContestFieldOut,
+    ContestStatistics,
     ContestSummary,
     MyEntryOut,
     PublicEntryOut,
@@ -89,7 +90,9 @@ async def list_contests(session: SessionDep) -> list[ContestSummary]:
 
 
 @router.get("/{contest_id}", response_model=ContestDetail)
-async def contest_detail(contest_id: int, session: SessionDep) -> ContestDetail:
+async def contest_detail(
+    contest_id: int, session: SessionDep, user: OptionalUser
+) -> ContestDetail:
     contest = await _get_published_contest(session, contest_id)
     phase = contest_service.contest_phase(contest)
     fields = None
@@ -100,6 +103,7 @@ async def contest_detail(contest_id: int, session: SessionDep) -> ContestDetail:
             .order_by(ContestField.position)
         )
         fields = [_field_out(f) for f in rows]
+    lock_reason, missing_fields = await stats_access_lock(session, user)
     return ContestDetail(
         id=contest.id,
         title=contest.title,
@@ -114,6 +118,8 @@ async def contest_detail(contest_id: int, session: SessionDep) -> ContestDetail:
         results_published=contest.results_published_at is not None,
         max_entries_per_runner=contest.max_entries_per_runner,
         fields=fields,
+        lock_reason=lock_reason,
+        missing_fields=missing_fields,
     )
 
 
@@ -146,6 +152,7 @@ async def submit_contest_entry(
     contest_id: int, request: Request, user: CurrentUser, session: SessionDep
 ) -> MyEntryOut:
     contest = await _get_published_contest(session, contest_id)
+    await _require_contest_access(session, user)
     fields = list(
         await session.scalars(
             select(ContestField)
@@ -156,18 +163,33 @@ async def submit_contest_entry(
 
     form = await request.form()
     raw_entry_id = form.get("entry_id")
-    entry_id = int(cast(str, raw_entry_id)) if raw_entry_id else None
+    try:
+        entry_id = int(cast(str, raw_entry_id)) if raw_entry_id else None
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Некорректная заявка") from exc
 
     existing_values: dict[int, str | None] = {}
     if entry_id is not None:
-        existing = await contest_service.get_owned_entry(session, contest_id, user.id, entry_id)
+        existing = await session.scalar(
+            select(ContestEntry).where(
+                ContestEntry.id == entry_id,
+                ContestEntry.contest_id == contest_id,
+                ContestEntry.runner_id == user.id,
+            ).with_for_update()
+        )
         if existing is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Entry not found")
+        if existing.status == ModerationStatus.approved:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Заявка уже подтверждена администратором, изменить её нельзя",
+            )
         await session.refresh(existing, attribute_names=["values"])
         existing_values = {v.field_id: v.value for v in existing.values}
 
     raw_values: dict[int, str] = {}
     saved_paths: list[str] = []
+    removed_paths: list[str] = []
     try:
         for field in fields:
             if field.field_type == ContestFieldType.image:
@@ -175,16 +197,32 @@ async def submit_contest_entry(
                     cast(FastAPIUploadFile, part)
                     for part in form.getlist(f"field_{field.id}")
                     if isinstance(part, UploadFile) and part.filename
-                ][: settings.contest_entry_max_images]
-                if uploads:
-                    paths = [await save_image(u, f"contests/{contest_id}") for u in uploads]
-                    saved_paths.extend(paths)
-                    raw_values[field.id] = json.dumps(paths)
-                else:
-                    # No new files this submit — keep whatever's already
-                    # stored, so fixing a typo in another field doesn't
-                    # force re-uploading photos every time.
-                    raw_values[field.id] = existing_values.get(field.id) or ""
+                ]
+                old_paths = contest_service.parse_json_list(existing_values.get(field.id))
+                retained = form.get(f"keep_field_{field.id}")
+                paths = old_paths.copy()
+                if retained is not None:
+                    try:
+                        keep = json.loads(str(retained))
+                    except (ValueError, TypeError) as exc:
+                        raise ValueError("Некорректный список фотографий") from exc
+                    if (
+                        not isinstance(keep, list)
+                        or any(not isinstance(p, str) or p not in old_paths for p in keep)
+                        or len(set(keep)) != len(keep)
+                    ):
+                        raise ValueError("Можно сохранить только фотографии этой заявки")
+                    paths = keep
+                if len(paths) + len(uploads) > settings.contest_entry_max_images:
+                    raise ValueError(
+                        f"Можно загрузить не более {settings.contest_entry_max_images} фотографий"
+                    )
+                removed_paths.extend(p for p in old_paths if p not in paths)
+                for upload in uploads:
+                    path = await save_image(upload, f"contests/{contest_id}")
+                    saved_paths.append(path)
+                    paths.append(path)
+                raw_values[field.id] = json.dumps(paths) if paths else ""
             elif field.field_type == ContestFieldType.gpx:
                 part = form.get(f"field_{field.id}")
                 if isinstance(part, UploadFile) and part.filename:
@@ -200,7 +238,7 @@ async def submit_contest_entry(
             else:
                 part = form.get(f"field_{field.id}")
                 raw_values[field.id] = str(part) if part is not None else ""
-    except (FileTooLargeError, InvalidFileTypeError) as exc:
+    except (FileTooLargeError, InvalidFileTypeError, ValueError) as exc:
         for path in saved_paths:
             delete_media(path)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -210,13 +248,19 @@ async def submit_contest_entry(
             session, contest, user, raw_values, entry_id=entry_id
         )
     except ContestValidationError as exc:
+        for path in saved_paths:
+            delete_media(path)
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             {"errors": {str(k): v for k, v in exc.errors.items()}},
         ) from exc
     except ValueError as exc:
+        for path in saved_paths:
+            delete_media(path)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await session.commit()
+    for path in removed_paths:
+        delete_media(path)
     return _my_entry_out(entry)
 
 
@@ -264,7 +308,7 @@ async def list_contest_entries(
             runner_name=f"{e.runner.first_name} {e.runner.last_name}",
             avatar=visible_avatar(e.runner, user.id if user else None),
             placement=e.placement,
-            vote_count=tally.get(e.id) if votes_visible else None,
+            vote_count=tally.get(e.id, 0) if votes_visible else None,
             values=[
                 ContestEntryValueOut(field_id=v.field_id, value=v.value)
                 for v in e.values
@@ -273,8 +317,24 @@ async def list_contest_entries(
         )
         for e in entries
     ]
+    statistics = None
+    if phase == "voting_closed":
+        voters = await session.scalar(
+            select(func.count(ContestVote.id))
+            .join(ContestEntry, ContestEntry.id == ContestVote.entry_id)
+            .where(
+                ContestVote.contest_id == contest_id,
+                ContestEntry.status == ModerationStatus.approved,
+            )
+        )
+        statistics = ContestStatistics(
+            participants=len({e.runner_id for e in entries}),
+            entries=len(entries),
+            voters=voters or 0,
+        )
     return ContestEntriesOut(
-        entries=out, votes_visible=votes_visible, my_vote_entry_id=my_vote_entry_id
+        entries=out, votes_visible=votes_visible, my_vote_entry_id=my_vote_entry_id,
+        statistics=statistics,
     )
 
 
@@ -339,14 +399,7 @@ async def vote_for_entry(
     contest_id: int, entry_id: int, user: CurrentUser, session: SessionDep
 ) -> None:
     contest = await _get_published_contest(session, contest_id)
-    reason, _missing = await stats_access_lock(session, user)
-    if reason is not None:
-        detail = (
-            "Пройдите анкету новичка, чтобы голосовать."
-            if reason == "survey_required"
-            else "Заполните профиль до конца, чтобы голосовать."
-        )
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail)
+    await _require_contest_access(session, user)
 
     entry = await session.get(ContestEntry, entry_id)
     if entry is None:
@@ -356,3 +409,16 @@ async def vote_for_entry(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await session.commit()
+
+
+async def _require_contest_access(session: SessionDep, user: CurrentUser) -> None:
+    reason, _missing = await stats_access_lock(session, user)
+    if reason is not None:
+        messages = {
+            "survey_required": "Пройдите анкету новичка, чтобы участвовать в конкурсе.",
+            "profile_pending_review": "Дождитесь проверки профиля, чтобы участвовать в конкурсе.",
+        }
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            messages.get(reason, "Заполните профиль до конца, чтобы участвовать в конкурсе."),
+        )
