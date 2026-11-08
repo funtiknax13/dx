@@ -55,6 +55,21 @@ def check(user: User) -> ProfileCompleteness:
     return ProfileCompleteness(is_complete=not missing, missing_fields=missing)
 
 
+async def profile_access_lock(
+    session: AsyncSession, viewer: User | None
+) -> tuple[str | None, list[str]]:
+    """Require a complete, verified and reviewed profile, independently of runs
+    or the newcomer survey. Contests use this gate without the stats gate."""
+    if viewer is None:
+        return "anonymous", []
+    completeness = check(viewer)
+    if not completeness.is_complete:
+        return "profile_incomplete", completeness.missing_fields
+    if await has_pending_review(session, viewer):
+        return "profile_pending_review", []
+    return None, []
+
+
 async def stats_access_lock(
     session: AsyncSession, viewer: User | None
 ) -> tuple[str | None, list[str]]:
@@ -73,13 +88,10 @@ async def stats_access_lock(
     still awaiting moderation — see profile_review_service; their *approved*
     data may well satisfy every field below, this is a separate gate on top.
     missing_fields is only ever populated for "profile_incomplete"."""
-    if viewer is None:
-        return "anonymous", []
-    completeness = check(viewer)
-    if not completeness.is_complete:
-        return "profile_incomplete", completeness.missing_fields
-    if await has_pending_review(session, viewer):
-        return "profile_pending_review", []
+    reason, missing_fields = await profile_access_lock(session, viewer)
+    if reason is not None:
+        return reason, missing_fields
+    assert viewer is not None
     if await stats_locked_pending_survey(session, viewer):
         return "survey_required", []
     return None, []

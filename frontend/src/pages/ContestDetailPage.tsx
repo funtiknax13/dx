@@ -126,16 +126,36 @@ export function ContestDetailPage() {
 }
 
 function UpcomingTeaser({ contest }: { contest: ContestDetail }) {
+  const submissionWindow = windowText(contest.submissions_open_at, contest.submissions_close_at)
+  const votingWindow = windowText(contest.voting_open_at, contest.voting_close_at)
   return (
-    <StatePanel
-      title="Событие скоро начнётся"
-      description={
-        contest.submissions_open_at
-          ? `Приём заявок откроется ${formatDate(contest.submissions_open_at, { day: 'numeric', month: 'long' })}, в ${formatTime(contest.submissions_open_at)}.`
-          : 'Условия конкурса появятся здесь, как только приём заявок откроется.'
-      }
-      icon={<IconTrophy />}
-    />
+    <div className="mx-auto max-w-2xl">
+      <h2 className="mb-4 font-display text-2xl text-ink">О конкурсе</h2>
+      {contest.description && (
+        <p className="mb-6 whitespace-pre-line break-words text-base leading-relaxed text-ink-700">
+          {contest.description}
+        </p>
+      )}
+      {(submissionWindow || votingWindow) && (
+        <dl className="mb-6 space-y-4 rounded-xl2 border border-ink/[0.08] bg-white p-5 shadow-card">
+          {submissionWindow && <div>
+            <dt className="font-semibold text-ink">Приём работ</dt>
+            <dd className="mt-1 text-sm text-clay">{submissionWindow}</dd>
+          </div>}
+          {votingWindow && <div>
+            <dt className="font-semibold text-ink">Голосование</dt>
+            <dd className="mt-1 text-sm text-clay">{votingWindow}</dd>
+          </div>}
+        </dl>
+      )}
+      <StatePanel
+        title="Событие скоро начнётся"
+        description={contest.submissions_open_at
+          ? 'Подать работу можно будет после открытия приёма заявок.'
+          : 'Организатор сообщит дату открытия приёма заявок.'}
+        icon={<IconTrophy />}
+      />
+    </div>
   )
 }
 
@@ -156,21 +176,18 @@ type Editing = { entry: MyContestEntry | null } | null
 function ContestAccessNotice({ contest }: { contest: ContestDetail }) {
   const reason = contest.lock_reason
   if (!reason) return null
-  const survey = reason === 'survey_required'
   const anonymous = reason === 'anonymous'
   const pending = reason === 'profile_pending_review'
   return (
     <StatePanel
-      title={anonymous ? 'Войдите, чтобы участвовать' : pending ? 'Анкета на проверке' : survey ? 'Пройдите анкету новичка' : 'Заполните профиль на 100%'}
+      title={anonymous ? 'Войдите, чтобы участвовать' : pending ? 'Анкета на проверке' : 'Заполните профиль на 100%'}
       description={pending
         ? 'Отправка работ и голосование станут доступны после проверки профиля.'
-        : survey
-          ? 'Для участия в конкурсе нужно пройти анкету новичка после первой тренировки.'
-          : contest.missing_fields.length
+        : contest.missing_fields.length
             ? `Осталось: ${contest.missing_fields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}.`
-            : 'Для отправки работ и голосования действуют те же условия, что и для рейтинга.'}
-      action={<Link to={anonymous ? '/login' : survey ? '/survey' : '/profile'} className="btn-ink">
-        {anonymous ? 'Войти' : survey ? 'К анкете' : 'В профиль'}
+            : 'Для отправки работ и голосования заполните профиль и подтвердите почту. Участие в пробежках и анкета новичка не требуются.'}
+      action={<Link to={anonymous ? '/login' : '/profile'} className="btn-ink">
+        {anonymous ? 'Войти' : 'В профиль'}
       </Link>}
     />
   )
@@ -366,6 +383,7 @@ function EntryForm({
               value={texts[f.id] ?? ''}
               onTextChange={(v) => setTexts((t) => ({ ...t, [f.id]: v }))}
               onFilesChange={(fl) => setFiles((cur) => ({ ...cur, [f.id]: fl }))}
+              selectedFiles={files[f.id] ?? []}
               existingFileUrls={
                 f.field_type === 'gpx'
                   ? parseJsonList(existingValues.get(f.id)).map((p) => media(p)!).filter(Boolean)
@@ -405,6 +423,7 @@ function ContestImages({ field, files, retained, onFilesChange, onRetainedChange
   onRetainedChange: (paths: string[]) => void
   error?: string
 }) {
+  const count = files.length + retained.length
   return (
     <div>
       <label htmlFor={`photos-${field.id}`} className="field-label">{field.label}{field.required ? ' *' : ''}</label>
@@ -425,14 +444,49 @@ function ContestImages({ field, files, retained, onFilesChange, onRetainedChange
           </div>
         ))}
       </div>
-      <input id={`photos-${field.id}`} type="file" multiple accept="image/png,image/jpeg,image/webp" className="field"
-        onChange={(e) => {
-          onFilesChange([...files, ...Array.from(e.target.files ?? [])])
-          e.target.value = ''
-        }} />
+      <ContestFilePicker
+        id={`photos-${field.id}`}
+        accept="image/png,image/jpeg,image/webp"
+        multiple
+        label={count ? 'Загрузить ещё файлы' : 'Загрузить файлы'}
+        onSelect={(chosen) => onFilesChange([...files, ...chosen])}
+      />
+      <p role="status" className="mt-2 text-sm text-clay">
+        {count ? `Файлов: ${count}` : 'Файлы не загружены'}
+      </p>
       <p className="mt-1 text-xs text-clay">Новые фотографии добавляются к выбранным. Изменения сохранятся при отправке заявки.</p>
       {error && <p className="mt-1.5 text-xs text-danger-600">{error}</p>}
     </div>
+  )
+}
+
+function ContestFilePicker({ id, accept, multiple = false, label, onSelect }: {
+  id: string
+  accept: string
+  multiple?: boolean
+  label: string
+  onSelect: (files: File[]) => void
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <>
+      <input
+        ref={input}
+        id={id}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        hidden
+        onChange={(e) => {
+          const chosen = Array.from(e.target.files ?? [])
+          if (chosen.length) onSelect(chosen)
+          e.target.value = ''
+        }}
+      />
+      <button type="button" className="btn-ghost" onClick={() => input.current?.click()}>
+        {label}
+      </button>
+    </>
   )
 }
 
@@ -441,6 +495,7 @@ function ContestFieldInput({
   value,
   onTextChange,
   onFilesChange,
+  selectedFiles,
   existingFileUrls,
   error,
 }: {
@@ -448,6 +503,7 @@ function ContestFieldInput({
   value: string
   onTextChange: (v: string) => void
   onFilesChange: (files: File[]) => void
+  selectedFiles: File[]
   existingFileUrls?: string[]
   error?: string
 }) {
@@ -511,15 +567,16 @@ function ContestFieldInput({
               </p>
             </div>
           )}
-          <input
-            type="file"
+          <ContestFilePicker
+            id={`gpx-${field.id}`}
             accept=".gpx"
-            className="field"
-            onChange={(e) => {
-              const list = Array.from(e.target.files ?? [])
-              if (list.length) onFilesChange(list)
-            }}
+            label={selectedFiles.length || existingFileUrls?.length ? 'Заменить GPX' : 'Загрузить GPX'}
+            onSelect={onFilesChange}
           />
+          <p role="status" className="mt-2 break-words text-sm text-clay">
+            {selectedFiles[0] ? `Выбран файл: ${selectedFiles[0].name}`
+              : existingFileUrls?.length ? 'Файл уже загружен' : 'Файлы не загружены'}
+          </p>
         </div>
       ) : (
         <input
@@ -615,6 +672,7 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
     contest.id, user?.id,
   ])
   const [notice, setNotice] = useState<string | null>(null)
+  const [voteChoice, setVoteChoice] = useState<PublicContestEntry | null>(null)
   const [votingFor, setVotingFor] = useState<number | null>(null)
   const voteInFlight = useRef(false)
 
@@ -634,6 +692,7 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
       // Another tab may have cast the final vote already.
       try { setData(await contestsApi.entries(contest.id)) } catch { /* keep current works visible */ }
     } finally {
+      setVoteChoice(null)
       setVotingFor(null)
       voteInFlight.current = false
     }
@@ -657,6 +716,10 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
     : []
   const podiumIds = new Set(podiumEntries.map((e) => e.id))
   const restEntries = sorted.filter((e) => !podiumIds.has(e.id))
+  const chosenTitle = voteChoice?.values.find((value) => {
+    const type = fieldsById.get(value.field_id)?.field_type
+    return (type === 'text' || type === 'long_text') && value.value?.trim()
+  })?.value
 
   return (
     <div>
@@ -669,6 +732,26 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
       ) : null}
       {notice && <Modal title={notice} onClose={() => setNotice(null)}>
         <button type="button" className="btn-ink" onClick={() => setNotice(null)}>Понятно</button>
+      </Modal>}
+      {voteChoice && <Modal
+        title="Подтвердите голос"
+        onClose={() => setVoteChoice(null)}
+        closeDisabled={votingFor != null}
+      >
+        <p className="break-words text-sm leading-relaxed text-ink-700">
+          Вы голосуете за работу{' '}
+          <span className="font-semibold text-ink">«{chosenTitle || `Работа №${voteChoice.id}`}»</span>
+          {' '}участника <span className="font-semibold text-ink">{voteChoice.runner_name}</span>.
+        </p>
+        <p className="mt-3 text-sm text-clay">Изменить голос после подтверждения нельзя.</p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" className="btn-ghost" disabled={votingFor != null}
+            onClick={() => setVoteChoice(null)} autoFocus>Отмена</button>
+          <button type="button" className="btn-ink" disabled={votingFor != null}
+            onClick={() => vote(voteChoice.id)}>
+            {votingFor != null ? <Spinner /> : 'Подтвердить голос'}
+          </button>
+        </div>
       </Modal>}
       {data.statistics && (
         <dl className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -717,7 +800,14 @@ function VotingSection({ contest }: { contest: ContestDetail }) {
               canVote={isAuthenticated && !contest.lock_reason && contest.phase === 'voting_open' && data.my_vote_entry_id == null}
               isMyVote={data.my_vote_entry_id === entry.id}
               showPlacement={contest.results_published}
-              onVote={() => vote(entry.id)}
+              onVote={() => {
+                if (voteInFlight.current || data.my_vote_entry_id != null) return
+                if (entry.runner_id === user?.id) {
+                  setNotice('Нельзя голосовать за свою заявку')
+                } else {
+                  setVoteChoice(entry)
+                }
+              }}
               voting={votingFor != null}
             />
           ))}

@@ -34,7 +34,7 @@ from app.services.media_service import (
     save_image,
     save_track_file,
 )
-from app.services.profile_completeness_service import stats_access_lock
+from app.services.profile_completeness_service import profile_access_lock
 
 router = APIRouter(prefix="/contests", tags=["contests"])
 
@@ -103,7 +103,7 @@ async def contest_detail(
             .order_by(ContestField.position)
         )
         fields = [_field_out(f) for f in rows]
-    lock_reason, missing_fields = await stats_access_lock(session, user)
+    lock_reason, missing_fields = await profile_access_lock(session, user)
     return ContestDetail(
         id=contest.id,
         title=contest.title,
@@ -412,10 +412,9 @@ async def vote_for_entry(
 
 
 async def _require_contest_access(session: SessionDep, user: CurrentUser) -> None:
-    reason, _missing = await stats_access_lock(session, user)
+    reason, _missing = await profile_access_lock(session, user)
     if reason is not None:
         messages = {
-            "survey_required": "Пройдите анкету новичка, чтобы участвовать в конкурсе.",
             "profile_pending_review": "Дождитесь проверки профиля, чтобы участвовать в конкурсе.",
         }
         raise HTTPException(

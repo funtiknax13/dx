@@ -91,6 +91,7 @@ async def test_unpublished_contest_404s(session: AsyncSession, client: AsyncClie
 async def test_upcoming_contest_hides_fields(session: AsyncSession, client: AsyncClient) -> None:
     org = await make_user(session, "org-capi3@example.com")
     contest = await make_contest(session, org, is_published=True, submissions_open_at=SOON)
+    contest.description = "Маршруты сообщества: условия участия до начала конкурса."
     await add_contest_field(session, contest)
     await session.commit()
 
@@ -99,6 +100,8 @@ async def test_upcoming_contest_hides_fields(session: AsyncSession, client: Asyn
     body = resp.json()
     assert body["phase"] == "upcoming"
     assert body["fields"] is None
+    assert body["description"] == contest.description
+    assert body["submissions_open_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -594,9 +597,9 @@ async def test_cast_vote_requires_complete_profile(
 
 
 @pytest.mark.parametrize("reason", [
-    "profile_incomplete", "email_unverified", "profile_pending_review", "survey_required",
+    "profile_incomplete", "email_unverified", "profile_pending_review",
 ])
-async def test_contest_submission_and_voting_use_rating_access_rules(
+async def test_contest_submission_and_voting_require_complete_verified_reviewed_profile(
     session: AsyncSession, client: AsyncClient, reason: str,
 ) -> None:
     org = await make_user(session, "access-org@example.com")
@@ -609,11 +612,6 @@ async def test_contest_submission_and_voting_use_rating_access_rules(
         runner.email_verified = False
     elif reason == "profile_pending_review":
         session.add(ProfileEditRequest(user_id=runner.id, changes={"first_name": "Новое"}))
-    else:
-        runner.prior_experience = PriorExperience.never
-        session.add(Survey(
-            title="Опрос", created_by=org.id, is_active=True, is_required_for_access=True,
-        ))
     await session.commit()
     headers = _auth(runner.id)
     rating = await client.get("/api/v1/rating", headers=headers)
@@ -629,6 +627,40 @@ async def test_contest_submission_and_voting_use_rating_access_rules(
         f"/api/v1/contests/{voting.id}/entries/{entry.id}/vote", headers=headers,
     )
     assert response.status_code == 403
+
+
+async def test_newcomer_can_submit_and_vote_without_attendance_or_survey(
+    session: AsyncSession, client: AsyncClient,
+) -> None:
+    org = await make_user(session, "newcomer-org@example.com")
+    runner = await make_user(session, "newcomer-runner@example.com")
+    runner.prior_experience = PriorExperience.never
+    session.add(Survey(
+        title="Анкета новичка", created_by=org.id,
+        is_active=True, is_required_for_access=True,
+    ))
+    contest, link, _photo = await _open_contest(session, org)
+    voting, entry, _, _ = await _voting_contest_with_approved_entry(session, org, org)
+    await session.commit()
+    headers = _auth(runner.id)
+    rating = await client.get("/api/v1/rating", headers=headers)
+    assert rating.json()["lock_reason"] == "survey_required"
+    for contest_id in (contest.id, voting.id):
+        detail = await client.get(f"/api/v1/contests/{contest_id}", headers=headers)
+        assert detail.json()["lock_reason"] is None
+        assert detail.json()["missing_fields"] == []
+    response = await client.post(
+        f"/api/v1/contests/{contest.id}/entries", headers=headers,
+        data={f"field_{link.id}": "https://example.com"},
+    )
+    assert response.status_code == 201, response.text
+    response = await client.post(
+        f"/api/v1/contests/{voting.id}/entries/{entry.id}/vote", headers=headers,
+    )
+    assert response.status_code == 204, response.text
+    assert (await client.get("/api/v1/rating", headers=headers)).json()["lock_reason"] == (
+        "survey_required"
+    )
 
 
 async def test_vote_is_final_and_does_not_reorder_works(
